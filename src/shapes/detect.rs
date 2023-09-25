@@ -23,7 +23,7 @@ impl HitRecord {
     }
 }
 pub trait Hittable {
-    fn hit(self: &mut Self, r: &Ray, ray_tmin: f64, ray_tmax: f64, rec: &mut HitRecord) -> bool;
+    fn hit(self: &mut Self, r: &Ray, ray_tmin: f64, ray_tmax: f64, rec: &&mut HitRecord) -> bool;
 }
 
 pub struct EntityList {
@@ -46,10 +46,10 @@ impl Hittable for EntityList {
         let mut closest = ray_tmax;
 
         for object in &mut self.objects {
-            if (object.hit(ray, ray_tmin, closest, &mut temp_record)) {
+            if (object.hit(ray, ray_tmin, closest, &&mut temp_record)) {
                 hit = true;
                 closest = temp_record.t;
-                hit_record = &mut temp_record
+                *hit_record = &mut temp_record
             }
         }
         return hit;

@@ -30,6 +30,7 @@ impl VulkanRenderer {
             .api_version(ash::vk_make_version!(1, 0, 0))
             .build();
         
+        let mut extension_names = crate::vulkan::surface::required_extension_names();
         todo!();
     }
 }

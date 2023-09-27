@@ -54,3 +54,16 @@ impl VkContext {
         &self.device
     }
 }
+
+impl Drop for VkContext {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_device(None);
+            self.surface.destroy_surface(self.surface_khr, None);
+            if let Some((report, callback)) = self.debug_report_callback.take() {
+                report.destroy_debug_report_callback(callback, None);
+            }
+            self.instance.destroy_instance(None);
+        }
+    }
+}

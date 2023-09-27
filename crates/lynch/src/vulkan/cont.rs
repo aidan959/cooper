@@ -53,6 +53,15 @@ impl VkContext {
     pub fn device(&self) -> &Device {
         &self.device
     }
+    /// get device memory propertiess
+    pub fn get_mem_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
+        unsafe {
+            self.instance
+                .get_physical_device_memory_properties(self.physical_device)
+        }
+    }
+
+    
 }
 
 impl Drop for VkContext {

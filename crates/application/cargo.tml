@@ -1,0 +1,8 @@
+[package]
+name = "application"
+version = "0.0.1-dev"
+edition = "2021"
+
+[dependencies]
+lynch = { path = "../lynch", version = "0.0.1-dev"}
+winit = "0.29.2"

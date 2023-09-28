@@ -31,7 +31,19 @@ impl VulkanRenderer {
             .build();
         
         let mut extension_names = crate::vulkan::surface::required_extension_names();
-        todo!();
+
+        if ENABLE_VALIDATION_LAYERS {
+            extension_names.push(DebugReport::name().as_ptr());
+        }
+
+        let (_layer_names, layer_pointers) = get_lay_names_pointers();
+
+        let mut instance_create_info = vk::InstanceCreateInfo::builder()
+            .application_info(&app_info)
+            .enabled_extension_names(&extension_names);
+
+
+        unsafe { entry.create_instance(&instance_create_info, None).unwrap() }            
     }
 }
 

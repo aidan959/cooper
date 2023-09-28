@@ -42,6 +42,10 @@ impl VulkanRenderer {
             .application_info(&app_info)
             .enabled_extension_names(&extension_names);
 
+        if ENABLE_VALIDATION_LAYERS {
+            check_validation_layer_support(&entry);
+            instance_create_info = instance_create_info.enabled_layer_names(&layer_pointers);
+        }
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }            
     }

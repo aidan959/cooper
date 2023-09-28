@@ -52,3 +52,26 @@ pub fn  get_lay_names_pointers()-> (Vec<CString>,Vec<*const i8>){
 
     (layer_names, layer_names_ptrs)
 }
+
+/// Check if we have necessary validation support.
+/// !Validation layers need to be disabled when running "release"
+/// 
+/// ! Panics
+/// Panic if at any of the layers are not supported.
+pub fn check_validation_layer_support(entry: &Entry) {
+    for required in REQUIRED_LAYERS.iter() {
+        let found = entry
+            .enumerate_instance_layer_properties()
+            .unwrap()
+            .iter()
+            .any(|layer| {
+                let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
+                let name = name.to_str().expect("Failed to get layer name pointer");
+                required == &name
+            });
+
+        if !found {
+            panic!("Validation layer not supported: {}", required);
+        }
+    }
+}

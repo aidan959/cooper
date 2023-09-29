@@ -171,13 +171,27 @@ impl VulkanRenderer {
                 .iter()
                 .map(|index| {
                     vk::DeviceQueueCreateInfo::builder()
-                        .queue_family_index(*index)
                         .queue_priorities(&queue_priorities)
+                        .queue_family_index(*index)
                         .build()
                 })
                 .collect::<Vec<_>>()
         };
+        
         let device_extensions = Self::get_required_device_extensions();
+        let device_extensions_ptrs = device_extensions
+            .iter()
+            .map(|ext| ext.as_ptr())
+            .collect::<Vec<_>>();
+        let device_features = vk::PhysicalDeviceFeatures::builder()
+            .sampler_anisotropy(true)
+            .build();
+        let mut device_info_builder = vk::DeviceCreateInfo::builder()
+            .enabled_extension_names(&device_extesions_ptrs)
+            .queue_create_infos(&queue_create_infos)
+            .enabled_features(&device_features);
+
+        let (_layer_names, layer_pointers) = get_lay_names_pointers();
         todo!();
     }
 }

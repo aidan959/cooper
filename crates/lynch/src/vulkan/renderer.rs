@@ -250,6 +250,32 @@ impl VulkanRenderer {
             extent,
             image_count,
         );
+        let graphics = queue_families_indices.graphics_index;
+        let present = queue_families_indices.present_index;
+
+        let families_indices = [graphics, present];
+        let create_info = {
+            let mut builder = vk::SwapchainCreateInfoKHR::builder()
+                .surface(vk_context.surface_khr())
+                .min_image_count(image_count)
+                .image_format(format.format)
+                .image_color_space(format.color_space)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+
+            builder = if graphics != present {
+                builder
+                    .queue_family_indices(&families_indices)
+            } else {
+                builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            };
+
+            builder
+                .pre_transform(details.capabilities.current_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(present_mode)
+                .clipped(true)
+                .build()
+        };
         todo!()
     }
 }

@@ -150,6 +150,10 @@ impl VulkanRenderer {
 
         (graphics, present)
     }
+    fn get_required_device_extensions() -> [&'static CStr; 1] {
+        [Swapchain::name()]
+    }
+    
 }
 
 

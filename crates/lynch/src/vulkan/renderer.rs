@@ -16,7 +16,8 @@ const HEIGHT: u32 = 720;
 pub struct VulkanRenderer {
     resize_dimensions: Option<[u32; 2]>,
     vk_context: VkContext,
-
+    graphics_queue: vk::Queue,
+    present_queue: vk::Queue,
 }
 
 impl VulkanRenderer {
@@ -231,7 +232,7 @@ impl Renderer for VulkanRenderer {
             Self::get_physical_device(&instance, &surface, surface_khr);
         
 
-        let (logical_device, _graphics_queue, _present_queue) = 
+        let (logical_device, graphics_queue, present_queue) = 
             Self::get_logical_device_queue(&instance,physical_device, queue_families_indices);
         
         let vk_context = VkContext::new(
@@ -246,8 +247,10 @@ impl Renderer for VulkanRenderer {
 
 
         Self {
-            None,
-            vk_context
+            resize_dimensions:None,
+            vk_context:vk_context
+            graphics_queue:graphics_queue
+            present_queue:present_queue
         }
     }
 }

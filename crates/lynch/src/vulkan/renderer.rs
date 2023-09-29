@@ -158,7 +158,8 @@ impl VulkanRenderer {
         device: vk::PhysicalDevice,
         queue_families_indices: QueueFamiliesIndices,
     ) -> (Device, vk::Queue, vk::Queue) {
-        todo()!;
+
+        todo!();
     }
 }
 
@@ -185,7 +186,7 @@ impl Renderer for VulkanRenderer {
 
         let (logical_device, graphics_queue, present_queue) = 
             Self::get_logical_device_queue(&instance,physical_device, queue_families_indices);
-
+        
         let vk_context = VkContext::new(
             entry,
             instance,
@@ -195,6 +196,8 @@ impl Renderer for VulkanRenderer {
             physical_device,
             logical_device,
         );
+
+
         Self {
             None,
             vk_context

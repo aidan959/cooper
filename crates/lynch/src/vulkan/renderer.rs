@@ -158,7 +158,26 @@ impl VulkanRenderer {
         device: vk::PhysicalDevice,
         queue_families_indices: QueueFamiliesIndices,
     ) -> (Device, vk::Queue, vk::Queue) {
+        let graphics_family_index = queue_families_indices.graphics_index;
+        let present_family_index = queue_families_indices.present_index;
 
+        let queue_priorities: [f32; 1] = [1.];
+
+        let queue_create_infos = {
+            let mut indices = vec![graphics_family_index, present_family_index];
+            indices.dedup();
+
+            indices
+                .iter()
+                .map(|index| {
+                    vk::DeviceQueueCreateInfo::builder()
+                        .queue_family_index(*index)
+                        .queue_priorities(&queue_priorities)
+                        .build()
+                })
+                .collect::<Vec<_>>()
+        };
+        let device_extensions = Self::get_required_device_extensions();
         todo!();
     }
 }

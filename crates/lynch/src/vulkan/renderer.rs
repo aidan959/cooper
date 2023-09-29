@@ -15,7 +15,8 @@ const HEIGHT: u32 = 720;
 
 pub struct VulkanRenderer {
     resize_dimensions: Option<[u32; 2]>,
-    vk_context: VkContext
+    vk_context: VkContext,
+
 }
 
 impl VulkanRenderer {
@@ -58,6 +59,13 @@ impl Renderer for VulkanRenderer {
         log::debug!("Creating application");
         let entry = ash::Entry::new().expect("Failed to create entry.");
         let instance = Self::create_instance(&entry);
+
+        let surface = Surface::new(&entry, &instance);
+
+        let surface_khr = 
+            unsafe {
+                unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
+            }
         Self {
             None,
             todo!()

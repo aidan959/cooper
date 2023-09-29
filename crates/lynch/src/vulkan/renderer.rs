@@ -192,7 +192,19 @@ impl VulkanRenderer {
             .enabled_features(&device_features);
 
         let (_layer_names, layer_pointers) = get_lay_names_pointers();
-        todo!();
+        
+        let device_create_info = device_info_builder.build();
+
+        let device = unsafe {
+            instance
+                .create_device(device, &device_create_info, None)
+                .expect("Logical device could not be created")
+        };
+
+        let graphics_queue = unsafe { device.get_device_queue(graphics_family_index, 0) };
+        let present_queue = unsafe { device.get_device_queue(present_family_index, 0) };
+
+        (device, graphics_queue, present_queue)
     }
 }
 

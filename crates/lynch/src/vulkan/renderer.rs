@@ -187,8 +187,8 @@ impl VulkanRenderer {
             .sampler_anisotropy(true)
             .build();
         let mut device_info_builder = vk::DeviceCreateInfo::builder()
-            .enabled_extension_names(&device_extesions_ptrs)
             .queue_create_infos(&queue_create_infos)
+            .enabled_extension_names(&device_extesions_ptrs)
             .enabled_features(&device_features);
 
         let (_layer_names, layer_pointers) = get_lay_names_pointers();

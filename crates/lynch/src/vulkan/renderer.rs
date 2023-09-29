@@ -231,7 +231,7 @@ impl Renderer for VulkanRenderer {
             Self::get_physical_device(&instance, &surface, surface_khr);
         
 
-        let (logical_device, graphics_queue, present_queue) = 
+        let (logical_device, _graphics_queue, _present_queue) = 
             Self::get_logical_device_queue(&instance,physical_device, queue_families_indices);
         
         let vk_context = VkContext::new(

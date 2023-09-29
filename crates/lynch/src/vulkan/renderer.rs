@@ -213,6 +213,37 @@ impl VulkanRenderer {
 
         (device, graphics_queue, present_queue)
     }
+
+    fn create_swapchain_and_images(
+        vk_context: &VkContext,
+        queue_families_indices: QueueFamiliesIndices,
+        dimensions: [u32; 2],
+    ) -> (
+        Swapchain,
+        vk::SwapchainKHR,
+        SwapchainProperties,
+        Vec<vk::Image>,
+    ) {
+        let details = SwapchainSupportDetails::new(
+            vk_context.physical_device(),
+            vk_context.surface(),
+            vk_context.surface_khr(),
+        );
+        let properties = details.get_ideal_swapchain_properties(dimensions);
+
+        let format = properties.format;
+        let present_mode = properties.present_mode;
+        let extent = properties.extent;
+        let image_count = {
+            let max = details.capabilities.max_image_count;
+            let mut preferred = details.capabilities.min_image_count + 1;
+            if max > 0 && preferred > max {
+                preferred = max;
+            }
+            preferred
+        };
+        todo!()
+    }
 }
 
 
@@ -248,7 +279,7 @@ impl Renderer for VulkanRenderer {
             physical_device,
             logical_device,
         );
-        let (swapchain, swapchain_khr, properties, images) = todo!();
+        let (swapchain, swapchain_khr, properties, images) = create_swapchain_and_images(vk_context,queue_families_indices, [WIDTH, HEIGHT]);
 
 
         Self {

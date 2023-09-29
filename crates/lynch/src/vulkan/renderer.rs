@@ -192,7 +192,9 @@ impl VulkanRenderer {
             .enabled_features(&device_features);
 
         let (_layer_names, layer_pointers) = get_lay_names_pointers();
-        
+        if ENABLE_VALIDATION_LAYERS {
+            device_info_builder = device_info_builder.enabled_layer_names(&layer_pointers);
+        }
         let device_create_info = device_info_builder.build();
 
         let device = unsafe {

@@ -260,10 +260,13 @@ impl VulkanRenderer {
                 .min_image_count(image_count)
                 .image_format(format.format)
                 .image_color_space(format.color_space)
+                .image_extent(extent)
+                .image_array_layers(1)
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
 
             builder = if graphics != present {
                 builder
+                    .image_sharing_mode(vk::SharingMode::CONCURRENT)
                     .queue_family_indices(&families_indices)
             } else {
                 builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
@@ -275,6 +278,7 @@ impl VulkanRenderer {
                 .present_mode(present_mode)
                 .clipped(true)
                 .build()
+            // .old_swapchain() We don't have an old swapchain but can't pass null
         };
         todo!()
     }

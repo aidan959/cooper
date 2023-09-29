@@ -21,6 +21,7 @@ pub struct VulkanRenderer {
     swapchain: Swapchain,
     swapchain_khr: vk::SwapchainKHR,
     swapchain_properties: SwapchainProperties,
+    images: Vec<vk::Image>
 }
 
 impl VulkanRenderer {
@@ -247,14 +248,15 @@ impl Renderer for VulkanRenderer {
             physical_device,
             logical_device,
         );
-        let (swapchain, swapchain_khr, properties) = todo!();
+        let (swapchain, swapchain_khr, properties, images) = todo!();
 
 
         Self {
             resize_dimensions:None,
-            vk_context:vk_context
-            graphics_queue:graphics_queue
-            present_queue:present_queue
+            vk_context
+            graphics_queue
+            present_queue
+            images
         }
     }
 }

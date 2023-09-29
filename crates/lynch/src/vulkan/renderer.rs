@@ -153,7 +153,13 @@ impl VulkanRenderer {
     fn get_required_device_extensions() -> [&'static CStr; 1] {
         [Swapchain::name()]
     }
-    
+    fn get_logical_device_queue(
+        instance: &Instance,
+        device: vk::PhysicalDevice,
+        queue_families_indices: QueueFamiliesIndices,
+    ) -> (Device, vk::Queue, vk::Queue) {
+        todo()!;
+    }
 }
 
 
@@ -175,6 +181,10 @@ impl Renderer for VulkanRenderer {
 
         let (physical_device, queue_family_indices) = 
             Self::get_physical_device(&instance, &surface, surface_khr);
+        
+
+        let (logical_device, graphics_queue, present_queue) = 
+            Self::get_logical_device_queue(&instance,physical_device, queue_families_indices);
 
         let vk_context = VkContext::new(
             entry,

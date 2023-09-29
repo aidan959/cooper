@@ -50,6 +50,37 @@ impl VulkanRenderer {
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }            
     }
+
+
+    fn get_physical_device(
+        instance: &Instance,
+        surface: &Surface,
+        surface_khr: &vk::SurfaceKHR
+    ) -> (vk::PhysicalDevice, QueueFamiliesIndices) {
+        let physical_device_handle = unsafe {
+            instance
+                .enumerate_physical_devices()
+                .expect("ahhh! No graphics card! Ahh! How!?")
+        };
+
+        let device = physical_device_handle
+            .into_iter()
+            .find(|device| Self::is_device_suitable(instance, surface, surface_khr, *device))
+            .expect("no suitable device found");
+
+        let props = unsafe { instance.get_physical_device_properties(device) };
+        // i really need to not use c bindings smh
+        log::debug!("Selected device: {:?}", unsafe {
+            CStr::from_ptr(props.device_name.as_ptr())
+        });
+
+        let (graphics, present) = Self::find_queue_families(instance, surface, surface_khr, device);
+        let queue_families_indices = QueueFamiliesIndices {
+            graphics_index: graphics.unwrap(),
+            present_index: present.unwrap(),
+        };
+        (device, queue_families_indices)
+    }
 }
 
 
@@ -65,7 +96,12 @@ impl Renderer for VulkanRenderer {
         let surface_khr = 
             unsafe {
                 unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
-            }
+            };
+
+        let debug_report_callback = setup_debug_messenger(&entry, &instance);
+
+        let (physical_device, queue_family_indices) =
+            
         Self {
             None,
             todo!()

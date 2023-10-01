@@ -21,7 +21,9 @@ pub struct VulkanRenderer {
     swapchain: Swapchain,
     swapchain_khr: vk::SwapchainKHR,
     swapchain_properties: SwapchainProperties,
-    images: Vec<vk::Image>
+    images: Vec<vk::Image>,
+    msaa_samples: vk::SampleCountFlags,
+    swapchain_image_views: Vec<vk::ImageView>,
 }
 
 impl VulkanRenderer {
@@ -290,6 +292,13 @@ impl VulkanRenderer {
             };
         (swapchain, swapchain_khr, properties, images)
     }
+    fn create_swapchain_image_views(
+        device: &Device,
+        swapchain_images: &[vk::Image],
+        swapchain_properties: SwapchainProperties,
+    ) -> Vec<vk::ImageView> {
+        todo!()  // fix
+    }
 }
 
 
@@ -325,15 +334,23 @@ impl Renderer for VulkanRenderer {
             physical_device,
             logical_device,
         );
-        let (swapchain, swapchain_khr, properties, images) = create_swapchain_and_images(vk_context,queue_families_indices, [WIDTH, HEIGHT]);
+        let (swapchain, swapchain_khr, properties, images) = 
+            Self::create_swapchain_and_images(vk_context,queue_families_indices, [WIDTH, HEIGHT]);
 
-
+        let swapchain_image_views = 
+            Self::create_swapchain_image_views(vk_context.device(), &images, properties);
+        let msaa_samples = vk_context.get_max_usable_sample_count();
         Self {
             resize_dimensions:None,
-            vk_context
-            graphics_queue
-            present_queue
-            images
+            vk_context,
+            graphics_queue,
+            present_queue,
+            images,
+            msaa_samples,
+            swapchain,
+            swapchain_khr,
+            swapchain_properties,
+            swapchain_image_views
         }
     }
 }

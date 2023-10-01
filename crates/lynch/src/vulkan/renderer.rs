@@ -489,7 +489,7 @@ impl Renderer for VulkanRenderer {
 
 impl Drop for VulkanRenderer {
     fn drop(&mut self) {
-        log::debug!("Dropping application.");
+        log::debug!("Dropping renderer.");
         self.cleanup_swapchain();
     }
 }

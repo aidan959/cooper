@@ -357,8 +357,26 @@ impl VulkanRenderer {
             .resolve_attachments(&resolve_attachment_refs)
             .depth_stencil_attachment(&depth_attachment_ref)
             .build();
-        let _subpass_descs = [subpass_desc];
-        todo!("finish render pass")
+
+
+        let subpass_dep = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .build();
+        let subpass_deps = [subpass_dep];
+
+        let render_pass_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&attachment_descs)
+            .subpasses(&[subpass_desc])
+            .dependencies(&[subpass_dep])
+            .build();
+        unsafe { device.create_render_pass(&render_pass_info, None).unwrap() }
     }
     fn find_depth_format(vk_context: &VkContext) -> vk::Format {
         let candidates = vec![

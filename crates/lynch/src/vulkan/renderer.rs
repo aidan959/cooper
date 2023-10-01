@@ -24,7 +24,8 @@ pub struct VulkanRenderer {
     images: Vec<vk::Image>,
     msaa_samples: vk::SampleCountFlags,
     swapchain_image_views: Vec<vk::ImageView>,
-    render_pass:  vk::RenderPass
+    render_pass:  vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout
 }
 
 impl VulkanRenderer {
@@ -393,7 +394,7 @@ impl VulkanRenderer {
             )
             .expect("Failed to find a supported depth format")
     }
-
+    
     fn create_swapchain_image_views(
         device: &Device,
         swapchain_images: &[vk::Image],
@@ -411,6 +412,27 @@ impl VulkanRenderer {
                 )
             })
             .collect::<Vec<_>>()
+    }
+    /// create layout
+    fn create_descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
+        let ubo_binding = UniformBufferObject::get_descriptor_set_layout_binding();
+        let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+        let bindings = [ubo_binding, sampler_binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        unsafe {
+            device
+                .create_descriptor_set_layout(&layout_info, None)
+                .unwrap()
+        }
     }
 
     /// clean up swapchain
@@ -470,6 +492,8 @@ impl Renderer for VulkanRenderer {
 
         let render_pass = 
             Self::create_render_pass(vk_context.device(), properties, msaa_samples, depth_format);
+
+        let descriptor_set_layout  = Self::create_descriptor_set_layout(vk_context.device());
         Self {
             resize_dimensions:None,
             vk_context,
@@ -481,7 +505,8 @@ impl Renderer for VulkanRenderer {
             swapchain_khr,
             swapchain_properties,
             swapchain_image_views,
-            render_pass
+            render_pass,
+            descriptor_set_layout
         }
     }
 }

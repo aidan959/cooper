@@ -435,6 +435,15 @@ impl VulkanRenderer {
         }
     }
 
+    fn create_pipeline(
+        logical_device: &Device,
+        swapchain_properties: SwapchainProperties,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        todo!();
+    }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
         let device = self.vk_context.device();
@@ -494,6 +503,14 @@ impl Renderer for VulkanRenderer {
             Self::create_render_pass(vk_context.device(), properties, msaa_samples, depth_format);
 
         let descriptor_set_layout  = Self::create_descriptor_set_layout(vk_context.device());
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            vk_context.device(),
+            properties,
+            render_pass,
+            descriptor_set_layout,
+            msaa_samples
+        );
         Self {
             resize_dimensions:None,
             vk_context,

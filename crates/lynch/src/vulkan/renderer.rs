@@ -278,9 +278,17 @@ impl VulkanRenderer {
                 .present_mode(present_mode)
                 .clipped(true)
                 .build()
-            // .old_swapchain() We don't have an old swapchain but can't pass null
         };
-        todo!()
+        let swapchain = Swapchain::new(vk_context.instance(), vk_context.device());
+        let swapchain_khr = 
+            unsafe {
+                swapchain.create_swapchain(&create_info, None).unwrap()
+            };
+        let images = 
+            unsafe {
+                swapchain.get_swapchain_images(swapchain_khr).unwrap()
+            };
+        (swapchain, swapchain_khr, properties, images)
     }
 }
 

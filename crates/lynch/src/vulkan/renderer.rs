@@ -412,6 +412,19 @@ impl VulkanRenderer {
             })
             .collect::<Vec<_>>()
     }
+
+    /// clean up swapchain
+    fn cleanup_swapchain(&  mut self) {
+        let device = self.vk_context.device();
+
+        unsafe {
+            device.destroy_render_pass(self.render_pass, None);
+            self.swapchain_image_views
+                .iter()
+                .for_each(|v| device.destroy_image_view(*v, None));
+            self.swapchain.destroy_swapchain(self.swapchain_khr, None);
+        }
+    }
 }
 
 
@@ -470,5 +483,13 @@ impl Renderer for VulkanRenderer {
             swapchain_image_views,
             render_pass
         }
+    }
+}
+
+
+impl Drop for VulkanRenderer {
+    fn drop(&mut self) {
+        log::debug!("Dropping application.");
+        self.cleanup_swapchain();
     }
 }

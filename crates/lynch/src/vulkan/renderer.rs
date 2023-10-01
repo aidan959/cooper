@@ -357,7 +357,7 @@ impl VulkanRenderer {
             .resolve_attachments(&resolve_attachment_refs)
             .depth_stencil_attachment(&depth_attachment_ref)
             .build();
-
+        let subpass_descs = [subpass_desc];
 
         let subpass_dep = vk::SubpassDependency::builder()
             .src_subpass(vk::SUBPASS_EXTERNAL)
@@ -373,9 +373,10 @@ impl VulkanRenderer {
 
         let render_pass_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachment_descs)
-            .subpasses(&[subpass_desc])
-            .dependencies(&[subpass_dep])
+            .subpasses(&subpass_descs)
+            .dependencies(&subpass_deps)
             .build();
+
         unsafe { device.create_render_pass(&render_pass_info, None).unwrap() }
     }
     fn find_depth_format(vk_context: &VkContext) -> vk::Format {

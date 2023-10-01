@@ -335,6 +335,29 @@ impl VulkanRenderer {
             depth_attachement_desc,
             resolve_attachment_desc,
         ];
+
+        let color_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+        let color_attachment_refs = [color_attachment_ref];
+
+        let depth_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .build();
+        let resolve_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(2)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+        let resolve_attachment_refs = [resolve_attachment_ref];
+        let subpass_desc = vk::SubpassDescription::builder()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&color_attachment_refs)
+            .resolve_attachments(&resolve_attachment_refs)
+            .depth_stencil_attachment(&depth_attachment_ref)
+            .build();
+        let _subpass_descs = [subpass_desc];
         todo!("finish render pass")
     }
     fn find_depth_format(vk_context: &VkContext) -> vk::Format {

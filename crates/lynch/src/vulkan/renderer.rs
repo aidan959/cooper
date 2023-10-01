@@ -292,12 +292,38 @@ impl VulkanRenderer {
             };
         (swapchain, swapchain_khr, properties, images)
     }
+    fn find_depth_format(vk_context: &VkContext) -> vk::Format {
+        let candidates = vec![
+            vk::Format::D32_SFLOAT,
+            vk::Format::D32_SFLOAT_S8_UINT,
+            vk::Format::D24_UNORM_S8_UINT,
+        ];
+        vk_context
+            .find_supported_format(
+                &candidates,
+                vk::ImageTiling::OPTIMAL,
+                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+            )
+            .expect("Failed to find a supported depth format")
+    }
+
     fn create_swapchain_image_views(
         device: &Device,
         swapchain_images: &[vk::Image],
         swapchain_properties: SwapchainProperties,
     ) -> Vec<vk::ImageView> {
-        todo!()  // fix
+        swapchain_images
+            .iter()
+            .map(|image| {
+                Self::create_image_view(
+                    device,
+                    *image,
+                    swapchain_properties.format.format,
+                    1,
+                    vk::ImageAspectFlags::COLOR,
+                )
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -340,6 +366,7 @@ impl Renderer for VulkanRenderer {
         let swapchain_image_views = 
             Self::create_swapchain_image_views(vk_context.device(), &images, properties);
         let msaa_samples = vk_context.get_max_usable_sample_count();
+        let depth_format = Self::find_depth_format(&vk_context);
         Self {
             resize_dimensions:None,
             vk_context,

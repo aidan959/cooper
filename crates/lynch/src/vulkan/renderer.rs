@@ -24,6 +24,7 @@ pub struct VulkanRenderer {
     images: Vec<vk::Image>,
     msaa_samples: vk::SampleCountFlags,
     swapchain_image_views: Vec<vk::ImageView>,
+    render_pass:  vk::RenderPass
 }
 
 impl VulkanRenderer {
@@ -292,6 +293,14 @@ impl VulkanRenderer {
             };
         (swapchain, swapchain_khr, properties, images)
     }
+    fn create_render_pass(
+        device: &Device,
+        swapchain_properties: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        depth_format: vk::Format,
+    ) -> vk::RenderPass {
+        todo!("finish render pass")
+    }
     fn find_depth_format(vk_context: &VkContext) -> vk::Format {
         let candidates = vec![
             vk::Format::D32_SFLOAT,
@@ -367,6 +376,9 @@ impl Renderer for VulkanRenderer {
             Self::create_swapchain_image_views(vk_context.device(), &images, properties);
         let msaa_samples = vk_context.get_max_usable_sample_count();
         let depth_format = Self::find_depth_format(&vk_context);
+
+        let render_pass = 
+            Self::create_render_pass(vk_context.device(), properties, msaa_samples, depth_format);
         Self {
             resize_dimensions:None,
             vk_context,
@@ -377,7 +389,8 @@ impl Renderer for VulkanRenderer {
             swapchain,
             swapchain_khr,
             swapchain_properties,
-            swapchain_image_views
+            swapchain_image_views,
+            render_pass
         }
     }
 }

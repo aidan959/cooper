@@ -608,6 +608,16 @@ impl VulkanRenderer {
                 .unwrap()
         }
     }
+    /// 
+    fn create_color_texture(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        swapchain_properties: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Texture {
+        todo!()
+    }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
         let device = self.vk_context.device();

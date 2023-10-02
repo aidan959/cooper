@@ -29,6 +29,7 @@ pub struct VulkanRenderer {
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
     command_pool: vk::CommandPool,
+    transient_command_pool: vk::CommandPool,
 }
 
 impl VulkanRenderer {
@@ -680,7 +681,11 @@ impl Renderer for VulkanRenderer {
             queue_families_indices,
             vk::CommandPoolCreateFlags::empty(),
         );
-
+        let transient_command_pool = Self::create_command_pool(
+            vk_context.device(),
+            queue_families_indices,
+            vk::CommandPoolCreateFlags::TRANSIENT,
+        );
         Self {
             resize_dimensions:None,
             vk_context,

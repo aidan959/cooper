@@ -434,7 +434,15 @@ impl VulkanRenderer {
                 .unwrap()
         }
     }
-
+    fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
+        log::debug!("Loading shader file {}", path.as_ref().to_str().unwrap());
+        let mut file = std::fs::File::open(path).unwrap();
+        ash::util::read_spv(&mut file).unwrap()
+    }
+    fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
+        let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
+        unsafe { device.create_shader_module(&create_info, None).unwrap() }
+    }
     fn create_pipeline(
         logical_device: &Device,
         swapchain_properties: SwapchainProperties,
@@ -565,13 +573,19 @@ impl VulkanRenderer {
             .render_pass(render_pass)
             .subpass(0)
             .build();
-        
+    
+        let pipeline_infos = [pipeline_info];
+        let pipeline = unsafe {
+            logical_device
+                .create_graphics_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+                .unwrap()[0]
+        };
 
         unsafe {
             logical_device.destroy_shader_module(vertex_shader_module, None);
             logical_device.destroy_shader_module(fragment_shader_module, None);
         };
-        todo!();
+        (pipeline, pipeline_layout)
     }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {

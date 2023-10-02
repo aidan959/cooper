@@ -608,6 +608,59 @@ impl VulkanRenderer {
                 .unwrap()
         }
     }
+    fn create_image(
+        vk_context: &VkContext,
+        mem_properties: vk::MemoryPropertyFlags,
+        extent: vk::Extent2D,
+        mip_levels: u32,
+        sample_count: vk::SampleCountFlags,
+        format: vk::Format,
+        tiling: vk::ImageTiling,
+        usage: vk::ImageUsageFlags,
+    ) -> (vk::Image, vk::DeviceMemory) {
+        let image_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width: extent.width,
+                height: extent.height,
+                depth: 1,
+            })
+            .mip_levels(mip_levels)
+            .array_layers(1)
+            .format(format)
+            .tiling(tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(sample_count)
+            .flags(vk::ImageCreateFlags::empty())
+            .build();
+
+        let image = unsafe { vk_context.device().create_image(&image_info, None).unwrap() };
+        let mem_requirements = unsafe { vk_context.device().get_image_memory_requirements(image) };
+        let mem_type_index = Self::find_memory_type(
+            mem_requirements,
+            vk_context.get_mem_properties(),
+            mem_properties,
+        );
+        let alloc_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(mem_type_index)
+            .build();
+        let memory = unsafe {
+            let mem = vk_context
+                .device()
+                .allocate_memory(&alloc_info, None)
+                .unwrap();
+            vk_context
+                .device()
+                .bind_image_memory(image, mem, 0)
+                .unwrap();
+            mem
+        };
+
+        (image, memory)
+    }
     fn create_color_texture(
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
@@ -615,38 +668,18 @@ impl VulkanRenderer {
         swapchain_properties: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Texture {
-        let format = swapchain_properties.format.format;
-        let (image, memory) = Self::create_image(
-            vk_context,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            swapchain_properties.extent,
-            1,
-            msaa_samples,
-            format,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
-        );
-
-        Self::transition_image_layout(
-            vk_context.device(),
-            command_pool,
-            transition_queue,
-            image,
-            1,
-            format,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        );
-
-        let view = Self::create_image_view(
-            vk_context.device(),
-            image,
-            format,
-            1,
-            vk::ImageAspectFlags::COLOR,
-        );
-
-        Texture::new(image, memory, view, None)
+        todo!()
+    }
+    fn create_depth_texture(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        format: vk::Format,
+        extent: vk::Extent2D,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Texture {
+        todo!()
+        
     }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
@@ -731,6 +764,14 @@ impl Renderer for VulkanRenderer {
             command_pool,
             graphics_queue,
             properties,
+            msaa_samples,
+        );
+        let depth_texture = Self::create_depth_texture(
+            &vk_context,
+            command_pool,
+            graphics_queue,
+            depth_format,
+            properties.extent,
             msaa_samples,
         );
         Self {

@@ -25,7 +25,10 @@ pub struct VulkanRenderer {
     msaa_samples: vk::SampleCountFlags,
     swapchain_image_views: Vec<vk::ImageView>,
     render_pass:  vk::RenderPass,
-    descriptor_set_layout: vk::DescriptorSetLayout
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+    command_pool: vk::CommandPool,
 }
 
 impl VulkanRenderer {
@@ -587,6 +590,23 @@ impl VulkanRenderer {
         };
         (pipeline, pipeline_layout)
     }
+    fn create_command_pool(
+        device: &Device,
+        queue_families_indices: QueueFamiliesIndices,
+        create_flags: vk::CommandPoolCreateFlags,
+    ) -> vk::CommandPool {
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queue_families_indices.graphics_index)
+            .flags(vk::CommandPoolCreateFlags::empty())
+            .flags(create_flags)
+            .build();
+
+        unsafe {
+            device
+                .create_command_pool(&command_pool_info, None)
+                .unwrap()
+        }
+    }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
         let device = self.vk_context.device();
@@ -654,6 +674,13 @@ impl Renderer for VulkanRenderer {
             descriptor_set_layout,
             msaa_samples
         );
+
+        let command_pool = Self::create_command_pool(
+            vk_context.device(),
+            queue_families_indices,
+            vk::CommandPoolCreateFlags::empty(),
+        );
+
         Self {
             resize_dimensions:None,
             vk_context,
@@ -666,7 +693,10 @@ impl Renderer for VulkanRenderer {
             swapchain_properties,
             swapchain_image_views,
             render_pass,
-            descriptor_set_layout
+            descriptor_set_layout,
+            pipeline,
+            pipeline_layout,
+            command_pool
         }
     }
 }

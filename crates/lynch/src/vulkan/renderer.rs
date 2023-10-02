@@ -472,7 +472,7 @@ impl VulkanRenderer {
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
             .build();
-            
+
         let viewport = vk::Viewport {
                 x: 0.,
                 y: 0.,
@@ -481,6 +481,17 @@ impl VulkanRenderer {
                 min_depth: 0.,
                 max_depth: 1.,
             };
+
+        let viewports: [vk::Viewport; 1] = [viewport];
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_properties.extent,
+        };
+        let scissors = [scissor];
+        let viewport_create_info = vk::PipelineViewportStateCreateInfo::builder()
+            .viewports(&viewports)
+            .scissors(&scissors)
+            .build();    
         todo!();
     }
     /// clean up swapchain

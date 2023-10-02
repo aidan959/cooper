@@ -32,6 +32,7 @@ pub struct VulkanRenderer {
     transient_command_pool: vk::CommandPool,
     depth_texture: Texture,
     color_texture:Texture,
+    swapchain_framebuffers: Vec<vk::Framebuffer>
 
 }
 
@@ -922,6 +923,33 @@ impl VulkanRenderer {
 
         Texture::new(image, mem, view, None)
     }
+    fn create_framebuffers(
+        logical_device: &Device,
+        swapchain_image_views: &[vk::ImageView],
+        color_texture: Texture,
+        depth_texture: Texture,
+        render_pass: vk::RenderPass,
+        properties: SwapchainProperties,
+    ) -> Vec<vk::Framebuffer> {
+        swapchain_image_views
+            .iter()
+            .map(|view| [color_texture.view, depth_texture.view, *view])
+            .map(|attachments| {
+                let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(render_pass)
+                    .attachments(&attachments)
+                    .width(properties.extent.width)
+                    .height(properties.extent.height)
+                    .layers(1)
+                    .build();
+                unsafe {
+                    logical_device
+                        .create_framebuffer(&framebuffer_info, None)
+                        .unwrap()
+                }
+            })
+            .collect::<Vec<_>>()
+    }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
         let device = self.vk_context.device();
@@ -1015,6 +1043,15 @@ impl Renderer for VulkanRenderer {
             properties.extent,
             msaa_samples,
         );
+
+        let swapchain_framebuffers = Self::create_framebuffers(
+            vk_context.device(),
+            &swapchain_image_views,
+            color_texture,
+            depth_texture,
+            render_pass,
+            properties,
+        );
         Self {
             resize_dimensions:None,
             vk_context,
@@ -1032,7 +1069,8 @@ impl Renderer for VulkanRenderer {
             pipeline_layout,
             command_pool,
             color_texture,
-            depth_texture
+            depth_texture,
+            swapchain_framebuffers
         }
     }
 }

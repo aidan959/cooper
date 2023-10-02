@@ -552,6 +552,25 @@ impl VulkanRenderer {
                     .unwrap()
             }
         };
+        let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&shader_states_infos)
+            .vertex_input_state(&vertex_input_info)
+            .input_assembly_state(&input_assembly_info)
+            .viewport_state(&viewport_create_info)
+            .rasterization_state(&rasterizer_create_info)
+            .multisample_state(&multisampling_create_info)
+            .depth_stencil_state(&depth_stencil_info)
+            .color_blend_state(&color_blending_info)
+            .layout(pipeline_layout)
+            .render_pass(render_pass)
+            .subpass(0)
+            .build();
+        
+
+        unsafe {
+            logical_device.destroy_shader_module(vertex_shader_module, None);
+            logical_device.destroy_shader_module(fragment_shader_module, None);
+        };
         todo!();
     }
     /// clean up swapchain

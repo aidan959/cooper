@@ -491,6 +491,33 @@ impl VulkanRenderer {
         let viewport_create_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(&viewports)
             .scissors(&scissors)
+            .build();
+        let rasterizer_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
+            .depth_clamp_enable(false)
+            .rasterizer_discard_enable(false)
+            .polygon_mode(vk::PolygonMode::FILL)
+            .line_width(1.)
+            .cull_mode(vk::CullModeFlags::BACK)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+            .depth_bias_enable(false)
+            .depth_bias_constant_factor(0.)
+            .depth_bias_clamp(0.)
+            .depth_bias_slope_factor(0.)
+            .build();
+
+        let multisampling_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
+            .sample_shading_enable(false)
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .alpha_to_coverage_enable(false)
+            .alpha_to_one_enable(false)
+            .build();   
+        
+        let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+
+            .front(Default::default())
+            .back(Default::default())
             .build();    
         todo!();
     }

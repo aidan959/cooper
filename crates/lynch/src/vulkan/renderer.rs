@@ -726,6 +726,13 @@ impl Renderer for VulkanRenderer {
             queue_families_indices,
             vk::CommandPoolCreateFlags::TRANSIENT,
         );
+        let color_texture = Self::create_color_texture(
+            &vk_context,
+            command_pool,
+            graphics_queue,
+            properties,
+            msaa_samples,
+        );
         Self {
             resize_dimensions:None,
             vk_context,

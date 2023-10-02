@@ -446,6 +446,21 @@ impl VulkanRenderer {
         let fragment_source = Self::read_shader_from_file("shaders/shader.frag.spv");
         let vertex_shader_module = Self::create_shader_module(logical_device, &vertex_source);
         let fragment_shader_module = Self::create_shader_module(logical_device, &fragment_source);
+                                // vertex entry
+        let entry_point_name = CString::new("main").unwrap();
+        let vertex_shader_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vertex_shader_module)
+            .name(&entry_point_name)
+            .build();
+        let fragment_shader_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(fragment_shader_module)
+            .name(&entry_point_name)
+            .build();
+        let shader_states_infos = [vertex_shader_state_info, fragment_shader_state_info];
+
+        
         todo!();
     }
     /// clean up swapchain

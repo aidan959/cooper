@@ -442,6 +442,10 @@ impl VulkanRenderer {
         descriptor_set_layout: vk::DescriptorSetLayout,
         msaa_samples: vk::SampleCountFlags,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
+        let vertex_source = Self::read_shader_from_file("shaders/shader.vert.spv");
+        let fragment_source = Self::read_shader_from_file("shaders/shader.frag.spv");
+        let vertex_shader_module = Self::create_shader_module(logical_device, &vertex_source);
+        let fragment_shader_module = Self::create_shader_module(logical_device, &fragment_source);
         todo!();
     }
     /// clean up swapchain

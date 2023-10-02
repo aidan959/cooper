@@ -30,6 +30,9 @@ pub struct VulkanRenderer {
     pipeline: vk::Pipeline,
     command_pool: vk::CommandPool,
     transient_command_pool: vk::CommandPool,
+    depth_texture: Texture,
+    color_texture:Texture,
+
 }
 
 impl VulkanRenderer {
@@ -398,7 +401,28 @@ impl VulkanRenderer {
             )
             .expect("Failed to find a supported depth format")
     }
-    
+    fn create_image_view(
+        device: &Device,
+        image: vk::Image,
+        format: vk::Format,
+        mip_levels: u32,
+        aspect_mask: vk::ImageAspectFlags,
+    ) -> vk::ImageView {
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .build();
+
+        unsafe { device.create_image_view(&create_info, None).unwrap() }
+    }
     fn create_swapchain_image_views(
         device: &Device,
         swapchain_images: &[vk::Image],
@@ -837,7 +861,26 @@ impl VulkanRenderer {
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
         );
-        todo!()
+        Self::transition_image_layout(
+            vk_context.device(),
+            command_pool,
+            transition_queue,
+            image,
+            1,
+            format,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        );
+
+        let view = Self::create_image_view(
+            vk_context.device(),
+            image,
+            format,
+            1,
+            vk::ImageAspectFlags::COLOR,
+        );
+
+        Texture::new(image, memory, view, None)
     }
     fn create_depth_texture(
         vk_context: &VkContext,
@@ -847,8 +890,37 @@ impl VulkanRenderer {
         extent: vk::Extent2D,
         msaa_samples: vk::SampleCountFlags,
     ) -> Texture {
-        todo!()
-        
+        let (image, mem) = Self::create_image(
+            vk_context,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            extent,
+            1,
+            msaa_samples,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        );
+
+        Self::transition_image_layout(
+            vk_context.device(),
+            command_pool,
+            transition_queue,
+            image,
+            1,
+            format,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        );
+
+        let view = Self::create_image_view(
+            vk_context.device(),
+            image,
+            format,
+            1,
+            vk::ImageAspectFlags::DEPTH,
+        );
+
+        Texture::new(image, mem, view, None)
     }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
@@ -958,7 +1030,9 @@ impl Renderer for VulkanRenderer {
             descriptor_set_layout,
             pipeline,
             pipeline_layout,
-            command_pool
+            command_pool,
+            color_texture,
+            depth_texture
         }
     }
 }

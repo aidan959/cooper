@@ -460,7 +460,27 @@ impl VulkanRenderer {
             .build();
         let shader_states_infos = [vertex_shader_state_info, fragment_shader_state_info];
 
+        let vertex_binding_descs = [Vertex::get_binding_description()];
+        let vertex_attribute_descs = Vertex::get_attribute_descriptions();
         
+        let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&vertex_binding_descs)
+            .vertex_attribute_descriptions(&vertex_attribute_descs)
+            .build();
+
+        let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .primitive_restart_enable(false)
+            .build();
+            
+        let viewport = vk::Viewport {
+                x: 0.,
+                y: 0.,
+                width: swapchain_properties.extent.width as _,
+                height: swapchain_properties.extent.height as _,
+                min_depth: 0.,
+                max_depth: 1.,
+            };
         todo!();
     }
     /// clean up swapchain

@@ -608,7 +608,6 @@ impl VulkanRenderer {
                 .unwrap()
         }
     }
-    /// 
     fn create_color_texture(
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
@@ -616,7 +615,38 @@ impl VulkanRenderer {
         swapchain_properties: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Texture {
-        todo!()
+        let format = swapchain_properties.format.format;
+        let (image, memory) = Self::create_image(
+            vk_context,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            swapchain_properties.extent,
+            1,
+            msaa_samples,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        );
+
+        Self::transition_image_layout(
+            vk_context.device(),
+            command_pool,
+            transition_queue,
+            image,
+            1,
+            format,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        );
+
+        let view = Self::create_image_view(
+            vk_context.device(),
+            image,
+            format,
+            1,
+            vk::ImageAspectFlags::COLOR,
+        );
+
+        Texture::new(image, memory, view, None)
     }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {

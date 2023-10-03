@@ -1267,6 +1267,58 @@ impl VulkanRenderer {
             },
         );
     }
+    fn create_index_buffer(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        transfer_queue: vk::Queue,
+        indices: &[u32],
+    ) -> (vk::Buffer, vk::DeviceMemory) {
+        Self::create_device_local_buffer_with_data::<u16, _>(
+            vk_context,
+            command_pool,
+            transfer_queue,
+            vk::BufferUsageFlags::INDEX_BUFFER,
+            indices,
+        )
+    }
+    fn create_vertex_buffer(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        transfer_queue: vk::Queue,
+        vertices: &[Vertex],
+    ) -> (vk::Buffer, vk::DeviceMemory) {
+        Self::create_device_local_buffer_with_data::<u32, _>(
+            vk_context,
+            command_pool,
+            transfer_queue,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vertices,
+        )
+    }
+    fn load_model() -> (Vec<Vertex>, Vec<u32>) {
+        log::debug!("Loading model.");
+        let (models, _) = tobj::load_obj(&Path::new("models/cube.obj")).unwrap();
+
+        let mesh = &models[0].mesh;
+
+        let vertex_count = mesh.positions.len() / 3;
+
+        let mut vertices = Vec::with_capacity(vertex_count);
+
+        for i in 0..vertex_count {
+            let vertex = Vertex {
+                pos: [
+                    mesh.positions[i * 3],
+                    mesh.positions[i * 3 + 1],
+                    mesh.positions[i * 3 + 2],
+                ],
+                color: [1.0, 1.0, 1.0],
+                coords: [mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]],
+            };
+            vertices.push(vertex);
+        }
+        (vertices, mesh.indices.clone())
+    }
     /// clean up swapchain
     fn cleanup_swapchain(&  mut self) {
         let device = self.vk_context.device();
@@ -1373,6 +1425,21 @@ impl Renderer for VulkanRenderer {
 
         let _texture = Self::create_texture_image(&vk_context, command_pool, graphics_queue);
         
+
+        let (vertices, indices) = Self::load_model();
+
+        let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            &vertices,
+        );
+        let (index_buffer, index_buffer_memory) = Self::create_index_buffer(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            &indices,
+        );
         Self {
             resize_dimensions:None,
             vk_context,

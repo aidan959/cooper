@@ -33,6 +33,7 @@ pub struct VulkanRenderer {
     transient_command_pool: vk::CommandPool,
     depth_texture: Texture,
     color_texture:Texture,
+    texture: Texture,
     swapchain_framebuffers: Vec<vk::Framebuffer>
 
 }
@@ -1423,7 +1424,7 @@ impl Renderer for VulkanRenderer {
         );
 
 
-        let _texture = Self::create_texture_image(&vk_context, command_pool, graphics_queue);
+        let texture = Self::create_texture_image(&vk_context, command_pool, graphics_queue);
         
 
         let (vertices, indices) = Self::load_model();
@@ -1458,7 +1459,8 @@ impl Renderer for VulkanRenderer {
             command_pool,
             color_texture,
             depth_texture,
-            swapchain_framebuffers
+            swapchain_framebuffers,
+            texture
         }
     }
 }

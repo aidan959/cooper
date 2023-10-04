@@ -1,5 +1,6 @@
 
 
+
 use crate::{camera::*, vulkan::cont::*, vulkan::debug::*, vulkan::swapchain::*, vulkan::texture::*, window::window::Window, renderer::Renderer};
 use ash::{
     extensions::{
@@ -9,14 +10,15 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
 use ash::{vk, Device, Entry, Instance};
-use cgmath::{Deg, Matrix4, Vector3};
+use cgmath::{Deg, Matrix4, Vector3, Point3};
 use memoffset::offset_of;
+use winit::dpi::PhysicalSize;
 use std::{
     ffi::{CStr, CString},
     fmt::Display,
-    path::Path,
+    path::Path, mem::{size_of, align_of},
 };
-
+use glam;
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 720;
@@ -560,7 +562,7 @@ impl VulkanRenderer {
         pool: vk::DescriptorPool,
         layout: vk::DescriptorSetLayout,
         uniform_buffers: &[vk::Buffer],
-        texture: Texture,
+        texture: Texture
     ) -> Vec<vk::DescriptorSet> {
         let layouts = (0..uniform_buffers.len())
             .map(|_| layout)
@@ -578,7 +580,7 @@ impl VulkanRenderer {
                 let buffer_info = vk::DescriptorBufferInfo::builder()
                     .buffer(*buffer)
                     .offset(0)
-                    .range(std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize)
+                    .range(size_of::<UniformBufferObject>() as vk::DeviceSize)
                     .build();
                 let buffer_infos = [buffer_info];
 
@@ -783,18 +785,19 @@ impl VulkanRenderer {
         )
     }
     fn create_texture_image(
+        texture_path: &str,
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         copy_queue: vk::Queue,
     ) -> Texture {
-        let image = image::open("textures/coop.png").unwrap();
+        let image = image::open(texture_path).unwrap();
         let image_as_rgb = image.to_rgba();
         let width = (&image_as_rgb).width();
         let height = (&image_as_rgb).height();
         let max_mip_levels = ((width.min(height) as f32).log2().floor() + 1.0) as u32;
         let extent = vk::Extent2D { width, height };
         let pixels = image_as_rgb.into_raw();
-        let image_size = (pixels.len() * std::mem::size_of::<u8>()) as vk::DeviceSize;
+        let image_size = (pixels.len() * size_of::<u8>()) as vk::DeviceSize;
 
         let (buffer, memory, mem_size) = Self::create_buffer(
             vk_context,
@@ -808,7 +811,7 @@ impl VulkanRenderer {
                 .device()
                 .map_memory(memory, 0, image_size, vk::MemoryMapFlags::empty())
                 .unwrap();
-            let mut align = ash::util::Align::new(ptr, std::mem::align_of::<u8>() as _, mem_size);
+            let mut align = ash::util::Align::new(ptr, align_of::<u8>() as _, mem_size);
             align.copy_from_slice(&pixels);
             vk_context.device().unmap_memory(memory);
         }
@@ -1170,7 +1173,7 @@ impl VulkanRenderer {
         usage: vk::BufferUsageFlags,
         data: &[T],
     ) -> (vk::Buffer, vk::DeviceMemory) {
-        let size = (data.len() * std::mem::size_of::<T>()) as vk::DeviceSize;
+        let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
         let (staging_buffer, staging_memory, staging_mem_size) = Self::create_buffer(
             vk_context,
             size,
@@ -1183,7 +1186,7 @@ impl VulkanRenderer {
                 .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())
                 .unwrap();
             let mut align =
-                ash::util::Align::new(data_ptr, std::mem::align_of::<A>() as _, staging_mem_size);
+                ash::util::Align::new(data_ptr, align_of::<A>() as _, staging_mem_size);
             align.copy_from_slice(data);
 
             vk_context.device().unmap_memory(staging_memory);
@@ -1293,7 +1296,7 @@ impl VulkanRenderer {
         vk_context: &VkContext,
         count: usize,
     ) -> (Vec<vk::Buffer>, Vec<vk::DeviceMemory>) {
-        let size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
         let mut buffers = Vec::new();
         let mut memories = Vec::new();
 
@@ -1653,7 +1656,8 @@ impl VulkanRenderer {
         self.swapchain_framebuffers = swapchain_framebuffers;
         self.command_buffers = command_buffers;
     }
-    fn update_uniform_buffers(&mut self, current_image: u32) {
+    
+    fn update_uniform_buffers(&mut self, current_image: u32, frame_count : u32) {
         if self.is_left_clicked && self.cursor_delta.is_some() {
             let delta = self.cursor_delta.take().unwrap();
             self.camera.mouse_moved(delta);
@@ -1664,21 +1668,35 @@ impl VulkanRenderer {
 
         let aspect = self.swapchain_properties.extent.width as f32
             / self.swapchain_properties.extent.height as f32;
-        let speed = 0.01;
+        let _speed = 0.01; 
+        
 
         let ubo = UniformBufferObject {
-            model: Matrix4::from_angle_x(Deg(270.0)),
+            model: Matrix4::from_translation( Vector3 { x: 0., y: 0., z: -(frame_count as f32) * 0.01 } ),
             view: Matrix4::look_at(
                 self.camera.position(),
-                self.camera.get_look_toward(),
+                //self.camera.get_look_toward(),
+                Point3::new(0.0, 0.0, 0.0),
+
                 Vector3::new(0.0, 1.0, 0.0),
             ),
             proj: crate::math::perspective(Deg(90.0), aspect, 0.1, 1000.0),
         };
-        let ubos = [ubo];
+        let ubo2 = UniformBufferObject {
+            model: Matrix4::from_translation( Vector3 { x: 0., y: 0., z: (frame_count as f32) * 0.01 } ),
+            view: Matrix4::look_at(
+                self.camera.position(),
+                //self.camera.get_look_toward(),
+                Point3::new(0.0, 0.0, 0.0),
+
+                Vector3::new(0.0, 1.0, 0.0),
+            ),
+            proj: crate::math::perspective(Deg(90.0), aspect, 0.1, 1000.0),
+        };
+        let ubos = [ubo, ubo2];
 
         let buffer_mem = self.uniform_buffer_memories[current_image as usize];
-        let size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
         unsafe {
             let data_ptr = self
                 .vk_context
@@ -1686,7 +1704,7 @@ impl VulkanRenderer {
                 .map_memory(buffer_mem, 0, size, vk::MemoryMapFlags::empty())
                 .unwrap();
 
-            let mut align = ash::util::Align::new(data_ptr, std::mem::align_of::<f32>() as _, size);
+            let mut align = ash::util::Align::new(data_ptr, align_of::<f32>() as _, size);
             align.copy_from_slice(&ubos);
             self.vk_context.device().unmap_memory(buffer_mem);
         }
@@ -1890,7 +1908,7 @@ impl Renderer for VulkanRenderer {
 
     fn create(window: &Window) -> Self {
         log::debug!("Creating application.");
-        let entry = ash::Entry::new().expect("Failed to create entry.");
+        let entry = ash::Entry::new().expect("Failed to create Ash entry.");
         let instance = Self::create_instance(&entry);
         let surface = Surface::new(&entry, &instance);
         let surface_khr =
@@ -1966,8 +1984,8 @@ impl Renderer for VulkanRenderer {
             properties,
         );
 
-        let texture = Self::create_texture_image(&vk_context, command_pool, graphics_queue);
-
+        
+        let texture = Self::create_texture_image("textures/coop.png",&vk_context, command_pool, graphics_queue);
         let (vertices, indices) = Self::load_model();
         let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
             &vk_context,
@@ -1983,14 +2001,13 @@ impl Renderer for VulkanRenderer {
         );
         let (uniform_buffers, uniform_buffer_memories) =
             Self::create_uniform_buffers(&vk_context, images.len());
-
         let descriptor_pool = Self::create_descriptor_pool(vk_context.device(), images.len() as _);
         let descriptor_sets = Self::create_descriptor_sets(
             vk_context.device(),
             descriptor_pool,
             descriptor_set_layout,
             &uniform_buffers,
-            texture,
+            texture
         );
         let command_buffers = Self::create_and_register_command_buffers(
             vk_context.device(),
@@ -2049,8 +2066,10 @@ impl Renderer for VulkanRenderer {
             transient_command_pool
         }
     }
-
-    fn draw_frame(&mut self) {
+    fn wait_gpu_idle(&self) {
+        unsafe { self.vk_context.device().device_wait_idle().unwrap() };
+    }
+    fn draw_frame(&mut self, frame_count :u32) {
         log::trace!("Drawing frame.");
         let sync_objects = self.in_flight_frames.next().unwrap();
         let image_available_semaphore = sync_objects.image_available_semaphore;
@@ -2083,7 +2102,7 @@ impl Renderer for VulkanRenderer {
             Err(error) => panic!("Error while acquiring next image. Cause: {}", error),
         };
         unsafe { self.vk_context.device().reset_fences(&wait_fences).unwrap() }
-        self.update_uniform_buffers(image_index);
+        self.update_uniform_buffers(image_index, frame_count);
         let wait_semaphores = [image_available_semaphore];
         let signal_semaphores = [render_finished_semaphore];
 
@@ -2135,6 +2154,10 @@ impl Renderer for VulkanRenderer {
                 self.recreate_swapchain();
             }
         }
+    }
+
+    fn resize(&mut self, resize: PhysicalSize<u32> ){
+        self.resize_dimensions  = Some([resize.width, resize.height]);
     }
     
 }
@@ -2239,7 +2262,6 @@ impl UniformBufferObject {
 }
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 struct Vertex {
     pos: [f32; 3],
     color: [f32; 3],
@@ -2250,7 +2272,7 @@ impl Vertex {
     fn get_binding_description() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
-            .stride(std::mem::size_of::<Self>() as u32)
+            .stride(size_of::<Self>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()
     }
@@ -2316,4 +2338,30 @@ impl Iterator for InFlightFrames {
 
         Some(next)
     }
+}
+
+
+pub struct ViewUniformData {
+    pub view: glam::Mat4,
+    pub projection: glam::Mat4,
+    pub inverse_view: glam::Mat4,
+    pub inverse_projection: glam::Mat4,
+    pub eye_pos: glam::Vec3,
+    pub samples_per_frame: u32,
+    pub sun_dir: glam::Vec3,
+    pub total_samples: u32,
+    pub num_bounces: u32,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
+    pub time: f32,
+
+    // render settings
+    pub shadows_enabled: u32,
+    pub ssao_enabled: u32,
+    pub fxaa_enabled: u32,
+    pub cubemap_enabled: u32,
+    pub ibl_enabled: u32,
+    pub marching_cubes_enabled: u32,
+    pub rebuild_tlas: u32,
+    pub raytracing_supported: u32,
 }

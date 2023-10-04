@@ -43,14 +43,30 @@ impl Camera {
         self.location[1] +=  sideway[1] * amount;
         self.location[2] +=  sideway[2] * amount;
     }
+    pub fn mouse_moved(&mut self, mouse_pos: [i32; 2]) {
+        self.yaw -= mouse_pos[0] as f32 * self.sensitivity;
+        self.pitch =  (self.pitch - (mouse_pos[1] as f32 * self.sensitivity)).clamp(-(PI / 2.) +0.01, PI / 2. -0.01);
+    }
+    pub fn get_look_toward(&mut self) -> Point3<f32> {
+        let r = self.pitch.cos();
+
+        let mut y = self.pitch.sin();
+        let mut z = r * self.yaw.cos();
+        let mut x = r * self.yaw.sin();
+        x += self.location.x;
+        y += self.location.y;
+        z += self.location.z;
+
+        Point3 { x: x, y: y, z: z }
+
+
+
+    }
+    pub fn forward(&mut self, r: f32) {
+        self.r -= r;
+    }
 }
 
-//orbital
-//Point3::new(
-//     self.r * self.phi.sin() * self.theta.sin(),
-//     self.r * self.phi.cos(),
-//     self.r * self.phi.sin() * self.theta.cos(),
-// )
 
 impl Default for Camera {
     fn default() -> Self {

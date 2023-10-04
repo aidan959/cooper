@@ -4,7 +4,46 @@ enum GameEvent {
     UpdateEvent,
     RenderEvent
 }
+impl EventHandler {
+    fn new() -> Self {
+        EventHandler {
+            input_subscribers: Vec::new(),
+            update_subscribers: Vec::new(),
+            render_subscribers: Vec::new(),
+            // ...
+        }
+    }
 
+    fn subscribe_input_event(&mut self, callback: Box<dyn Fn(&GameEvent) -> ()>) {
+        self.input_subscribers.push(callback);
+    }
+
+    fn subscribe_update_event(&mut self, callback: Box<dyn Fn(&GameEvent) -> ()>) {
+        self.update_subscribers.push(callback);
+    }
+
+    fn subscribe_render_event(&mut self, callback: Box<dyn Fn() -> ()>) {
+        self.render_subscribers.push(callback);
+    }
+
+    fn dispatch_input_event(&self, event: &GameEvent) {
+        &self.input_subscribers
+            .iter()
+            .for_each(|subscriber: &Box<dyn Fn(&GameEvent)>| { subscriber(&event)});
+    }
+
+    fn dispatch_update_event(&self, event: &GameEvent) {
+        &self.update_subscribers
+            .iter()
+            .for_each(|subscriber: &Box<dyn Fn(&GameEvent)>| { subscriber(&event)});
+    }
+
+    fn dispatch_render_event(&self, event: &GameEvent) {
+        &self.render_subscribers
+            .iter()
+            .for_each(|subscriber: &Box<dyn Fn()>| { subscriber()});
+    }
+}
 pub struct EventHandler {
     input_subscribers: Vec<Box<dyn Fn(&GameEvent) -> ()>>,
     update_subscribers: Vec<Box<dyn Fn(&GameEvent) -> ()>>, 

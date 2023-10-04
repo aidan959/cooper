@@ -4,13 +4,14 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Window as WinitWindow},
 };
-
+type EventCallback = fn(Event<()>) -> ();
 pub struct Window{
     pub window : WinitWindow,
     pub event_loop : EventLoop<()>,
     window_title : String,
     width : f64,
     height : f64,
+    cursor_delta: Option<[i32; 2]>,
 }
 
 impl Window {
@@ -27,7 +28,9 @@ impl Window {
             cursor_delta: None
         }
     }
-
+    fn create_event_loop() -> EventLoop<()> {
+        EventLoop::new().unwrap()
+    }
     fn create_window(window_title: &str, width: f64, height: f64, event_loop: &EventLoop<()>) -> WinitWindow{
         WindowBuilder::new()
         .with_title(window_title)

@@ -55,12 +55,12 @@ impl EventHandler {
 }
 use lynch::{window::window::Window, renderer::Renderer};
 use lynch::vulkan::renderer::VulkanRenderer;
-
-use winit::{
-    dpi::PhysicalSize,
-    event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::ControlFlow
-};
+use ash::vk;
+use glam::{Vec3, Mat4};
+use winit::
+    event::{Event, WindowEvent}
+;
+use winit::event_loop::EventLoop;
 
 pub struct CooperApplication {
     window: Window,

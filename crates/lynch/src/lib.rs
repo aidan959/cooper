@@ -1,2 +1,4 @@
 pub mod renderer;
-pub mod window
+pub mod window;
+mod math;
+mod camera;

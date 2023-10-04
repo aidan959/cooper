@@ -1,5 +1,4 @@
 
-
 enum GameEvent {
     InputEvent,
     UpdateEvent,
@@ -60,6 +59,7 @@ use lynch::vulkan::renderer::VulkanRenderer;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
+    event_loop::ControlFlow
 };
 
 pub struct CooperApplication {
@@ -92,7 +92,11 @@ impl CooperApplication {
                             println!("Redraw Requested");
                             self.renderer.draw_frame();
                         }
-                        WindowEvent::CloseRequested => {return},
+                        WindowEvent::CloseRequested => {
+                            print!("close requested");
+                            
+                            _elwt.exit();
+                            },
                         WindowEvent::Resized(PhysicalSize { width: _, height: _ }) => {
                             //resize_dimensions = Some([width as u32, height as u32]);
                         }
@@ -120,6 +124,7 @@ impl CooperApplication {
                     //
                         _ => {}
                     },
+                    Event::LoopExiting => self.renderer.wait_gpu_idle(),
                     _ => {}
                 }
             }

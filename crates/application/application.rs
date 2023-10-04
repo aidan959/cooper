@@ -51,7 +51,14 @@ pub struct EventHandler {
 }
 
 use lynch::{window::window::Window, renderer::Renderer};
-
+use lynch::vulkan::renderer::VulkanRenderer;
+use winit::event_loop;
+use winit::{
+    dpi::PhysicalSize,
+    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::{WindowBuilder},
+};
 pub struct CooperApplication {
     window: Window,
     renderer: Box<dyn Renderer>,
@@ -62,10 +69,12 @@ impl CooperApplication {
     pub fn create() -> Self {
         let window = Window::create("Cooper", 1280., 720.);
         
-        Self {
+        let renderer = Box::new(VulkanRenderer::create(&window));
+        let event_handler = EventHandler::new();
+        CooperApplication {
             window,
-            todo!(),
-            todo!()
+            renderer,
+            event_handler
         }
     }
 

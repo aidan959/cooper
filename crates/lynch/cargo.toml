@@ -5,6 +5,12 @@ edition = "2021"
 
 [dependencies]
 log = "0.4"
+env_logger = "0.6"
 ash = "0.27"
 winit = "0.29.2"
 winapi = "0.3.6"
+cgmath = "0.17.0"
+image = "0.21.0"
+tobj = "0.1.6"
+memoffset = "0.5.1"
+raw-window-handle = "0.3"

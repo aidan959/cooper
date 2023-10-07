@@ -27,7 +27,7 @@ pub struct Reflection {
 
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {
     todo!();
-    let shader_info = vk::ShaderModuleCreateInfo::builder().;
+    let shader_info = vk::ShaderModuleCreateInfo::builder();
 
     unsafe {
         device

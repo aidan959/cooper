@@ -61,17 +61,19 @@ use winit::
     event::{Event, WindowEvent}
 ;
 use winit::event_loop::EventLoop;
-
+const WIDTH : f64= 1280.;
+const HEIGHT : f64 = 720.;
 pub struct CooperApplication {
     window: Window,
-    renderer: Box<dyn Renderer>,
-    event_handler: EventHandler
+    renderer: VulkanRenderer,
+    event_handler: EventHandler,
+    event_loop: EventLoop<()>
 }
 impl CooperApplication {
     pub fn create() -> CooperApplication {
-        let window = Window::create("Cooper", 1280., 720.);
+        let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         
-        let renderer = Box::new(VulkanRenderer::create(&window));
+        let renderer = VulkanRenderer::create(&window);
         let event_handler = EventHandler::new();
         CooperApplication {
             window,

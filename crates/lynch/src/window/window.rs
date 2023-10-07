@@ -16,10 +16,10 @@ pub struct Window{
 
 impl Window {
 
-    pub fn create(window_title: &str, width: f64, height: f64) -> Self{
+    pub fn create(window_title: &str, width: f64, height: f64) -> (Self, EventLoop<()>){
         let event_loop = Self::create_event_loop();
         let window =  Self::create_window(&window_title, width, height, &event_loop);
-        Window{
+        (Window{
             window,
             event_loop,
             window_title: String::from(window_title),
@@ -27,6 +27,7 @@ impl Window {
             height,
             cursor_delta: None
         }
+        ,event_loop)
     }
     fn create_event_loop() -> EventLoop<()> {
         EventLoop::new().unwrap()

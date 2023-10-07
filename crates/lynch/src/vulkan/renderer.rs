@@ -1902,6 +1902,76 @@ impl VulkanRenderer {
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
         }
     }
+    fn create_swapchain(
+        context: &VkContext,
+    ) -> (
+        vk::SwapchainKHR,
+        Swapchain,
+        vk::SurfaceFormatKHR,
+        vk::Extent2D,
+        u32,
+    ) {
+        let surface_loader = context.surface();
+        let physical_device = context.physical_device();
+        let surface = context.surface_khr();
+        let instance = context.instance();
+        unsafe {
+            let surface_format = surface_loader
+                .get_physical_device_surface_formats(physical_device, surface)
+                .expect("Error getting device surface formats")[0];
+
+            let surface_capabilities = surface_loader
+                .get_physical_device_surface_capabilities(physical_device, surface)
+                .expect("Error getting device surface capabilities");
+
+            let desired_image_count = surface_capabilities.min_image_count + 1;
+            let surface_resolution = surface_capabilities.current_extent;
+            let desired_transform = vk::SurfaceTransformFlagsKHR::IDENTITY;
+
+            let present_modes = surface_loader
+                .get_physical_device_surface_present_modes(physical_device, surface)
+                .expect("Present modes could not be retrieved.");
+
+            let present_mode = match present_modes
+                .iter()
+                .cloned()
+                .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            {
+                Some(a) => a,
+                None => vk::PresentModeKHR::FIFO_RELAXED,
+            };
+            let ash_device = context.ash_device();
+            let swapchain_loader = Swapchain::new(instance, ash_device);
+
+            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+                .surface(surface)
+                .min_image_count(desired_image_count)
+                .image_color_space(surface_format.color_space)
+                .image_format(surface_format.format)
+                .image_extent(surface_resolution)
+                .image_usage(
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
+                )
+                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .pre_transform(desired_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(present_mode)
+                .clipped(true)
+                .image_array_layers(1);
+
+            let swapchain = swapchain_loader
+                .create_swapchain(&swapchain_create_info, None)
+                .unwrap();
+
+            (
+                swapchain,
+                swapchain_loader,
+                surface_format,
+                surface_resolution,
+                desired_image_count,
+            )
+        }
+    }
 }
 
 impl Renderer for VulkanRenderer {
@@ -1915,13 +1985,6 @@ impl Renderer for VulkanRenderer {
             unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
         let device = Device::new(&instance, surface_khr, &surface, debug_utils);
-
-
-        let (physical_device, queue_families_indices) =
-            Self::get_physical_device(&instance, &surface, surface_khr);
-
-        let (logical_device, graphics_queue, present_queue) =
-            Self::get_logical_device_queue(&instance, physical_device, queue_families_indices);
         let vk_context = VkContext::new(
             entry,
             instance,
@@ -1929,9 +1992,8 @@ impl Renderer for VulkanRenderer {
             surface_khr,
             device
         );
-        let (swapchain, swapchain_khr, properties, images) =
-            Self::create_swapchain_and_images(&vk_context, queue_families_indices, [WIDTH, HEIGHT]);
-
+        let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count) =
+            Self::create_swapchain(&vk_context);
         //let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         let swapchain_image_views =

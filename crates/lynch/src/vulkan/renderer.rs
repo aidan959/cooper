@@ -1914,6 +1914,9 @@ impl Renderer for VulkanRenderer {
         let surface_khr =
             unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
+        let device = Device::new(&instance, surface_khr, &surface, debug_utils);
+
+
         let (physical_device, queue_families_indices) =
             Self::get_physical_device(&instance, &surface, surface_khr);
 
@@ -1922,11 +1925,9 @@ impl Renderer for VulkanRenderer {
         let vk_context = VkContext::new(
             entry,
             instance,
-            debug_report_callback,
             surface,
             surface_khr,
-            physical_device,
-            logical_device,
+            device
         );
         let (swapchain, swapchain_khr, properties, images) =
             Self::create_swapchain_and_images(&vk_context, queue_families_indices, [WIDTH, HEIGHT]);

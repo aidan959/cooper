@@ -18,20 +18,16 @@ impl VkContext {
     pub fn new(
         entry: Entry,
         instance: Instance,
-        debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
         surface: Surface,
         surface_khr: vk::SurfaceKHR,
-        physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
         VkContext {
             _entry: entry,
             instance,
-            debug_report_callback,
             surface,
             surface_khr,
-            physical_device,
-            device,
+            device: Arc::new(device),
         }
     }
     pub fn instance(&self) -> &Instance {
@@ -46,12 +42,18 @@ impl VkContext {
         self.surface_khr
     }
 
-    pub fn physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
+    pub fn ash_device(&self) -> &ash::Device {
+        &self.device.ash_device
     }
 
+    pub fn physical_device(&self) -> vk::PhysicalDevice {
+        self.device.physical_device
+    }
     pub fn device(&self) -> &Device {
         &self.device
+    }
+    pub fn arc_device(&self) -> Arc<Device> {
+        self.device.clone()
     }
     /// get device memory propertiess
     pub fn get_mem_properties(&self) -> vk::PhysicalDeviceMemoryProperties {

@@ -1,8 +1,5 @@
-use ash::vk;
-use ash::{
-    extensions::khr::{Surface, Win32Surface},
-    version::{EntryV1_0, InstanceV1_0},
-};
+use ash::{vk, Entry, Instance};
+use ash::extensions::khr::{Surface, Win32Surface};
 use winit::raw_window_handle::{HasWindowHandle};
 use std::{os::raw::c_void, ptr};
 use winapi::{shared::windef::HWND, um::libloaderapi::GetModuleHandleW};
@@ -15,9 +12,9 @@ pub fn required_extension_names() -> Vec<*const i8> {
 }
 
 /// Create the surface.
-pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
-    entry: &E,
-    instance: &I,
+pub unsafe fn create_surface(
+    entry: &Entry,
+    instance: &Instance,
     window: &Window,
 ) -> Result<vk::SurfaceKHR, vk::Result> {
     let a = window.window_handle().unwrap().as_raw();

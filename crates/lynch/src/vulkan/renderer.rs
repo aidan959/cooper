@@ -73,7 +73,15 @@ pub struct RendererInternal {
 }
 impl RendererInternal {
     pub fn new(vk_context: &VkContext) -> Self {
-        todo!("Needs to be implemented.")
+        let bindless_descriptor_set_layout = create_bindless_descriptor_set_layout(vk_context.device());
+        let bindless_descriptor_set =
+            create_bindless_descriptor_set(vk_context.device(), bindless_descriptor_set_layout);
+        Self {
+            bindless_descriptor_set,
+            bindless_descriptor_set_layout,
+
+        }
+            todo!("Needs to be implemented.")
     }
 impl VulkanRenderer {
     
@@ -2419,3 +2427,112 @@ impl Iterator for InFlightFrames {
     }
 }
 
+pub const MAX_BINDLESS_DESCRIPTOR_COUNT: usize = 512 * 510;
+
+pub fn create_bindless_descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
+    let descriptor_set_layout_binding = vec![
+        // Texture buffer binding
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(MAX_BINDLESS_DESCRIPTOR_COUNT as u32)
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build(),
+        // Vertex buffer binding
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(MAX_BINDLESS_DESCRIPTOR_COUNT as u32)
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build(),
+        // Index buffer binding
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(2)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(MAX_BINDLESS_DESCRIPTOR_COUNT as u32)
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build(),
+        // Materials buffer binding
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(3)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(MAX_BINDLESS_DESCRIPTOR_COUNT as u32) // ! FIX
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build(),
+        // Meshes buffer binding
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(4)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(MAX_BINDLESS_DESCRIPTOR_COUNT as u32) // ! FIX
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build(),
+    ];
+
+    let binding_flags: [vk::DescriptorBindingFlags;5] = [
+        vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+        vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+        vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+        vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+        vk::DescriptorBindingFlags::PARTIALLY_BOUND
+            | vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
+    ];
+
+    let mut binding_flags_create_info =
+        vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
+            .binding_flags(&binding_flags);
+
+    let descriptor_sets_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+        .bindings(&descriptor_set_layout_binding)
+        .flags(vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
+        .push_next(&mut binding_flags_create_info)
+        .build();
+
+    unsafe {
+        device.device()
+            .create_descriptor_set_layout(&descriptor_sets_layout_info, None)
+            .expect("Error creating descriptor set layout")
+    }
+}
+
+pub fn create_bindless_descriptor_set(
+    device: &Device,
+    layout: vk::DescriptorSetLayout,
+) -> vk::DescriptorSet {
+    let descriptor_sizes = [vk::DescriptorPoolSize {
+        ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+        descriptor_count: MAX_BINDLESS_DESCRIPTOR_COUNT as u32,
+    }];
+
+    let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
+        .pool_sizes(&descriptor_sizes)
+        .flags(vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND)
+        .max_sets(1);
+
+    let descriptor_pool = unsafe {
+        device
+            .ash_device
+            .create_descriptor_pool(&descriptor_pool_info, None)
+            .expect("Error allocating bindless descriptor pool")
+    };
+
+    let variable_descriptor_count = MAX_BINDLESS_DESCRIPTOR_COUNT as u32;
+    let mut variable_descriptor_count_allocate_info =
+        vk::DescriptorSetVariableDescriptorCountAllocateInfo::builder()
+            .descriptor_counts(std::slice::from_ref(&variable_descriptor_count))
+            .build();
+
+    let descriptor_set = unsafe {
+        device
+            .ash_device
+            .allocate_descriptor_sets(
+                &vk::DescriptorSetAllocateInfo::builder()
+                    .descriptor_pool(descriptor_pool)
+                    .set_layouts(std::slice::from_ref(&layout))
+                    .push_next(&mut variable_descriptor_count_allocate_info)
+                    .build(),
+            )
+            .expect("Error allocating bindless descriptor pool")[0]
+    };
+
+    descriptor_set
+}

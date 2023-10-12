@@ -2274,35 +2274,6 @@ impl SyncObjects {
         }
     }
 }
-struct GameTick {
-    current_tick: u64,
-    sum_tick: u64,
-    tick_index: usize,
-    tick_list: [u64; 100],
-}
-
-impl GameTick {
-    fn new() -> Self {
-        GameTick {
-            current_tick: 0,
-            sum_tick: 0,
-            tick_index: 0,
-            tick_list: [0; 100],
-        }
-    }
-    fn tick(self: &mut Self) {
-        self.current_tick += 1;
-    }
-    fn calc_average_tick(self: &mut Self, newtick: u64) -> f64 {
-        self.sum_tick -= self.tick_list[self.tick_index];
-        self.sum_tick += newtick;
-        self.tick_list[self.tick_index] = newtick;
-        self.tick_index += 1;
-        self.tick_index = self.tick_index % 99;
-
-        self.sum_tick as f64 / 100.
-    }
-}
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -2403,28 +2374,3 @@ impl Iterator for InFlightFrames {
     }
 }
 
-
-pub struct ViewUniformData {
-    pub view: glam::Mat4,
-    pub projection: glam::Mat4,
-    pub inverse_view: glam::Mat4,
-    pub inverse_projection: glam::Mat4,
-    pub eye_pos: glam::Vec3,
-    pub samples_per_frame: u32,
-    pub sun_dir: glam::Vec3,
-    pub total_samples: u32,
-    pub num_bounces: u32,
-    pub viewport_width: u32,
-    pub viewport_height: u32,
-    pub time: f32,
-
-    // render settings
-    pub shadows_enabled: u32,
-    pub ssao_enabled: u32,
-    pub fxaa_enabled: u32,
-    pub cubemap_enabled: u32,
-    pub ibl_enabled: u32,
-    pub marching_cubes_enabled: u32,
-    pub rebuild_tlas: u32,
-    pub raytracing_supported: u32,
-}

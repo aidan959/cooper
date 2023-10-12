@@ -260,6 +260,28 @@ impl Device {
 
         (graphics, present)
     }
+    fn check_device_extension_support(instance: &ash::Instance, device: vk::PhysicalDevice) -> bool {
+        let required_extentions = Self::get_required_device_extensions();
+
+        let extension_props = unsafe {
+            instance
+                .enumerate_device_extension_properties(device)
+                .unwrap()
+        };
+
+        for required in required_extentions.iter() {
+            let found = extension_props.iter().any(|ext| {
+                let name = unsafe { std::ffi::CStr::from_ptr(ext.extension_name.as_ptr()) };
+                required == &name
+            });
+
+            if !found {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 

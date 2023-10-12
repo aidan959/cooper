@@ -304,7 +304,28 @@ pub struct Vertex {
     pub color: [f32; 3],
     pub coords: [f32; 2],
 }
+#[derive(Clone, Copy)]
+struct QueueFamiliesIndices {
+    graphics_index: u32,
+    present_index: u32,
+}
 
+#[derive(Clone, Copy)]
+struct SyncObjects {
+    image_available_semaphore: vk::Semaphore,
+    render_finished_semaphore: vk::Semaphore,
+    fence: vk::Fence,
+}
+
+impl SyncObjects {
+    fn destroy(&self, device: &Device) {
+        unsafe {
+            device.device().destroy_semaphore(self.image_available_semaphore, None);
+            device.device().destroy_semaphore(self.render_finished_semaphore, None);
+            device.device().destroy_fence(self.fence, None);
+        }
+    }
+}
 impl Vertex {
     fn get_binding_description() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()

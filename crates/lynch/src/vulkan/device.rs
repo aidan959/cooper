@@ -231,7 +231,20 @@ impl Device {
         surface: &Surface,
         surface_khr: vk::SurfaceKHR,
         device: vk::PhysicalDevice,
-    ) -> bool { true }
+    ) -> bool {
+        let (graphics, present) = Self::find_queue_families(instance, surface, surface_khr, device);
+        let extention_support = Self::check_device_extension_support(instance, device);
+        let is_swapchain_adequate = {
+            let details = SwapchainSupportDetails::new(device, surface, surface_khr);
+            !details.formats.is_empty() && !details.present_modes.is_empty()
+        };
+        let features = unsafe { instance.get_physical_device_features(device) };
+        graphics.is_some()
+            && present.is_some()
+            && extention_support
+            && is_swapchain_adequate
+            && features.sampler_anisotropy == vk::TRUE
+    }
     fn find_queue_families(
         instance: &ash::Instance,
         surface: &Surface,

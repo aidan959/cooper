@@ -298,6 +298,44 @@ impl Device {
 }
 
 
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    pub pos: [f32; 3],
+    pub color: [f32; 3],
+    pub coords: [f32; 2],
+}
+
+impl Vertex {
+    fn get_binding_description() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(size_of::<Self>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+        let position_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(Self, pos) as u32)
+            .build();
+        let color_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(Self, color) as u32)
+            .build();
+        let coords_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(offset_of!(Self, coords) as u32)
+            .build();
+        [position_desc, color_desc, coords_desc]
+    }
+}
 
 impl Display for Vertex {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

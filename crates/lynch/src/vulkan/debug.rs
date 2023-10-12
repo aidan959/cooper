@@ -13,29 +13,67 @@ pub const ENABLE_VALIDATION_LAYERS: bool = false;
 
 pub const REQUIRED_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
 
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugReportFlagsEXT,
-    typ: vk::DebugReportObjectTypeEXT,
-    _: u64,
-    _: usize,
-    _: i32,
-    _: *const c_char,
-    p_message: *const c_char,
-    _: *mut c_void,
-) -> u32 {
-    if flag == vk::DebugReportFlagsEXT::DEBUG {
-        log::debug!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        log::info!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else {
-        log::error!("{} - {:?}", typ, CStr::from_ptr(p_message));
+
+pub unsafe extern "system" fn vulkan_debug_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _user_data: *mut std::os::raw::c_void,
+) -> vk::Bool32 {
+    if !ENABLE_VALIDATION_LAYERS {
+        return vk::FALSE
     }
+    let callback_data = *p_callback_data;
+    let message_id_number: i32 = callback_data.message_id_number;
+
+    let message_id_name = if callback_data.p_message_id_name.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy()
+    };
+
+    let message = if callback_data.p_message.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(callback_data.p_message).to_string_lossy()
+    };
+
+    match message_severity {
+        DebugUtilsMessageSeverityFlagsEXT::VERBOSE | DebugUtilsMessageSeverityFlagsEXT::INFO => {
+            info!(
+                "{:?}:\n{:?} [{} ({})] : {}\n",
+                message_severity,
+                message_type,
+                message_id_name,
+                &message_id_number.to_string(),
+                message,
+            );
+        },
+        DebugUtilsMessageSeverityFlagsEXT::WARNING => {
+            warn!("{:?}:\n{:?} [{} ({})] : {}\n",
+            message_severity,
+            message_type,
+            message_id_name,
+            &message_id_number.to_string(),
+            message)
+        },
+        DebugUtilsMessageSeverityFlagsEXT::ERROR => {
+            error!("{:?}:\n{:?} [{} ({})] : {}\n",
+            message_severity,
+            message_type,
+            message_id_name,
+            &message_id_number.to_string(),
+            message,);
+            
+        },
+        _ => todo!()
+
+
+    }
+    
     vk::FALSE
 }
+
 
 
 /// Get the pointers to the validation layers names.

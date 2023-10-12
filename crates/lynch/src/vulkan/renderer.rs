@@ -1972,15 +1972,51 @@ impl VulkanRenderer {
             )
         }
     }
+    fn create_debug_utils(
+        entry: &ash::Entry,
+        instance: &ash::Instance,
+    ) -> (Option<DebugUtils>, Option<vk::DebugUtilsMessengerEXT>) {
+        if !ENABLE_VALIDATION_LAYERS {
+            return(None,None)
+        }
+        let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            .message_severity(
+                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE,
+            )
+            .message_type(
+                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
+                    | vk::DebugUtilsMessageTypeFlagsEXT::DEVICE_ADDRESS_BINDING,
+            )
+            .pfn_user_callback(Some(super::debug::vulkan_debug_callback));
+
+        let debug_utils_loader = DebugUtils::new(entry, instance);
+
+        let debug_utils_messenger = unsafe {
+            debug_utils_loader
+                .create_debug_utils_messenger(&debug_info, None)
+                .unwrap()
+        };
+        
+
+        (Some(debug_utils_loader), Some(debug_utils_messenger))
+    }
+
+}
 }
 
 impl Renderer for VulkanRenderer {
 
     fn create(window: &Window) -> Self {
         log::debug!("Creating application.");
-        let entry = ash::Entry::new().expect("Failed to create Ash entry.");
+        let entry = ash::Entry::linked();
         let instance = Self::create_instance(&entry);
         let surface = Surface::new(&entry, &instance);
+        let (debug_utils, debug_utils_messenger) = Self::create_debug_utils(&entry, &instance);
         let surface_khr =
             unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
         let debug_report_callback = setup_debug_messenger(&entry, &instance);

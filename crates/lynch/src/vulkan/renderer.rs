@@ -67,6 +67,14 @@ pub struct VulkanRenderer {
     current_frame: usize,
     in_flight_frames: InFlightFrames
 }
+pub struct RendererInternal {
+    pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
+    pub bindless_descriptor_set: vk::DescriptorSet,
+}
+impl RendererInternal {
+    pub fn new(vk_context: &VkContext) -> Self {
+        todo!("Needs to be implemented.")
+    }
 impl VulkanRenderer {
     
     fn create_swapchain_image_views(
@@ -2123,6 +2131,7 @@ impl Renderer for VulkanRenderer {
         );
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
+        let internal_renderer = RendererInternal::new(&vk_context);
         Self {
             queue_families_indices,
             vk_context,

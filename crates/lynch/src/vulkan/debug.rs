@@ -1,9 +1,13 @@
-use ash::{extensions::ext::DebugReport, version::EntryV1_0};
-use ash::{vk, Entry, Instance};
+use ash::vk::DebugUtilsMessageSeverityFlagsEXT;
+
+use ash::{vk, Entry};
+use log::{info, warn, error};
+use std::borrow::Cow;
+
 use std::{
     ffi::{CStr, CString},
-    os::raw::{c_char, c_void},
 };
+
 
 
 #[cfg(debug_assertions)]

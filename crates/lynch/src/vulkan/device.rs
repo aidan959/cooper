@@ -232,6 +232,34 @@ impl Device {
         surface_khr: vk::SurfaceKHR,
         device: vk::PhysicalDevice,
     ) -> bool { true }
+    fn find_queue_families(
+        instance: &ash::Instance,
+        surface: &Surface,
+        surface_khr: vk::SurfaceKHR,
+        device: vk::PhysicalDevice,
+    ) -> (Option<u32>, Option<u32>) {
+        let (mut graphics, mut present) = (None, None);
+
+        let props = unsafe { instance.get_physical_device_queue_family_properties(device) };
+
+        for (index, family) in props.iter().filter(|f| f.queue_count > 0).enumerate() {
+            let index = index as u32;
+            if family.queue_flags.contains(vk::QueueFlags::GRAPHICS) && graphics.is_none() {
+                graphics = Some(index);
+            }
+            if unsafe { surface.get_physical_device_surface_support(device, index, surface_khr).expect("No phyiscal device support") }
+                && present.is_none()
+            {
+                present = Some(index);
+            }
+
+            if graphics.is_some() && present.is_some() {
+                break;
+            };
+        }
+
+        (graphics, present)
+    }
 }
 
 

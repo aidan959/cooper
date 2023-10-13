@@ -23,6 +23,9 @@ use glam;
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 720;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
+pub const DESCRIPTOR_SET_INDEX_BINDLESS: u32 = 0;
+pub const DESCRIPTOR_SET_INDEX_VIEW: u32 = 1;
+pub const DESCRIPTOR_SET_INDEX_INPUT_TEXTURES: u32 = 2;
 
 use crate::vulkan::surface::create_surface;
 

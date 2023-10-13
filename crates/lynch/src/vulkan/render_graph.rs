@@ -41,32 +41,15 @@ pub struct Attachment {
     pub load_op: vk::AttachmentLoadOp,
 }
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum TextureResourceType {
-    CombinedImageSampler,
-    StorageImage,
-}
 
-#[derive(Copy, Clone)]
-pub struct TextureResource {
-    pub texture: TextureId,
-    pub input_type: TextureResourceType,
-    pub access_type: vk_sync::AccessType,
-}
 
-#[derive(Copy, Clone)]
-pub struct BufferResource {
-    pub buffer: BufferId,
-    pub access_type: vk_sync::AccessType,
-}
 
-#[derive(Copy, Clone)]
-pub enum Resource {
-    Texture(TextureResource),
-    Buffer(BufferResource),
-}
-pub struct TextureCopy {
-    pub src: TextureId,
-    pub dst: TextureId,
-    pub copy_desc: vk::ImageCopy,
+
+pub struct RenderGraph {
+    pub passes: Vec<Vec<RenderPass>>,
+    pub resources: GraphResources,
+    pub descriptor_set_camera: Vec<DescriptorSet>,
+    pub pipeline_descs: Vec<PipelineDesc>,
+    pub current_frame: usize,
+    pub device: Arc<Device>,
 }

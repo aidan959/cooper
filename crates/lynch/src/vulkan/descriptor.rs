@@ -224,6 +224,39 @@ impl DescriptorSet {
                 .update_descriptor_sets(&[descriptor_writes], &[])
         };
     }
+    pub fn write_storage_buffer(
+        &self,
+        device: &Device,
+        name: DescriptorIdentifier,
+        buffer: &Buffer,
+    ) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .offset(0)
+            .range(buffer.size)
+            .buffer(buffer.buffer)
+            .build();
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER) // todo
+            .buffer_info(&[buffer_info])
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
     pub fn get_set_index(&self) -> u32 {
         self.binding_map
             .iter()

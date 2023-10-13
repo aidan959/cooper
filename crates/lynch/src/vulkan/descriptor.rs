@@ -93,6 +93,31 @@ impl DescriptorSet {
             layout,
         };
     }
+    pub fn write_storage_image(&self, device: &Device, name: DescriptorIdentifier, image: &Image) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let descriptor_info = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: image.image_view,
+            sampler: vk::Sampler::null(),
+        };
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
     pub fn write_acceleration_structure(
         &self,
         device: &Device,
@@ -113,6 +138,9 @@ impl DescriptorSet {
 
         let mut descriptor_writes = vk::WriteDescriptorSet::builder()
             .dst_set(self.handle)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .push_next(&mut descriptor_info)
             .build();
         descriptor_writes.descriptor_count = 1;
 

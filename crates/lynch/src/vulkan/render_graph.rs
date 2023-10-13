@@ -53,3 +53,50 @@ pub struct RenderGraph {
     pub current_frame: usize,
     pub device: Arc<Device>,
 }
+
+
+
+
+impl RenderGraph {
+    pub fn new(
+        device: Arc<Device>,
+        camera_uniform_buffer: &Vec<Buffer>,
+        num_frames_in_flight: u32,
+    ) -> Self {
+        RenderGraph {
+            passes: (0..num_frames_in_flight).map(|_| vec![]).collect(),
+            resources: GraphResources::new(),
+            descriptor_set_camera: (*camera_uniform_buffer)
+                .iter()
+                .map(|buffer| Self::create_camera_descriptor_set(device.clone(), buffer))
+                .collect(),
+            pipeline_descs: vec![],
+            current_frame: 0,
+            device: device,
+        }
+    }
+
+    pub fn new_frame(&mut self, current_frame: usize) {
+        self.current_frame = current_frame;
+    }
+    pub fn clear(&mut self) {
+        for pass in &self.passes[self.current_frame] {
+            if let Some(descriptor_set) = &pass.uniform_descriptor_set {
+                unsafe {
+                    self.device
+                        .ash_device
+                        .destroy_descriptor_pool(descriptor_set.pool, None)
+                };
+            }
+            if let Some(descriptor_set) = &pass.read_resources_descriptor_set {
+                unsafe {
+                    self.device
+                        .ash_device
+                        .destroy_descriptor_pool(descriptor_set.pool, None)
+                };
+            }
+        }
+
+        self.passes[self.current_frame].clear();
+    }
+}

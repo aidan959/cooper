@@ -70,7 +70,28 @@ impl DescriptorSet {
                     .expect("Error creating descriptor pool")
             }
         };
-        todo!()
+
+        let descriptor_sets = {
+            let descriptor_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&[layout])
+                .build();
+
+            unsafe {
+                device
+                    .device()
+                    .allocate_descriptor_sets(&descriptor_alloc_info)
+                    .expect("Error allocating descriptor sets")
+            }
+        };
+        
+        DescriptorSet {
+            handle: descriptor_sets[0],
+            pool: descriptor_pool,
+            binding_map,
+            device,
+            layout,
+        };
     }
 
 }

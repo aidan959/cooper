@@ -15,6 +15,32 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    pub fn new<T: Copy>(
+        device: Arc<Device>,
+        initial_data: Option<&[T]>,
+        size: u64,
+        usage_flags: vk::BufferUsageFlags,
+        location: gpu_allocator::MemoryLocation,
+        debug_name: Option<String>,
+    ) -> Buffer {
+        let mut buffer = Buffer::create_buffer(
+            device.clone(),
+            size,
+            usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+            debug_name.clone(),
+        );
+
+        if let Some(initial_data) = initial_data {
+            buffer.update_memory(initial_data);
+        }
+        let debug_name = match debug_name.as_deref() {
+            Some(value) => value,
+            None => "unnamed_buffer", // smh lazy work from you
+        };
+        buffer.set_debug_name(&debug_name);
+        buffer
+    }
     pub fn create_buffer(
         device: Arc<Device>,
         // TODO: infer

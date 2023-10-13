@@ -78,58 +78,28 @@ impl RendererInternal {
         let bindless_descriptor_set_layout = create_bindless_descriptor_set_layout(vk_context.device());
         let bindless_descriptor_set =
             create_bindless_descriptor_set(vk_context.device(), bindless_descriptor_set_layout);
-        let gpu_materials_buffer = {  
-            let device = vk_context.arc_device();
-            let size = (MAX_NUM_GPU_MATERIALS * std::mem::size_of::<GpuMaterial>()) as u64;
-            let usage_flags = vk::BufferUsageFlags::STORAGE_BUFFER;
-            let location = gpu_allocator::MemoryLocation::CpuToGpu;
-            let debug_name = Some(String::from("material_buffer"));
-            let mut buffer = Buffer::create_buffer(
-                device.clone(),
-                size,
-                usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
-                location,
-                debug_name.clone(),
-            );
+        let gpu_materials_buffer = Buffer::new::<u8>(
+            vk_context.arc_device(),
+            None,
+            (MAX_NUM_GPU_MATERIALS * std::mem::size_of::<GpuMaterial>()) as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            gpu_allocator::MemoryLocation::CpuToGpu,
+            Some(String::from("material_buffer")),
+        );
 
-            if let Some(initial_data) = None {
-                buffer.update_memory(initial_data);
-            }
-            let debug_name = match debug_name.as_deref() {
-                Some(value) => value,
-                None => "unnamed_buffer",
-            };
-            buffer.set_debug_name(&debug_name);
-            buffer
-        };
-        let gpu_meshes_buffer = {
-            let device = vk_context.arc_device();
-            let size = (MAX_NUM_GPU_MESHES * std::mem::size_of::<GpuMesh>()) as u64;
-            let usage_flags = vk::BufferUsageFlags::STORAGE_BUFFER;
-            let location = gpu_allocator::MemoryLocation::CpuToGpu;
-            let debug_name = Some(String::from("gpu_mesh_buffer"));
-            let mut buffer = Buffer::create_buffer(
-                device.clone(),
-                size,
-                usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
-                location,
-                debug_name.clone(),
-            );
-
-            if let Some(initial_data) = None {
-                buffer.update_memory(initial_data);
-            }
-            let debug_name = match debug_name.as_deref() {
-                Some(value) => value,
-                None => "unnamed_buffer",
-            };
-            buffer.set_debug_name(&debug_name);
-            buffer
-        };
+        let gpu_meshes_buffer = Buffer::new::<u8>(
+            vk_context.arc_device(),
+            None,
+            (MAX_NUM_GPU_MESHES * std::mem::size_of::<GpuMesh>()) as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            gpu_allocator::MemoryLocation::CpuToGpu,
+            Some(String::from("gpu_mesh_buffer")),
+        );
         Self {
             bindless_descriptor_set,
             bindless_descriptor_set_layout,
-
+            gpu_materials_buffer,
+            gpu_meshes_buffer
         }
             todo!("Needs to be implemented.")
     }

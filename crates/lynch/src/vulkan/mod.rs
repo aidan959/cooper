@@ -3,3 +3,8 @@ mod surface;
 mod swapchain;
 mod debug;
 mod cont;
+mod render_pass;
+mod buffer;
+mod descriptor;
+mod shader;
+mod texture;

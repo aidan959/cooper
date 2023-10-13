@@ -174,6 +174,31 @@ impl DescriptorSet {
                 .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
         };
     }
+    pub fn write_combined_image(
+        &self,
+        device: &Device,
+        name: DescriptorIdentifier,
+        texture: &Texture,
+    ) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding)
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
     pub fn get_set_index(&self) -> u32 {
         self.binding_map
             .iter()

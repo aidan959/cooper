@@ -174,6 +174,31 @@ impl DescriptorSet {
                 .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
         };
     }
+    pub fn write_uniform_buffer(&self, device: &Device, name: String, buffer: &Buffer) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .offset(0)
+            .range(buffer.size)
+            .buffer(buffer.buffer)
+            .build();
+
+        let binding = match self.binding_map.get(&name) {
+            Some(binding) => binding,
+            None => panic!("No descriptor binding found with name: \"{}\"", name),
+        };
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding.binding)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
     pub fn write_combined_image(
         &self,
         device: &Device,

@@ -142,7 +142,7 @@ impl DescriptorSet {
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .push_next(&mut descriptor_info)
             .build();
-        descriptor_writes.descriptor_count = 1;
+        descriptor_writes.descriptor_count = 1; // Not set for acceleration structures
 
         unsafe {
             device

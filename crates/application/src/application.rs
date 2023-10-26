@@ -47,7 +47,7 @@ impl EventHandler {
             .for_each(|subscriber: &Box<dyn Fn(&GameEvent)>| { subscriber(&event)});
     }
 
-    fn dispatch_render_event(&self, event: &GameEvent) {
+    fn dispatch_render_event(&self, _event: &GameEvent) {
         &self.render_subscribers
             .iter()
             .for_each(|subscriber: &Box<dyn Fn()>| { subscriber()});
@@ -55,12 +55,10 @@ impl EventHandler {
 }
 use lynch::{window::window::Window, renderer::Renderer};
 use lynch::vulkan::renderer::VulkanRenderer;
-use winit::event_loop;
+
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder},
+    event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
 };
 
 pub struct CooperApplication {
@@ -85,7 +83,7 @@ impl CooperApplication {
         let mut wheel_delta = None;
         let event_loop = self.window.event_loop;
         event_loop.run( move
-            |event, elwt|{
+            |event, _elwt|{
                 match event{
                     
                     Event::WindowEvent {event, .. } => match event {
@@ -94,12 +92,12 @@ impl CooperApplication {
                             self.renderer.draw_frame();
                         }
                         WindowEvent::CloseRequested => {return},
-                        WindowEvent::Resized(PhysicalSize { width, height }) => {
+                        WindowEvent::Resized(PhysicalSize { width: _, height: _ }) => {
                             //resize_dimensions = Some([width as u32, height as u32]);
                         }
                         WindowEvent::MouseInput {
                             button: MouseButton::Left,
-                            state,
+                            state: _,
                             ..
                         } => {
                             //if state == ElementState::Pressed {

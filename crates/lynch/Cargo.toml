@@ -1,17 +1,11 @@
 [package]
-name = "cooper"
-version = "0.1.0"
+name = "lynch"
+version = "0.0.1-dev"
 edition = "2021"
-build = "build.rs"
-
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lynch = { path = "crates/lynch", version = "0.0.1-dev"}
-application = { path = "crates/application", version = "0.0.1-dev"}
-frost = { path = "crates/frost", version = "0.0.1-dev"}
-
 log = "0.4"
 env_logger = "0.6"
 ash = "0.27"
@@ -21,3 +15,4 @@ cgmath = "0.17.0"
 image = "0.21.0"
 tobj = "0.1.6"
 memoffset = "0.5.1"
+raw-window-handle = "0.3"

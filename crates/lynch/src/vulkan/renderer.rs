@@ -1664,7 +1664,7 @@ impl VulkanRenderer {
 
         let aspect = self.swapchain_properties.extent.width as f32
             / self.swapchain_properties.extent.height as f32;
-        let speed = 0.01;
+        let _speed = 0.01;
 
         let ubo = UniformBufferObject {
             model: Matrix4::from_angle_x(Deg(270.0)),

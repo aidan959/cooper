@@ -3,11 +3,11 @@ use ash::{
     extensions::khr::{Surface, Win32Surface},
     version::{EntryV1_0, InstanceV1_0},
 };
-use winit::raw_window_handle::{HasWindowHandle, HasRawDisplayHandle, Win32WindowHandle};
+use winit::raw_window_handle::{HasWindowHandle};
 use std::{os::raw::c_void, ptr};
 use winapi::{shared::windef::HWND, um::libloaderapi::GetModuleHandleW};
 use winit::{ window::Window};
-use raw_window_handle::windows::WindowsHandle;
+
 /// Get required instance extensions.
 /// This is windows specific.
 pub fn required_extension_names() -> Vec<*const i8> {

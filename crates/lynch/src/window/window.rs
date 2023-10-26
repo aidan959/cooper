@@ -31,7 +31,9 @@ impl Window {
         }
     }
     fn create_event_loop() -> EventLoop<()> {
-        EventLoop::new().unwrap()
+        let event_loop = EventLoop::new().unwrap();
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        event_loop
     }
     fn create_window(window_title: &str, width: f64, height: f64, event_loop: &EventLoop<()>) -> WinitWindow{
         WindowBuilder::new()

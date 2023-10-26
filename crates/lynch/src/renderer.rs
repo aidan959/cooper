@@ -4,4 +4,5 @@ pub trait Renderer {
     where
         Self: Sized;
     fn draw_frame(self : &mut Self);
+    fn wait_gpu_idle(self:&Self);
 }

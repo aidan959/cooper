@@ -2049,7 +2049,9 @@ impl Renderer for VulkanRenderer {
             transient_command_pool
         }
     }
-
+    fn wait_gpu_idle(&self) {
+        unsafe { self.vk_context.device().device_wait_idle().unwrap() };
+    }
     fn draw_frame(&mut self) {
         log::trace!("Drawing frame.");
         let sync_objects = self.in_flight_frames.next().unwrap();

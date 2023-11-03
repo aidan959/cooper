@@ -53,6 +53,7 @@ impl EventHandler {
             .for_each(|subscriber: &Box<dyn Fn()>| { subscriber()});
     }
 }
+use lynch::renderer;
 use lynch::{window::window::Window, renderer::Renderer};
 use lynch::vulkan::renderer::VulkanRenderer;
 
@@ -80,24 +81,24 @@ impl CooperApplication {
         }
     }
     pub fn run(mut self) -> (){
-        let mut cursor_position = None;
+        //let mut cursor_position = None;
         let mut wheel_delta = None;
+        let mut frame_count = 0;
         let event_loop = self.window.event_loop;
         event_loop.run( move
             |event, _elwt|{
                 match event{
-                    
                     Event::WindowEvent {event, .. } => match event {
+                        
                         WindowEvent::RedrawRequested=> {
-                            println!("Redraw Requested");
-                            self.renderer.draw_frame();
-                        }
+                            self.renderer.draw_frame(frame_count);
+                            //self.renderer.wait_gpu_idle();
+                        },
                         WindowEvent::CloseRequested => {
-                            print!("close requested");
-                            
                             _elwt.exit();
-                            },
-                        WindowEvent::Resized(PhysicalSize { width: _, height: _ }) => {
+                        },
+                        WindowEvent::Resized(resize_value) => {
+                            self.renderer.resize(resize_value);
                             //resize_dimensions = Some([width as u32, height as u32]);
                         }
                         WindowEvent::MouseInput {
@@ -113,7 +114,7 @@ impl CooperApplication {
                         }
                         WindowEvent::CursorMoved { position, .. } => {
                             let position: (i32, i32) = position.into();
-                            cursor_position = Some([position.0, position.1]);
+                            //cursor_position = Some([position.0, position.1]);
                         }
                         WindowEvent::MouseWheel {
                             delta: MouseScrollDelta::LineDelta(_, v_lines),
@@ -121,11 +122,20 @@ impl CooperApplication {
                         } => {
                             wheel_delta = Some(v_lines);
                         }
-                    //
-                        _ => {}
+                        _ => {
+                            
+                        }
                     },
                     Event::LoopExiting => self.renderer.wait_gpu_idle(),
-                    _ => {}
+
+                                    
+                    _ => {self.window.window.request_redraw();}
+                    
+                }
+                frame_count += 1;
+                if frame_count & 0b11110 != 0{
+
+                    //println!("{}", frame_count);
                 }
             }
         ).unwrap()

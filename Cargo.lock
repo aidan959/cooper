@@ -26,6 +26,17 @@ checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
 name = "ahash"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a824f2aa7e75a0c98c5a504fceb80649e9c35265d44525b5f94de4771a395cd"
+dependencies = [
+ "getrandom",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
+name = "ahash"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91429305e9f0a25f6205c5b8e0d2db09e0708a7a6df0f42212bb56c32c8ac97a"
@@ -123,6 +134,12 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atomic_refcell"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41e67cd8309bbd06cd603a9e693a784ac2e5d1e955f11286e355089fcab3047c"
 
 [[package]]
 name = "atty"
@@ -503,6 +520,9 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 [[package]]
 name = "frost"
 version = "0.0.1-dev"
+dependencies = [
+ "shred",
+]
 
 [[package]]
 name = "fuchsia-cprng"
@@ -540,6 +560,12 @@ dependencies = [
  "color_quant",
  "lzw",
 ]
+
+[[package]]
+name = "glam"
+version = "0.20.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
 
 [[package]]
 name = "hashbrown"
@@ -713,6 +739,7 @@ dependencies = [
  "ash",
  "cgmath",
  "env_logger",
+ "glam",
  "image",
  "log",
  "memoffset 0.5.6",
@@ -1334,6 +1361,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "shred"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6b2cd1ccb08cf2b25d75c936e0cc9c8cb93c39a83814956da32653236338c0"
+dependencies = [
+ "ahash 0.7.7",
+ "arrayvec",
+ "atomic_refcell",
+ "smallvec",
+ "tynm",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1520,6 +1560,15 @@ name = "ttf-parser"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49d64318d8311fc2668e48b63969f4343e0a85c4a109aa8460d6672e364b8bd1"
+
+[[package]]
+name = "tynm"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc08441e69e42a4695d4dde68282419a9fc8379723aa7e51a67c52cedd992069"
+dependencies = [
+ "nom",
+]
 
 [[package]]
 name = "unicode-ident"
@@ -1934,7 +1983,7 @@ version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b829f75d02fe1e225b97c91a04c326900147a50234d1141a1cbe215ce8798c11"
 dependencies = [
- "ahash",
+ "ahash 0.8.6",
  "android-activity",
  "atomic-waker",
  "bitflags 2.4.1",

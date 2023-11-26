@@ -1,17 +1,20 @@
+
+
+use std::sync::Arc;
+
 use ash::{
-    extensions::{ext::DebugReport, khr::Surface},
-    version::{DeviceV1_0, InstanceV1_0},
-    vk, Device, Entry, Instance,
+    extensions::{khr::Surface},
+    vk, Entry, Instance,
 };
+
+use super::Device;
 
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
-    debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
     surface: Surface,
     surface_khr: vk::SurfaceKHR,
-    physical_device: vk::PhysicalDevice,
-    device: Device,
+    device: Arc<Device>,
 }
 
 impl VkContext {
@@ -27,20 +30,27 @@ impl VkContext {
         self.surface_khr
     }
 
-    pub fn physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
+    pub fn ash_device(&self) -> &ash::Device {
+        &self.device.ash_device
     }
 
+    pub fn physical_device(&self) -> vk::PhysicalDevice{
+        self.device.physical_device
+    }
     pub fn device(&self) -> &Device {
         &self.device
     }
+    pub fn arc_device(&self) -> Arc<Device> {
+        self.device.clone()
+    }
+    
 }
 
 impl VkContext {
     pub fn get_mem_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
         unsafe {
             self.instance
-                .get_physical_device_memory_properties(self.physical_device)
+                .get_physical_device_memory_properties(self.physical_device())
         }
     }
 
@@ -54,18 +64,18 @@ impl VkContext {
         candidates.iter().cloned().find(|candidate| {
             let props = unsafe {
                 self.instance
-                    .get_physical_device_format_properties(self.physical_device, *candidate)
+                    .get_physical_device_format_properties(self.physical_device(), *candidate)
             };
             (tiling == vk::ImageTiling::LINEAR && props.linear_tiling_features.contains(features))
                 || (tiling == vk::ImageTiling::OPTIMAL
                     && props.optimal_tiling_features.contains(features))
         })
     }
-    /// Return the maximim sample count supported.
+    /// Return the maximum sample count supported.
     pub fn get_max_usable_sample_count(&self) -> vk::SampleCountFlags {
         let props = unsafe {
             self.instance
-                .get_physical_device_properties(self.physical_device)
+                .get_physical_device_properties(self.physical_device())
         };
         let color_sample_counts = props.limits.framebuffer_color_sample_counts;
         let depth_sample_counts = props.limits.framebuffer_depth_sample_counts;
@@ -93,20 +103,16 @@ impl VkContext {
     pub fn new(
         entry: Entry,
         instance: Instance,
-        debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
         surface: Surface,
         surface_khr: vk::SurfaceKHR,
-        physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
         VkContext {
             _entry: entry,
             instance,
-            debug_report_callback,
             surface,
             surface_khr,
-            physical_device,
-            device,
+            device: Arc::new(device),
         }
     }
 }
@@ -114,11 +120,7 @@ impl VkContext {
 impl Drop for VkContext {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
-            if let Some((report, callback)) = self.debug_report_callback.take() {
-                report.destroy_debug_report_callback(callback, None);
-            }
             self.instance.destroy_instance(None);
         }
     }

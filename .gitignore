@@ -1,3 +1,9 @@
 /target
 /shaders/*.spv
+assets/*
 target
+.idea
+.vscode
+tmp
+*-aidan-laptop.*
+models

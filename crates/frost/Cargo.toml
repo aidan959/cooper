@@ -6,4 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-shred = { version = "0.15.0", default-features = false }
+shred = "0.15.0"
+hibitset = "0.6.4"
+
+winit = "0.29.2"
+glam = "0.20.2"
+smallvec = "1.11.2"
+arrayvec = "0.7.4"

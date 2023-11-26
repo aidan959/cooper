@@ -1,91 +1,130 @@
-use crate::math::cross_product;
-use crate::math::normalize;
-use cgmath::Point3;
-use cgmath::Point2;
-use crate::constants::PI;
+use dolly::prelude::*;
+use glam::{Mat3, Mat4, Quat, Vec3};
 
+use frost::Input;
 
-#[derive(Clone, Copy)]
 pub struct Camera {
-    last_look_position: Option<Point2<f32>>,
-    sensitivity: f32,
-    location: Point3<f32>,
-    pitch: f32,
-    yaw: f32,
-    r: f32,
+    camera_rig: CameraRig,
+    fov_degrees: f32,
+    aspect_ratio: f32,
+    z_near: f32,
+    z_far: f32,
+    speed: f32,
 }
 
 impl Camera {
-    pub fn position(&self) -> Point3<f32> {
-        self.location
-    }
-    pub fn get_forward(&self) -> [f32; 3]{
-        let forward_vector = [
-            self.pitch.cos() * self.yaw.sin(),
-            self.pitch.sin(),
-            self.pitch.cos() * self.yaw.cos()
-        ];
-        return normalize(forward_vector);
-    } 
-    pub fn move_forward(&mut self, amount: f32){
-        
-        let forward = self.get_forward();
-        self.location[0] +=  forward[0] * amount;
-        self.location[1] +=  forward[1] * amount;
-        self.location[2] +=  forward[2] * amount;
-    }
-    pub fn move_sideways(&mut self, amount: f32){
-        let forward = self.get_forward();
+    pub fn new(
+        pos: Vec3,
+        target: Vec3,
+        fov_degrees: f32,
+        aspect_ratio: f64,
+        z_near: f32,
+        z_far: f32,
+        speed: f32,
+    ) -> Camera {
+        let rotation = Self::get_lookat_rotation(pos, target);
 
-        let sideway = cross_product(forward, [0.,1.,0.]);
-        
-        self.location[0] +=  sideway[0] * amount;
-        self.location[1] +=  sideway[1] * amount;
-        self.location[2] +=  sideway[2] * amount;
-    }
-}
+        let camera_rig = CameraRig::builder()
+            .with(Position::new(pos))
+            .with(YawPitch::new().rotation_quat(rotation))
+            .with(Smooth::new_position_rotation(0.9, 0.9))
+            .build();
 
-//orbital
-//Point3::new(
-//     self.r * self.phi.sin() * self.theta.sin(),
-//     self.r * self.phi.cos(),
-//     self.r * self.phi.sin() * self.theta.cos(),
-// )
-
-impl Camera {
-    pub fn mouse_moved(&mut self, mouse_pos: [i32; 2]) {
-        self.yaw -= mouse_pos[0] as f32 * self.sensitivity;
-        self.pitch =  (self.pitch - (mouse_pos[1] as f32 * self.sensitivity)).clamp(-(PI / 2.) +0.01, PI / 2. -0.01);
-    }
-    pub fn get_look_toward(&mut self) -> Point3<f32> {
-        let r = self.pitch.cos();
-        
-        let mut y = self.pitch.sin();
-        let mut z = r * self.yaw.cos();
-        let mut x = r * self.yaw.sin();
-        x += self.location.x;
-        y += self.location.y;
-        z += self.location.z;
-
-        Point3 { x: x, y: y, z: z }
-        
-
-
-    }
-    pub fn forward(&mut self, r: f32) {
-        self.r -= r;
-    }
-}
-
-impl Default for Camera {
-    fn default() -> Self {
         Camera {
-            last_look_position: None,
-            sensitivity: 0.01,
-            location: Point3::new(2., 2., 2.),
-            pitch: 0.,
-            yaw: 0.,
-            r: 0.
-        } 
+            camera_rig,
+            fov_degrees,
+            aspect_ratio: aspect_ratio as f32,
+            z_near,
+            z_far,
+            speed,
+        }
+    }
+
+    pub fn get_lookat_rotation(pos: Vec3, target: Vec3) -> Quat {
+        // Rotation calculation from
+        // https://github.com/h3r2tic/dolly/blob/main/src/drivers/look_at.rs
+
+        (target - pos)
+            .try_normalize()
+            .and_then(|forward| {
+                let right = forward.cross(Vec3::Y).try_normalize()?;
+                let up = right.cross(forward);
+                Some(Quat::from_mat3(&Mat3::from_cols(right, up, -forward)))
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn update(&mut self, input: &Input) -> bool {
+        let transform = self.camera_rig.final_transform;
+
+        let mut movement = Vec3::new(0.0, 0.0, 0.0);
+        if input.key_down(winit::keyboard::KeyCode::KeyW) {
+            movement += self.speed * transform.forward();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyS) {
+            movement -= self.speed * transform.forward();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyA) {
+            movement -= self.speed * transform.right();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyD) {
+            movement += self.speed * transform.right();
+        }
+
+        self.camera_rig.driver_mut::<Position>().translate(movement);
+
+        let mut view_changed = false;
+        if input.right_mouse_down {
+            self.camera_rig
+                .driver_mut::<YawPitch>()
+                .rotate_yaw_pitch(-0.3 * input.mouse_delta.x, -0.3 * input.mouse_delta.y);
+            view_changed = true;
+        }
+        self.camera_rig.update(1.0); 
+        movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
+    }
+
+    pub fn get_view(&self) -> Mat4 {
+        let transform = self.camera_rig.final_transform;
+
+        glam::Mat4::look_at_rh(
+            transform.position,
+            transform.position + transform.forward(),
+            transform.up(),
+        )
+    }
+
+    pub fn get_projection(&self) -> Mat4 {
+        glam::Mat4::perspective_rh(
+            f32::to_radians(self.fov_degrees),
+            self.aspect_ratio,
+            self.z_near,
+            self.z_far,
+        )
+    }
+
+    pub fn get_position(&self) -> Vec3 {
+        self.camera_rig.final_transform.position
+    }
+
+    pub fn get_forward(&self) -> Vec3 {
+        self.camera_rig.final_transform.forward()
+    }
+
+    pub fn set_position_target(&mut self, position: Vec3, target: Vec3) {
+        self.camera_rig.driver_mut::<Position>().position = position;
+
+        let rotation = Self::get_lookat_rotation(position, target);
+        self.camera_rig
+            .driver_mut::<YawPitch>()
+            .set_rotation_quat(rotation);
+    }
+
+    pub(crate) fn get_near_plane(&self) -> f32 {
+        self.z_near
+    }
+
+    pub(crate) fn get_far_plane(&self) -> f32 {
+        self.z_far
     }
 }

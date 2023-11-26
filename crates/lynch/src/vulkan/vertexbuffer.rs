@@ -13,4 +13,4 @@ fn create_vertex_buffer(
         vk::BufferUsageFlags::VERTEX_BUFFER,
         vertices,
     )
-}
+} 

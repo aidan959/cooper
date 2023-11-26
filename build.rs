@@ -8,6 +8,7 @@ use std::{
 
 fn main() {
     compile_shaders();
+    
 }
 
 fn compile_shaders() {

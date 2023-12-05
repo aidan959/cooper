@@ -111,20 +111,20 @@ impl CooperApplication {
             event_loop
         }
     }
-    pub fn run(mut self) -> (){
-        let mut cursor_position = None;
-        let mut wheel_delta = None;
-        let event_loop = self.window.event_loop;
-        
+    pub fn run(mut self: Self) -> (){
+        //let mut cursor_position = None;
+        let _frame_count = 0;
         self.create_scene();
-        
+        let mut input : Input = Input::default(); 
+        let _events : Vec<WindowEvent> = Vec::new();
+        let mut spawned = false;
         self.graph.recompile_all_shaders(self.renderer.device(), Some(self.renderer.internal_renderer.bindless_descriptor_set_layout));
-        event_loop.run( move
+        self.event_loop.run( move
             |event, _elwt|{
                 match event{
-                    
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
+                            
                             let present_index = self.renderer.begin_frame();
                             self.camera.update(&input);
 
@@ -133,51 +133,114 @@ impl CooperApplication {
                             self.view_data.inverse_view = self.camera.get_view().inverse();
                             self.view_data.inverse_projection = self.camera.get_projection().inverse();
                             self.view_data.eye_pos = self.camera.get_position();
+                            
+                            CooperApplication::record_commands(
+                                &self.renderer,
+                                self.renderer.sync_frames[self.renderer.current_frame].command_buffer,
+                                self.renderer.sync_frames[self.renderer.current_frame].command_buffer_reuse_fence,
+                                |command_buffer| {
+                                    self.camera_uniform_buffer[self.renderer.current_frame]
+                                        .update_memory(&self.renderer.device(), std::slice::from_ref(&self.view_data));
+                
+                                    self.graph.new_frame(self.renderer.current_frame);
+                                    self.graph.clear(self.renderer.device());
+                
+            
+                                    lynch::render_tools::build_render_graph(
+                                        &mut self.graph,
+                                        &self.renderer.device(),
+                                        &self.renderer,
+                                        &self.view_data,
+                                        &self.camera,
+                                    );
 
+                                    self.graph.prepare(&self.renderer);
+                                    let image = self.renderer.present_images[present_index].clone();
+                                    self.graph.render(
+                                        &command_buffer,
+                                        &self.renderer,
+                                        &[image]
+                                    );
+            
+                                    
+                                },
+                            );
                             self.renderer.submit_commands(self.graph.current_frame);
                             self.renderer.present_images[present_index].current_layout = vk::ImageLayout::PRESENT_SRC_KHR; 
                             self.renderer.present_frame(present_index, self.graph.current_frame);
                             self.renderer.current_frame = (self.renderer.current_frame + 1 ) % self.renderer.num_frames_in_flight as usize;
                             self.renderer.internal_renderer.need_environment_map_update = false;
                             self.graph.current_frame = self.renderer.current_frame;
-                        }
+
+                        },
                         WindowEvent::CloseRequested => {
-                            print!("close requested");
-                            
+                            self.graph.clear(self.renderer.device());
+                                
                             _elwt.exit();
-                            },
-                        WindowEvent::Resized(PhysicalSize { width: _, height: _ }) => {
+                        },
+                        WindowEvent::Resized(resize_value) => {
+                            self.renderer.resize(resize_value);
                             //resize_dimensions = Some([width as u32, height as u32]);
                         }
-                        WindowEvent::MouseInput {
-                            button: MouseButton::Left,
-                            state: _,
-                            ..
-                        } => {
-                            //if state == ElementState::Pressed {
-                            //    is_left_clicked = Some(true);
-                            //} else {
-                            //    is_left_clicked = Some(false);
-                            //}
+                        WindowEvent::MouseInput {..} | WindowEvent::CursorMoved {..}| WindowEvent::KeyboardInput {..}| WindowEvent::MouseWheel {..} => {
+                            input.update(&event);
                         }
-                        WindowEvent::CursorMoved { position, .. } => {
-                            let position: (i32, i32) = position.into();
-                            cursor_position = Some([position.0, position.1]);
+                        _ => {
+                            
                         }
-                        WindowEvent::MouseWheel {
-                            delta: MouseScrollDelta::LineDelta(_, v_lines),
-                            ..
-                        } => {
-                            wheel_delta = Some(v_lines);
-                        }
-                    //
-                        _ => {}
                     },
                     Event::LoopExiting => self.renderer.wait_gpu_idle(),
-                    _ => {}
-                }
+
+                                    
+                    _ => {self.window.window.request_redraw();}
+                    
+                }                
             }
         ).unwrap()
+    }
+    fn record_commands<F: FnOnce(ash::vk::CommandBuffer)>(
+        renderer: &VulkanRenderer,
+        command_buffer:  ash::vk::CommandBuffer,
+        wait_fence:  ash::vk::Fence,
+        render_commands: F,
+    ) {
+        let device = renderer.device();
+        unsafe {
+            {
+                device
+                    .device()
+                    .wait_for_fences(&[wait_fence], true, std::u64::MAX)
+                    .expect("Wait for fence failed.");
+                
+                device
+                    .device()
+                    .reset_fences(&[wait_fence])
+                    .expect("Reset fences failed.");
+            }
+
+            device
+                .device()
+                .reset_command_buffer(
+                    command_buffer,
+                    ash::vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("Reset command buffer failed.");
+
+            let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo::builder()
+                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            device
+                .device()
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Begin command buffer failed.");
+
+            render_commands(command_buffer);
+
+            device
+                .device()
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer failed.");
+        }
     }
     fn create_scene(&mut self) {
         self.renderer.initialize();

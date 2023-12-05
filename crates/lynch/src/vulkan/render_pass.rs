@@ -27,7 +27,67 @@ impl RenderPass {
             writes: Vec::new(),
         }
     }
+    pub fn prepare_render(
+        &self,
+        device: &Device,
+        command_buffer: &vk::CommandBuffer,
+        color_attachments: &[(Image, ViewType, vk::AttachmentLoadOp)],
+        depth_attachment: Option<(Image, ViewType, vk::AttachmentLoadOp)>,
+        extent: vk::Extent2D,
+        pipelines: &[Pipeline],
+    ) {
+        let bind_point = match pipelines[self.pipeline_handle].pipeline_type {
+            PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,
+            PipelineType::Compute => vk::PipelineBindPoint::COMPUTE,
+        };
 
+        if bind_point != vk::PipelineBindPoint::GRAPHICS {
+            unsafe {
+                device.ash_device.cmd_bind_pipeline(
+                    *command_buffer,
+                    bind_point,
+                    pipelines[self.pipeline_handle].handle,
+                );
+            }
+
+            return;
+        }
+        unsafe {
+            device
+                .device()
+                .cmd_begin_rendering(*command_buffer, &rendering_info);
+
+            device
+                .device()
+                .cmd_bind_pipeline(
+                *command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipelines[self.pipeline_handle].handle,
+            );
+
+            let viewports = [vk::Viewport {
+                x: 0.0,
+                y: extent.height as f32,
+                width: extent.width as f32,
+                height: -(extent.height as f32),
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }];
+
+            let scissors = [vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            }];
+
+            device
+                .device()
+                .cmd_set_viewport(*command_buffer, 0, &viewports);
+            device
+                .device()
+                .cmd_set_scissor(*command_buffer, 0, &scissors);
+            todo!();
+        }
+    }
     pub fn try_create_read_resources_descriptor_set(
         &mut self,
         pipelines: &[Pipeline],

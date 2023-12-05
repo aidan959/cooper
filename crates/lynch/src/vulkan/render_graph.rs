@@ -346,7 +346,6 @@ impl RenderGraph {
                 let dst = copy_command.dst;
 
                 // Image barriers
-                // (a bit verbose, but ok for now)
                 let next_access = vulkan::image_pipeline_barrier(
                     device,
                     *command_buffer,
@@ -389,6 +388,29 @@ impl RenderGraph {
 
         }
 
+    }
+    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> PassBuilder {
+        PassBuilder {
+            name,
+            pipeline_handle,
+            reads: vec![],
+            writes: vec![],
+            render_func: None,
+            depth_attachment: None,
+            presentation_pass: false,
+            uniforms: HashMap::new(),
+            copy_command: None,
+            extra_barriers: None,
+        }
+    }
+
+    pub fn add_pass_from_desc(
+        &mut self,
+        name: &str,
+        desc_builder: PipelineDescBuilder,
+    ) -> RenderPassBuilder {
+        let pipeline_handle = self.create_pipeline(desc_builder.build());
+        self.add_pass(name.to_string(), pipeline_handle)
     }
 
     pub fn recompile_all_shaders(

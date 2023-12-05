@@ -138,7 +138,67 @@ struct GpuMesh {
     material: u32,
 }
 impl VulkanRenderer {
-    
+    pub fn render(&mut self, render_graph: &mut RenderGraph, camera: &Camera){
+        self.update_view_to_camera(&camera);
+        let command_buffer = self.sync_frames[self.current_frame].command_buffer;
+        let wait_fence = self.sync_frames[self.current_frame].command_buffer_reuse_fence;
+        let present_index = self.begin_frame();
+        unsafe {
+            {
+                self.ash_device()
+                    .wait_for_fences(&[wait_fence], true, std::u64::MAX)
+                    .expect("Wait for fence failed.");
+
+                self.ash_device()
+                    .reset_fences(&[wait_fence])
+                    .expect("Reset fences failed.");
+            }
+
+            self.ash_device()
+                .reset_command_buffer(
+                    command_buffer,
+                    ash::vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("Reset command buffer failed.");
+
+            let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo::builder()
+                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            self.ash_device()
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Begin command buffer failed.");
+
+            self.camera_uniform_buffer[self.current_frame]
+                .update_memory(std::slice::from_ref(&self.view_data));
+            graph.new_frame(self.current_frame);    
+
+            graph.clear();
+            render_tools::build_render_graph(
+                graph,
+                self.arc_device(),
+                &self,
+                &self.view_data,
+                &camera,
+            );
+
+            graph.prepare(&self);
+            let image = self.present_images[present_index].clone();
+            graph.render(&command_buffer, &self, &image);
+
+            self.submit_commands(self.current_frame);
+            self.present_frame(present_index, self.current_frame);
+            self.current_frame = (self.current_frame + 1) % self.num_frames_in_flight as usize;
+            self.internal_renderer.need_environment_map_update = false;
+            graph.current_frame = self.current_frame;
+        };
+    }
+    fn update_view_to_camera(self: &mut Self, camera: &Camera) {
+        self.view_data.view = camera.get_view();
+        self.view_data.projection = camera.get_projection();
+        self.view_data.inverse_view = camera.get_view().inverse();
+        self.view_data.inverse_projection = camera.get_projection().inverse();
+        self.view_data.eye_pos = camera.get_position();
+    }
     fn setup_swapchain_images(
         vk_context: &VkContext,
         swapchain: vk::SwapchainKHR,

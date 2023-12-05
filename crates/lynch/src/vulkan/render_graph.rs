@@ -99,4 +99,53 @@ impl RenderGraph {
 
         self.passes[self.current_frame].clear();
     }
+
+    pub fn create_camera_descriptor_set(
+        device: &Device,
+        camera_uniform_buffer: &Buffer,
+    ) -> DescriptorSet {
+        let descriptor_set_layout_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::ALL)
+            .build();
+
+        let descriptor_sets_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&[descriptor_set_layout_binding])
+            .build();
+
+        let descriptor_set_layout = unsafe {
+            device
+                .device()
+                .create_descriptor_set_layout(&descriptor_sets_layout_info, None)
+                .expect("Error creating descriptor set layout")
+        };
+
+        let mut binding_map: vulkan::shader::BindingMap = std::collections::BTreeMap::new();
+        binding_map.insert(
+            "view".to_string(),
+            vulkan::shader::Binding {
+                set: DESCRIPTOR_SET_INDEX_VIEW,
+                binding: 0,
+                info: rspirv_reflect::DescriptorInfo {
+                    ty: rspirv_reflect::DescriptorType::UNIFORM_BUFFER,
+                    binding_count: rspirv_reflect::BindingCount::One,
+                    name: "view".to_string(),
+                },
+            },
+        );
+
+        let descriptor_set_camera =
+            DescriptorSet::new(device, descriptor_set_layout, binding_map);
+
+        descriptor_set_camera.write_uniform_buffer(
+            device,
+            "view".to_string(),
+            camera_uniform_buffer,
+        );
+
+        descriptor_set_camera
+    } 
+    
 }

@@ -1,20 +1,16 @@
-use crate::math::normalize;
-use cgmath::Point3;
-use cgmath::Point2;
-pub const  PI : f32 = 3.14159265358979323846;
 use dolly::prelude::*;
 use glam::{Mat3, Mat4, Quat, Vec3};
 
-#[derive(Clone, Copy)]
+use frost::Input;
+
 pub struct Camera {
     camera_rig: CameraRig,
+    fov_degrees: f32,
     aspect_ratio: f32,
     z_near: f32,
     z_far: f32,
-    sensitivity: f32,
+    speed: f32,
 }
-
-
 impl Camera {
     pub fn new(
         pos: Vec3,
@@ -42,13 +38,10 @@ impl Camera {
             speed,
         }
     }
-    pub fn position(&self) -> Vec3 {
-        self.camera_rig.final_transform.position
-    }
 
     pub fn get_lookat_rotation(pos: Vec3, target: Vec3) -> Quat {
         (target - pos)
-            .try_normalize()
+            .try_normalize() // can return none
             .and_then(|forward| {
                 let right = forward.cross(Vec3::Y).try_normalize()?;
                 let up = right.cross(forward);
@@ -56,16 +49,10 @@ impl Camera {
             })
             .unwrap_or_default()
     }
-    pub fn forward(&mut self, r: f32) {
-        self.r -= r;
-    }
-    pub fn update(&mut self, input: &Input) -> bool {
+
+    pub fn update(&mut self, input: &Input, delta: f32) -> bool {
         let transform = self.camera_rig.final_transform;
-        // TODO abstract to ecs / get inpputs from ecs
-        // two ideas: One -> ECS passes input and this is just handled
-        // in "update" blocks by anything that has Input struct
-        // Two -> Update is handled as system in and of itself and
-        // and we just 
+
         let mut movement = Vec3::new(0.0, 0.0, 0.0);
         if input.key_down(winit::keyboard::KeyCode::KeyW) {
             movement += self.speed * transform.forward();
@@ -89,9 +76,10 @@ impl Camera {
                 .rotate_yaw_pitch(-0.3 * input.mouse_delta.x, -0.3 * input.mouse_delta.y);
             view_changed = true;
         }
-        self.camera_rig.update(1.0); 
+        self.camera_rig.update(delta); 
         movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
     }
+
     pub fn get_view(&self) -> Mat4 {
         let transform = self.camera_rig.final_transform;
 
@@ -101,7 +89,7 @@ impl Camera {
             transform.up(),
         )
     }
-    // glamafied projection
+
     pub fn get_projection(&self) -> Mat4 {
         glam::Mat4::perspective_rh(
             f32::to_radians(self.fov_degrees),
@@ -110,7 +98,8 @@ impl Camera {
             self.z_far,
         )
     }
-    #pub fn get_position(&self) -> Vec3 {
+
+    pub fn get_position(&self) -> Vec3 {
         self.camera_rig.final_transform.position
     }
 
@@ -133,19 +122,5 @@ impl Camera {
 
     pub(crate) fn get_far_plane(&self) -> f32 {
         self.z_far
-    }
-}
-
-
-impl Default for Camera {
-    fn default() -> Self {
-        Camera {
-            last_look_position: None,
-            sensitivity: 0.01,
-            location: Point3::new(2., 2., 2.),
-            pitch: 0.,
-            yaw: 0.,
-            r: 0.
-        } 
     }
 }

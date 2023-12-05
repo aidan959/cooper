@@ -188,7 +188,26 @@ impl VulkanRenderer {
             })
             .collect::<Vec<_>>()
     }
-
+    pub fn submit_commands(&self, frame_index: usize) {
+        //verbose!("Submitting commands on frame_index {}", frame_index);
+        unsafe {
+            let command_buffers = [self.sync_frames[frame_index].command_buffer];
+            let wait_semaphores = [self.sync_frames[frame_index].image_available_semaphore];
+            let signal_semaphores = [self.sync_frames[frame_index].render_finished_semaphore];
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(&wait_semaphores)
+                .signal_semaphores(&signal_semaphores)
+                .command_buffers(&command_buffers)
+                .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT]);
+            self.device().ash_device
+                .queue_submit(
+                    self.device().queue,
+                    &[submit_info.build()],
+                    self.sync_frames[frame_index].command_buffer_reuse_fence,
+                )
+                .expect("Queue submit failed.");
+        }
+    }
     fn create_instance(entry: &Entry) -> Instance {
         let app_name = CString::new("Cooper").unwrap();
         let engine_name = CString::new("Lynch").unwrap();

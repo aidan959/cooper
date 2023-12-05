@@ -98,7 +98,7 @@ impl CooperApplication {
             })
             .collect::<Vec<_>>();
 
-            let graph = lynch::graph::Graph::new(renderer.vk_context.arc_device(), &camera_uniform_buffer, renderer.image_count);
+        let graph = lynch::graph::Graph::new(renderer.vk_context.arc_device(), &camera_uniform_buffer, renderer.image_count);
         let event_handler = EventHandler::new();
         CooperApplication {
             window,
@@ -114,6 +114,9 @@ impl CooperApplication {
         let mut cursor_position = None;
         let mut wheel_delta = None;
         let event_loop = self.window.event_loop;
+        
+        self.create_scene();
+        
         self.graph.recompile_all_shaders(self.renderer.device(), Some(self.renderer.internal_renderer.bindless_descriptor_set_layout));
         event_loop.run( move
             |event, _elwt|{
@@ -174,5 +177,46 @@ impl CooperApplication {
                 }
             }
         ).unwrap()
+    }
+    fn create_scene(&mut self) {
+        self.renderer.initialize();
+
+        self.build_scene();
+    }
+    fn build_scene(&mut self ) {
+        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/cube.gltf");
+        sphere.meshes[0].material.material_type =
+            gltf_loader::MaterialType::Dielectric;
+        let translation_matrix = Mat4::from_scale_rotation_translation(
+                glam::Vec3::new(1., 1., 1.),
+                glam::Quat::IDENTITY ,
+                glam::Vec3::new(6., 6., 6.));
+        self.renderer.add_model(
+            sphere,
+            translation_matrix
+        );
+        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
+        sphere.meshes[0].material.material_type =
+            gltf_loader::MaterialType::Dielectric;
+        let translation_matrix = Mat4::from_scale_rotation_translation(
+                glam::Vec3::new(1., 1., 1.),
+                glam::Quat::IDENTITY ,
+                glam::Vec3::new(7., 6.5, 6.));
+        self.renderer.add_model(
+            sphere,
+            translation_matrix
+        );
+        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
+        sphere.meshes[0].material.material_type =
+            gltf_loader::MaterialType::Dielectric;
+        let translation_matrix = Mat4::from_scale_rotation_translation(
+                glam::Vec3::new(1., 10., 1.),
+                glam::Quat::IDENTITY ,
+                glam::Vec3::new(6.5, 15., 6.));
+        self.renderer.add_model(
+            sphere,
+            translation_matrix
+        );
+
     }
 }

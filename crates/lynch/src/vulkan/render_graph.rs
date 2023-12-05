@@ -75,7 +75,15 @@ impl RenderGraph {
             device: device,
         }
     }
-
+    pub fn recompile_all_shaders(
+        &mut self,
+        device: &Device,
+        bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
+    ) {
+        for pipeline in &mut self.resources.pipelines {
+            pipeline.recreate_pipeline(device, bindless_descriptor_set_layout);
+        }
+    }
     pub fn new_frame(&mut self, current_frame: usize) {
         self.current_frame = current_frame;
     }
@@ -148,4 +156,96 @@ impl RenderGraph {
         descriptor_set_camera
     } 
     
+}
+
+
+pub struct RenderPassBuilder {
+    pub name: String,
+    pub pipeline_handle: PipelineId,
+    pub reads: Vec<Resource>,
+    pub writes: Vec<Attachment>,
+    pub render_func: Option<
+        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
+    >,
+}
+
+impl RenderPassBuilder {
+    pub fn read(mut self, resource_id: TextureId) -> Self {
+        self.reads.push(Resource::Texture(TextureResource {
+            texture: resource_id,
+            input_type: TextureResourceType::CombinedImageSampler,
+            access_type: vk_sync::AccessType::AnyShaderReadSampledImageOrUniformTexelBuffer,
+        }));
+        self
+    }
+
+    pub fn image_write(mut self, resource_id: TextureId) -> Self {
+        self.reads.push(Resource::Texture(TextureResource {
+            texture: resource_id,
+            input_type: TextureResourceType::StorageImage,
+            access_type: vk_sync::AccessType::AnyShaderWrite,
+        }));
+        self
+    }
+    pub fn write_buffer(mut self, resource_id: BufferId) -> Self {
+        self.reads.push(Resource::Buffer(BufferResource {
+            buffer: resource_id,
+            access_type: vk_sync::AccessType::AnyShaderWrite,
+        }));
+        self
+    }
+
+    pub fn read_buffer(mut self, resource_id: BufferId) -> Self {
+        self.reads.push(Resource::Buffer(BufferResource {
+            buffer: resource_id,
+            access_type: vk_sync::AccessType::AnyShaderReadOther,
+        }));
+        self
+    }
+
+    pub fn write(mut self, resource_id: TextureId) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        });
+        self
+    }
+
+    pub fn write_layer(mut self, resource_id: TextureId, layer: u32) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Layer(layer),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        });
+        self
+    }
+
+    pub fn load_write(mut self, resource_id: TextureId) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::LOAD,
+        });
+        self
+    }
+    pub fn build(self, graph: &mut RenderGraph) {
+        let mut pass = RenderPass::new(
+            self.name,
+            self.pipeline_handle,
+            self.render_func,
+            self.device.clone(),
+        );
+
+        for read in &self.reads {
+            pass.reads.push(*read);
+        }
+
+        for write in &self.writes {
+            pass.writes.push(*write);
+        }
+
+
+        graph.passes[graph.current_frame].push(pass);
+    }
 }

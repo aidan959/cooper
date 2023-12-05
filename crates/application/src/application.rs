@@ -71,6 +71,8 @@ pub struct CooperApplication {
     event_handler: EventHandler,
     event_loop: EventLoop<()>,
     pub camera: Camera,
+    view_data: lynch::ViewUniformData,
+    camera_uniform_buffer: Vec<Buffer>,
 }
 impl CooperApplication {
     pub fn create() -> CooperApplication {
@@ -88,28 +90,52 @@ impl CooperApplication {
             1000.0,
             0.20,
         );
-        let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count);
+        let view_data = lynch::ViewUniformData::new(&camera, WIDTH, HEIGHT);
+
+        let camera_uniform_buffer = (0..renderer.image_count)
+            .map(|_| { 
+                view_data.create_camera_buffer(&renderer.vk_context)
+            })
+            .collect::<Vec<_>>();
+
+            let graph = lynch::graph::Graph::new(renderer.vk_context.arc_device(), &camera_uniform_buffer, renderer.image_count);
         let event_handler = EventHandler::new();
         CooperApplication {
             window,
             renderer,
             event_handler,
             camera,
-            graph
+            graph,
+            camera_uniform_buffer,
+            event_loop,
         }
     }
     pub fn run(mut self) -> (){
         let mut cursor_position = None;
         let mut wheel_delta = None;
         let event_loop = self.window.event_loop;
+        self.graph.recompile_all_shaders(self.renderer.device(), Some(self.renderer.internal_renderer.bindless_descriptor_set_layout));
         event_loop.run( move
             |event, _elwt|{
                 match event{
                     
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
-                            self.renderer.render(&mut self.graph);
-                            self.renderer.draw_frame();
+                            let present_index = self.renderer.begin_frame();
+                            self.camera.update(&input);
+
+                            self.view_data.view = self.camera.get_view();
+                            self.view_data.projection = self.camera.get_projection();
+                            self.view_data.inverse_view = self.camera.get_view().inverse();
+                            self.view_data.inverse_projection = self.camera.get_projection().inverse();
+                            self.view_data.eye_pos = self.camera.get_position();
+
+                            self.renderer.submit_commands(self.graph.current_frame);
+                            self.renderer.present_images[present_index].current_layout = vk::ImageLayout::PRESENT_SRC_KHR; 
+                            self.renderer.present_frame(present_index, self.graph.current_frame);
+                            self.renderer.current_frame = (self.renderer.current_frame + 1 ) % self.renderer.num_frames_in_flight as usize;
+                            self.renderer.internal_renderer.need_environment_map_update = false;
+                            self.graph.current_frame = self.renderer.current_frame;
                         }
                         WindowEvent::CloseRequested => {
                             print!("close requested");

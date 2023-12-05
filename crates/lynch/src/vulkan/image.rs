@@ -28,3 +28,14 @@ pub struct ImageDesc {
     pub usage: vk::ImageUsageFlags,
     pub mip_levels: u32,
 }
+
+
+
+
+#[derive(Clone)]
+pub struct Image {
+    pub image: vk::Image,
+    pub image_view: vk::ImageView,
+    pub desc: ImageDesc,
+    pub device: Arc<Device>,
+}

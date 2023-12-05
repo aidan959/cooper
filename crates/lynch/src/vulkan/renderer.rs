@@ -65,6 +65,7 @@ pub struct VulkanRenderer {
     pub num_frames_in_flight: u32,
     pub swapchain_recreate_needed : bool
 }
+
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     pub bindless_descriptor_set: vk::DescriptorSet,
@@ -1638,37 +1639,6 @@ impl VulkanRenderer {
         let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
         unsafe { device.create_shader_module(&create_info, None).unwrap() }
     }
-    fn create_sync_objects(device: &Device) -> InFlightFrames {
-        let mut sync_objects_vec = Vec::new();
-        for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            let image_available_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
-            };
-
-            let render_finished_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
-            };
-
-            let in_flight_fence = {
-                let fence_info = vk::FenceCreateInfo::builder()
-                    .flags(vk::FenceCreateFlags::SIGNALED)
-                    .build();
-                unsafe { device.create_fence(&fence_info, None).unwrap() }
-            };
-
-            let sync_objects = SyncObjects {
-                image_available_semaphore,
-                render_finished_semaphore,
-                fence: in_flight_fence,
-            };
-            sync_objects_vec.push(sync_objects)
-        }
-
-        InFlightFrames::new(sync_objects_vec)
-    }
-    
     
     
     fn create_command_pool(
@@ -1902,97 +1872,6 @@ impl VulkanRenderer {
         );
 
         Texture::new(image, memory, view, None)
-    }
-    fn recreate_swapchain(&mut self) {
-        log::debug!("Recreating swapchain.");
-
-        if self.has_window_been_minimized() {
-            while !self.has_window_been_maximized() {
-                
-            }
-        }
-
-        unsafe { self.vk_context.device().device_wait_idle().unwrap() };
-
-        self.cleanup_swapchain();
-
-        let dimensions = self.resize_dimensions.unwrap_or([
-            self.swapchain_properties.extent.width,
-            self.swapchain_properties.extent.height,
-        ]);
-        let (swapchain, swapchain_khr, properties, images) = Self::create_swapchain_and_images(
-            &self.vk_context,
-            self.queue_families_indices,
-            dimensions,
-        );
-        let swapchain_image_views =
-            Self::create_swapchain_image_views(&self.vk_context.device(), &images, properties);
-
-        let render_pass = Self::create_render_pass(
-            self.vk_context.device(),
-            properties,
-            self.msaa_samples,
-            self.depth_format,
-        );
-        let (pipeline, layout) = Self::create_pipeline(
-            self.vk_context.device(),
-            properties,
-            render_pass,
-            self.descriptor_set_layout,
-            self.msaa_samples,
-        );
-
-        let color_texture = Self::create_color_texture(
-            &self.vk_context,
-            self.command_pool,
-            self.graphics_queue,
-            properties,
-            self.msaa_samples,
-        );
-
-        let depth_texture = Self::create_depth_texture(
-            &self.vk_context,
-            self.command_pool,
-            self.graphics_queue,
-            self.depth_format,
-            properties.extent,
-            self.msaa_samples,
-        );
-        let swapchain_framebuffers = Self::create_framebuffers(
-            &self.vk_context.device(),
-            &swapchain_image_views,
-            color_texture,
-            depth_texture,
-            render_pass,
-            properties,
-        );
-
-        let command_buffers = Self::create_and_register_command_buffers(
-            &self.vk_context.device(),
-            self.command_pool,
-            &swapchain_framebuffers,
-            render_pass,
-            properties,
-            self.vertex_buffer,
-            self.index_buffer,
-            self.model_index_count,
-            layout,
-            &self.descriptor_sets,
-            pipeline,
-        );
-
-        self.swapchain = swapchain;
-        self.swapchain_khr = swapchain_khr;
-        self.swapchain_properties = properties;
-        self.images = images;
-        self.swapchain_image_views = swapchain_image_views;
-        self.render_pass = render_pass;
-        self.pipeline = pipeline;
-        self.pipeline_layout = layout;
-        self.color_texture = color_texture;
-        self.depth_texture = depth_texture;
-        self.swapchain_framebuffers = swapchain_framebuffers;
-        self.command_buffers = command_buffers;
     }
     fn setup_swapchain_images(
         vk_context: &VkContext,

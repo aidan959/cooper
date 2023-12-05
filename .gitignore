@@ -1,3 +1,4 @@
 /target
 /shaders/*.spv
-target
+target.
+/assets

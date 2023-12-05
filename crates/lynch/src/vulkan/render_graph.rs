@@ -86,6 +86,7 @@ impl RenderGraph {
 
             let pass_pipeline = &self.resources.pipelines[pass.pipeline_handle];
 
+            // Transition pass resources
             for read in &pass.reads {
 
                 match read {
@@ -133,11 +134,13 @@ impl RenderGraph {
                         *access_type,
                     );
 
+                    // Update the buffer's previous access type with the next access type
                     if let Some(buffer) = self.resources.buffers.get_mut(*buffer_id) {
                         buffer.prev_access = next_access;
                     }
                 }
             }
+
             let mut writes_for_synch = pass.writes.clone();
             // If the depth attachment is owned by the graph make sure it gets a barrier as well
             if pass.depth_attachment.is_some() {
@@ -197,50 +200,197 @@ impl RenderGraph {
                     )
                 })
                 .collect();
-                let extent = if !pass.writes.is_empty() {
-                    vk::Extent2D {
-                        width: self.resources.textures[pass.writes[0].texture]
+
+            // Todo: very ugly just to get the extents...
+            let extent = if !pass.writes.is_empty() {
+                vk::Extent2D {
+                    width: self.resources.textures[pass.writes[0].texture]
+                        .texture
+                        .image
+                        .width(),
+                    height: self.resources.textures[pass.writes[0].texture]
+                        .texture
+                        .image
+                        .height(),
+                }
+            } else if pass.depth_attachment.is_some() {
+                match pass.depth_attachment.as_ref().unwrap() {
+                    DepthAttachment::GraphHandle(depth_attachment) => vk::Extent2D {
+                        width: self.resources.textures[depth_attachment.texture]
                             .texture
                             .image
                             .width(),
-                        height: self.resources.textures[pass.writes[0].texture]
+                        height: self.resources.textures[depth_attachment.texture]
                             .texture
                             .image
                             .height(),
-                    }
-                } else if pass.depth_attachment.is_some() {
+                    },
+                    DepthAttachment::External(depth_attachment, _) => vk::Extent2D {
+                        width: depth_attachment.width(),
+                        height: depth_attachment.height(),
+                    },
+                }
+            } else {
+                vk::Extent2D {
+                    width: 1,
+                    height: 1,
+                }
+            };
+
+            assert_eq!(present_image.len(), 1);
+            let present_image = [(
+                present_image[0].clone(),
+                ViewType::Full(),
+                vk::AttachmentLoadOp::CLEAR,
+            )];
+
+            pass.prepare_render(
+                device,
+                command_buffer,
+                if !pass.presentation_pass {
+                    write_attachments.as_slice()
+                } else {
+                    &present_image
+                },
+                if pass.depth_attachment.is_some() {
                     match pass.depth_attachment.as_ref().unwrap() {
-                        DepthAttachment::GraphHandle(depth_attachment) => vk::Extent2D {
-                            width: self.resources.textures[depth_attachment.texture]
+                        DepthAttachment::GraphHandle(depth_attachment) => Some((
+                            self.resources.textures[depth_attachment.texture]
                                 .texture
-                                .image
-                                .width(),
-                            height: self.resources.textures[depth_attachment.texture]
-                                .texture
-                                .image
-                                .height(),
-                        },
-                        DepthAttachment::External(depth_attachment, _) => vk::Extent2D {
-                            width: depth_attachment.width(),
-                            height: depth_attachment.height(),
-                        },
+                                .image.clone()
+                                ,
+                            depth_attachment.view,
+                            depth_attachment.load_op,
+                        )),
+                        DepthAttachment::External(depth_attachment, load_op) => {
+                            Some((depth_attachment.clone(), ViewType::Full(), *load_op))
+                        }
                     }
                 } else {
+                    None
+                },
+                if !pass.presentation_pass {
+                    extent
+                } else {
                     vk::Extent2D {
-                        width: 1,
-                        height: 1,
+                        width: present_image[0].0.width(),   // Todo
+                        height: present_image[0].0.height(), // Todo
                     }
+                },
+                &self.resources.pipelines,
+            );
+
+            // Bind descriptor sets that are used by all passes.
+
+            unsafe {
+                let bind_point = match pass_pipeline.pipeline_type {
+                    PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,
+                    PipelineType::Compute => vk::PipelineBindPoint::COMPUTE,
                 };
-    
-                assert_eq!(present_image.len(), 1);
-                let present_image = [(
-                    present_image[0].clone(),
-                    ViewType::Full(),
-                    vk::AttachmentLoadOp::CLEAR,
-                )];
+
+                device.device().cmd_bind_descriptor_sets(
+                    *command_buffer,
+                    bind_point,
+                    pass_pipeline.pipeline_layout,
+                    DESCRIPTOR_SET_INDEX_BINDLESS,
+                    &[renderer.internal_renderer.bindless_descriptor_set],
+                    &[],
+                );
+
+                device.device().cmd_bind_descriptor_sets(
+                    *command_buffer,
+                    bind_point,
+                    pass_pipeline.pipeline_layout,
+                    DESCRIPTOR_SET_INDEX_VIEW,
+                    &[self.descriptor_set_camera[self.current_frame].handle],
+                    &[],
+                );
+
+                if let Some(read_textures_descriptor_set) = &pass.read_resources_descriptor_set {
+                    device.device().cmd_bind_descriptor_sets(
+                        *command_buffer,
+                        bind_point,
+                        pass_pipeline.pipeline_layout,
+                        DESCRIPTOR_SET_INDEX_INPUT_TEXTURES,
+                        &[read_textures_descriptor_set.handle],
+                        &[],
+                    )
+                }
+
+                if let Some(uniforms_descriptor_set) = &pass.uniforms_descriptor_set {
+                    device.device().cmd_bind_descriptor_sets(
+                        *command_buffer,
+                        bind_point,
+                        pass_pipeline.pipeline_layout,
+                        pass_pipeline
+                            .reflection
+                            .get_binding(&pass.uniforms.values().next().unwrap().0)
+                            .set,
+                        &[uniforms_descriptor_set.handle],
+                        &[],
+                    )
+                }
+            };
+
+            if let Some(render_func) = &pass.render_func {
+                render_func(device, command_buffer, renderer, pass, &self.resources);
+            }
+
+            if pass_pipeline.pipeline_type == PipelineType::Graphics {
+                unsafe { device.device().cmd_end_rendering(*command_buffer) };
+            }
+
+            if let Some(copy_command) = &pass.copy_command {
+
+                let src = copy_command.src;
+                let dst = copy_command.dst;
+
+                // Image barriers
+                // (a bit verbose, but ok for now)
+                let next_access = vulkan::image_pipeline_barrier(
+                    device,
+                    *command_buffer,
+                    &self.resources.textures[src].texture.image,
+                    self.resources.textures[src].prev_access,
+                    vk_sync::AccessType::TransferRead,
+                    false,
+                );
+                self.resources.textures.get_mut(src).unwrap().prev_access = next_access;
+
+                let next_access = vulkan::image_pipeline_barrier(
+                    device,
+                    *command_buffer,
+                    &self.resources.textures[dst].texture.image,
+                    self.resources.textures[dst].prev_access,
+                    vk_sync::AccessType::TransferWrite,
+                    false,
+                );
+                self.resources.textures.get_mut(dst).unwrap().prev_access = next_access;
+
+                let src = &self.resources.textures[src].texture.image;
+                let dst = &self.resources.textures[dst].texture.image;
+
+                // Use aspect flags from images
+                let mut copy_desc = copy_command.copy_desc;
+                copy_desc.src_subresource.aspect_mask = src.desc.aspect_flags;
+                copy_desc.dst_subresource.aspect_mask = dst.desc.aspect_flags;
+
+                unsafe {
+                    device.device().cmd_copy_image(
+                        *command_buffer,
+                        src.image,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        dst.image,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[copy_desc],
+                    )
+                };
+            }
+
         }
-        todo!(); // complete
+
     }
+
     pub fn recompile_all_shaders(
         &mut self,
         device: &Device,

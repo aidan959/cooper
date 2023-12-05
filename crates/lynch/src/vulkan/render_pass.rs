@@ -1,32 +1,157 @@
+use std::collections::HashMap;
+
 use ash::vk;
+
+use crate::graph::{Attachment ,DepthAttachment ,GraphResources ,Resource ,PipelineId, UniformData, BufferId, TextureCopy, GraphTexture, GraphBuffer, TextureResourceType, ViewType};
+
+
+use super::{Device, Pipeline, Image, PipelineType};
+use super::descriptor::{DescriptorSet, DescriptorIdentifier};
+use super::renderer::{VulkanRenderer};
 
 
 pub struct RenderPass {
-    pub name: String,
     pub pipeline_handle: PipelineId,
-    pub render_func: Option<
-        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
-    >,
+    #[allow(clippy::type_complexity)]
+    pub render_func:
+        Option<Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>>,
     pub reads: Vec<Resource>,
-
     pub writes: Vec<Attachment>,
+    pub depth_attachment: Option<DepthAttachment>,
+    pub presentation_pass: bool,
+    pub read_resources_descriptor_set: Option<DescriptorSet>,
+    pub name: String,
+    pub uniforms: HashMap<String, (String, UniformData)>,
+    pub uniform_buffer: Option<BufferId>,
+    pub uniforms_descriptor_set: Option<DescriptorSet>,
+    pub copy_command: Option<TextureCopy>,
+    pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
 }
+
 impl RenderPass {
     pub fn new(
         name: String,
         pipeline_handle: PipelineId,
-        render_func: Option<
+        presentation_pass: bool,
+        depth_attachment: Option<DepthAttachment>,
+        uniforms: HashMap<String, (String, UniformData)>,
+        #[allow(clippy::type_complexity)] render_func: Option<
             Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
         >,
+        copy_command: Option<TextureCopy>,
+        extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
     ) -> RenderPass {
         RenderPass {
-            name,
             pipeline_handle,
             render_func,
-            reads: Vec::new(),
-            writes: Vec::new(),
+            reads: vec![],
+            writes: vec![],
+            depth_attachment,
+            presentation_pass,
+            read_resources_descriptor_set: None,
+            name,
+            uniforms,
+            uniform_buffer: None,
+            uniforms_descriptor_set: None,
+            copy_command,
+            extra_barriers,
         }
     }
+
+    pub fn try_create_read_resources_descriptor_set(
+        &mut self,
+        device: &Device,
+        pipelines: &[Pipeline],
+        textures: &[GraphTexture],
+        buffers: &[GraphBuffer],
+        _tlas: vk::AccelerationStructureKHR,
+    ) {
+
+
+        // If there are input textures then create the descriptor set used to read them
+        if !self.reads.is_empty() && self.read_resources_descriptor_set.is_none() {
+            let descriptor_set_read_resources = DescriptorSet::new(
+                device,
+                pipelines[self.pipeline_handle].descriptor_set_layouts
+                    [super::renderer::DESCRIPTOR_SET_INDEX_INPUT_TEXTURES as usize],
+                pipelines[self.pipeline_handle]
+                    .reflection
+                    .get_set_mappings(super::renderer::DESCRIPTOR_SET_INDEX_INPUT_TEXTURES),
+            );
+
+            for (idx, &read) in self.reads.iter().enumerate() {
+                match read {
+                    Resource::Texture(read) => {
+                        if read.input_type == TextureResourceType::CombinedImageSampler {
+                            descriptor_set_read_resources.write_combined_image(
+                                device,
+                                DescriptorIdentifier::Index(idx as u32),
+                                &textures[read.texture].texture,
+                            );
+                        } else if read.input_type == TextureResourceType::StorageImage {
+                            descriptor_set_read_resources.write_storage_image(
+                                device,
+                                DescriptorIdentifier::Index(idx as u32),
+                                &textures[read.texture].texture.image,
+                            );
+                        }
+                    }
+                    Resource::Buffer(read) => {
+                        descriptor_set_read_resources.write_storage_buffer(
+                            device,
+                            DescriptorIdentifier::Index(idx as u32),
+                            &buffers[read.buffer].buffer,
+                        );
+                    }
+                }
+            }
+
+            self.read_resources_descriptor_set
+                .replace(descriptor_set_read_resources);
+        }
+    }
+
+    pub fn try_create_uniform_buffer_descriptor_set(
+        &mut self,
+        device: &Device,
+        pipelines: &[Pipeline],
+        buffers: &[GraphBuffer],
+    ) {
+
+        if !self.uniforms.is_empty() && self.uniforms_descriptor_set.is_none() {
+
+            let uniform_name = &self.uniforms.values().next().unwrap().0;
+            let binding = pipelines[self.pipeline_handle]
+                .reflection
+                .get_binding(uniform_name);
+            let descriptor_set = DescriptorSet::new(
+                device,
+                pipelines[self.pipeline_handle].descriptor_set_layouts[binding.set as usize],
+                pipelines[self.pipeline_handle]
+                    .reflection
+                    .get_set_mappings(binding.set),
+            );
+            {
+                descriptor_set.write_uniform_buffer(
+                    device,
+                    uniform_name.to_string(),
+                    &buffers[self.uniform_buffer.unwrap()].buffer,
+                );
+            }
+
+            self.uniforms_descriptor_set.replace(descriptor_set);
+        }
+    }
+
+    pub fn update_uniform_buffer_memory(&mut self, device: &Device, buffers: &mut [GraphBuffer]) {
+
+        if let Some(buffer_id) = self.uniform_buffer {
+            buffers[buffer_id]
+                .buffer
+                .update_memory(device, &self.uniforms.values().next().unwrap().1.data)
+        }
+    }
+
     pub fn prepare_render(
         &self,
         device: &Device,
@@ -52,6 +177,7 @@ impl RenderPass {
 
             return;
         }
+
         let color_attachments = color_attachments
             .iter()
             .map(|image| {
@@ -101,6 +227,7 @@ impl RenderPass {
                 extent,
             })
             .build();
+
         unsafe {
             device
                 .device()
@@ -136,62 +263,4 @@ impl RenderPass {
                 .cmd_set_scissor(*command_buffer, 0, &scissors);
         }
     }
-    pub fn try_create_read_resources_descriptor_set(
-        &mut self,
-        pipelines: &[Pipeline],
-        textures: &[GraphTexture],
-        buffers: &[GraphBuffer],
-        _tlas: vk::AccelerationStructureKHR,
-    ) {
-        if !(!self.reads.is_empty() && self.read_resources_descriptor_set.is_none()) {
-            return;
-        }
-        let descriptor_set_read_resources = DescriptorSet::new(
-            self.device.clone(),
-            pipelines[self.pipeline_handle].descriptor_set_layouts
-                [super::renderer::DESCRIPTOR_SET_INDEX_INPUT_TEXTURES as usize],
-            pipelines[self.pipeline_handle]
-                .reflection
-                .get_set_mappings(super::renderer::DESCRIPTOR_SET_INDEX_INPUT_TEXTURES),
-        );
-        for (idx, &read) in self.reads.iter().enumerate() {
-            match read {
-                Resource::Texture(read) => {
-                    if read.input_type == TextureResourceType::CombinedImageSampler {
-                        descriptor_set_read_resources.write_combined_image(
-                            &self.device,
-                            DescriptorIdentifier::Index(idx as u32),
-                            &textures[read.texture].texture,
-                        );
-                    } else if read.input_type == TextureResourceType::StorageImage {
-                        descriptor_set_read_resources.write_storage_image(
-                            &self.device,
-                            DescriptorIdentifier::Index(idx as u32),
-                            &textures[read.texture].texture.image,
-                        );
-                    }
-                }
-                Resource::Buffer(read) => {
-                    descriptor_set_read_resources.write_storage_buffer(
-                        &self.device,
-                        DescriptorIdentifier::Index(idx as u32),
-                        &buffers[read.buffer].buffer,
-                    );
-                }
-            }
-        }
-    
-        self.read_resources_descriptor_set
-            .replace(descriptor_set_read_resources);
-    }
-    pub fn update_uniform_buffer_memory(&mut self, buffers: &mut [GraphBuffer]) {
-        if let Some(buffer_id) = self.uniform_buffer {
-            buffers[buffer_id]
-                .buffer
-                .update_memory(&self.uniforms.values().next().unwrap().1.data)
-        }
-    }
-
 }
-
-

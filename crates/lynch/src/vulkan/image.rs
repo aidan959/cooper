@@ -46,11 +46,54 @@ impl ImageDesc {
             aspect_flags: vk::ImageAspectFlags::COLOR,
             usage: Self::common_usage_flags()
                 | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::STORAGE,
             mip_levels: 1,
         }
     }
-}
 
+    pub fn new_2d_array(width: u32, height: u32, array_layers: u32, format: vk::Format) -> Self {
+        ImageDesc {
+            width,
+            height,
+            depth: 1,
+            array_layers,
+            format,
+            image_type: ImageType::Tex2dArray,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+            usage: Self::common_usage_flags(),
+            mip_levels: 1,
+        }
+    }
+
+    pub fn new_cubemap(width: u32, height: u32, format: vk::Format) -> Self {
+        ImageDesc {
+            width,
+            height,
+            depth: 1,
+            array_layers: 6,
+            format,
+            image_type: ImageType::Cube,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+            usage: Self::common_usage_flags(),
+            mip_levels: 1,
+        }
+    }
+
+    pub fn aspect(mut self, aspect_flags: vk::ImageAspectFlags) -> Self {
+        self.aspect_flags = aspect_flags;
+        self
+    }
+
+    pub fn usage(mut self, usage_flags: vk::ImageUsageFlags) -> Self {
+        self.usage = usage_flags;
+        self
+    }
+
+    pub fn mip_levels(mut self, mip_levels: u32) -> Self {
+        self.mip_levels = mip_levels;
+        self
+    }
+}
 
 #[derive(Clone)]
 pub struct Image {
@@ -63,64 +106,31 @@ pub struct Image {
     pub debug_name: String,
     pub device: Arc<Device>,
 }
-
-
+/* //TODO implement appropriate dropping
+impl Drop for Image {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .ash_device
+                .destroy_image_view(self.image_view, None);
+            self.device.ash_device.destroy_image(self.image, None);
+            self.layer_views
+                .iter()
+                .for_each(|iv| self.device.ash_device.destroy_image_view(*iv, None));
+        }
+    }
+}*/
 impl Image {
     pub fn clean_vk_resources(&self) {
         unsafe {
             self.device.ash_device.device_wait_idle().unwrap();
             self.device
-                .ash_device
-                .destroy_image_view(self.image_view, None);
+            .ash_device
+            .destroy_image_view(self.image_view, None);
+            self.layer_views
+                .iter()
+                .for_each(|iv| self.device.ash_device.destroy_image_view(*iv, None));
             self.device.ash_device.destroy_image(self.image, None);
-        }
-    }
-    #[allow(clippy::too_many_arguments)]
-    pub fn create_image_view(
-        device: &Device,
-        image: vk::Image,
-        format: vk::Format,
-        aspect_flags: vk::ImageAspectFlags,
-        view_type: vk::ImageViewType,
-        base_array_layer: u32,
-        layer_count: u32,
-        mip_levels: u32,
-    ) -> vk::ImageView {
-        let image_aspect_flags = vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL;
-        let components = match aspect_flags {
-            vk::ImageAspectFlags::COLOR => vk::ComponentMapping {
-                r: vk::ComponentSwizzle::R,
-                g: vk::ComponentSwizzle::G,
-                b: vk::ComponentSwizzle::B,
-                a: vk::ComponentSwizzle::A,
-            },
-            vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH => {
-                vk::ComponentMapping::default()
-            }
-            n if n == image_aspect_flags => vk::ComponentMapping::default(),
-            _ => unimplemented!(),
-        };
-
-        let image_view_info = vk::ImageViewCreateInfo {
-            view_type,
-            format,
-            components,
-            subresource_range: vk::ImageSubresourceRange {
-                aspect_mask: aspect_flags,
-                base_array_layer,
-                layer_count,
-                base_mip_level: 0,
-                level_count: mip_levels,
-            },
-            image,
-            ..Default::default()
-        };
-
-        unsafe {
-            device
-                .ash_device
-                .create_image_view(&image_view_info, None)
-                .unwrap()
         }
     }
     pub fn new_from_desc(device: Arc<Device>, desc: ImageDesc) -> Image {
@@ -230,6 +240,140 @@ impl Image {
             }
         }
     }
+
+    pub fn new_from_handle(device: Arc<Device>, image: vk::Image, desc: ImageDesc) -> Image {
+        let view_type = if desc.image_type == ImageType::Tex2d && desc.array_layers == 1 {
+            vk::ImageViewType::TYPE_2D
+        } else if desc.image_type == ImageType::Tex2dArray && desc.array_layers > 1 {
+            vk::ImageViewType::TYPE_2D_ARRAY
+        } else if desc.image_type == ImageType::Cube {
+            vk::ImageViewType::CUBE
+        } else {
+            unimplemented!()
+        };
+
+        let image_view = Image::create_image_view(
+            &device,
+            image,
+            desc.format,
+            desc.aspect_flags,
+            view_type,
+            0,
+            1,
+            desc.mip_levels,
+        );
+
+        Image {
+            image,
+            image_view,
+            layer_views: vec![],
+            device_memory: vk::DeviceMemory::null(),
+            current_layout: vk::ImageLayout::UNDEFINED,
+            desc,
+            debug_name: "unnamed_image".to_string(),
+            device,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_image_view(
+        device: &Device,
+        image: vk::Image,
+        format: vk::Format,
+        aspect_flags: vk::ImageAspectFlags,
+        view_type: vk::ImageViewType,
+        base_array_layer: u32,
+        layer_count: u32,
+        mip_levels: u32,
+    ) -> vk::ImageView {
+        let image_aspect_flags = vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL;
+        let components = match aspect_flags {
+            vk::ImageAspectFlags::COLOR => vk::ComponentMapping {
+                r: vk::ComponentSwizzle::R,
+                g: vk::ComponentSwizzle::G,
+                b: vk::ComponentSwizzle::B,
+                a: vk::ComponentSwizzle::A,
+            },
+            vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH => {
+                vk::ComponentMapping::default()
+            }
+            n if n == image_aspect_flags => vk::ComponentMapping::default(),
+            _ => unimplemented!(),
+        };
+
+        let image_view_info = vk::ImageViewCreateInfo {
+            view_type,
+            format,
+            components,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: aspect_flags,
+                base_array_layer,
+                layer_count,
+                base_mip_level: 0,
+                level_count: mip_levels,
+            },
+            image,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .ash_device
+                .create_image_view(&image_view_info, None)
+                .unwrap()
+        }
+    }
+
+    pub fn set_debug_name(&mut self, name: &str) {
+        let device = &self.device;
+        self.debug_name = String::from(name);
+        device.set_debug_name(vk::Handle::as_raw(self.image), vk::ObjectType::IMAGE, name);
+        device.set_debug_name(
+            vk::Handle::as_raw(self.image_view),
+            vk::ObjectType::IMAGE_VIEW,
+            name,
+        );
+
+        for view in &self.layer_views {
+            device.set_debug_name(vk::Handle::as_raw(*view), vk::ObjectType::IMAGE_VIEW, name);
+        }
+    }
+
+    pub fn copy(&self, device: &Device, cb: vk::CommandBuffer, dest: &Image) {
+        let copy_region = vk::ImageCopy::builder()
+            .src_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: self.desc.aspect_flags,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .dst_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: dest.desc.aspect_flags,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .dst_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .extent(vk::Extent3D {
+                width: self.desc.width,
+                height: self.desc.height,
+                depth: 1,
+            })
+            .build();
+
+        unsafe {
+            device.ash_device.cmd_copy_image(
+                cb,
+                self.image,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                dest.image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[copy_region],
+            )
+        };
+    }
+
     pub fn transition_layout(
         &self,
         device: &Device,
@@ -312,6 +456,7 @@ impl Image {
             );
         }
     }
+
     pub fn layer_view(&self, layer: u32) -> vk::ImageView {
         assert!(layer < self.layer_views.len() as u32);
         self.layer_views[layer as usize]
@@ -354,7 +499,6 @@ pub struct ImageCopyDescBuilder {
     image_copy: vk::ImageCopy,
 }
 
-
 impl ImageCopyDescBuilder {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
@@ -381,6 +525,7 @@ impl ImageCopyDescBuilder {
                 .build(),
         }
     }
+
     pub fn src_aspect_mask(mut self, aspect_mask: vk::ImageAspectFlags) -> Self {
         self.image_copy.src_subresource.aspect_mask = aspect_mask;
         self
@@ -401,8 +546,15 @@ impl ImageCopyDescBuilder {
         self
     }
 
+    pub fn dst_aspect_mask(mut self, aspect_mask: vk::ImageAspectFlags) -> Self {
+        self.image_copy.dst_subresource.aspect_mask = aspect_mask;
+        self
+    }
 
-
+    pub fn dst_mip_level(mut self, mip_level: u32) -> Self {
+        self.image_copy.dst_subresource.mip_level = mip_level;
+        self
+    }
 
     pub fn dst_base_array_layer(mut self, base_array_layer: u32) -> Self {
         self.image_copy.dst_subresource.base_array_layer = base_array_layer;

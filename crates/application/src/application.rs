@@ -66,13 +66,13 @@ const WIDTH : f64= 1280.;
 const HEIGHT : f64 = 720.;
 pub struct CooperApplication {
     window: Window,
-    renderer: VulkanRenderer,
-    graph: RenderGraph,
+    pub renderer: VulkanRenderer,
     event_handler: EventHandler,
-    event_loop: EventLoop<()>,
-    pub camera: Camera,
+    graph: Graph,
     view_data: lynch::ViewUniformData,
     camera_uniform_buffer: Vec<Buffer>,
+    pub camera: Camera,
+    event_loop: EventLoop<()>
 }
 impl CooperApplication {
     pub fn create() -> CooperApplication {
@@ -104,10 +104,11 @@ impl CooperApplication {
             window,
             renderer,
             event_handler,
-            camera,
             graph,
+            view_data,
             camera_uniform_buffer,
-            event_loop,
+            camera,
+            event_loop
         }
     }
     pub fn run(mut self) -> (){
@@ -184,9 +185,9 @@ impl CooperApplication {
         self.build_scene();
     }
     fn build_scene(&mut self ) {
-        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/cube.gltf");
+        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/cube.gltf");
         sphere.meshes[0].material.material_type =
-            gltf_loader::MaterialType::Dielectric;
+            mesh_loader::MaterialType::Dielectric;
         let translation_matrix = Mat4::from_scale_rotation_translation(
                 glam::Vec3::new(1., 1., 1.),
                 glam::Quat::IDENTITY ,
@@ -195,9 +196,9 @@ impl CooperApplication {
             sphere,
             translation_matrix
         );
-        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
+        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
         sphere.meshes[0].material.material_type =
-            gltf_loader::MaterialType::Dielectric;
+            mesh_loader::MaterialType::Dielectric;
         let translation_matrix = Mat4::from_scale_rotation_translation(
                 glam::Vec3::new(1., 1., 1.),
                 glam::Quat::IDENTITY ,
@@ -206,9 +207,9 @@ impl CooperApplication {
             sphere,
             translation_matrix
         );
-        let mut sphere = lynch::gltf_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
+        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
         sphere.meshes[0].material.material_type =
-            gltf_loader::MaterialType::Dielectric;
+            mesh_loader::MaterialType::Dielectric;
         let translation_matrix = Mat4::from_scale_rotation_translation(
                 glam::Vec3::new(1., 10., 1.),
                 glam::Quat::IDENTITY ,

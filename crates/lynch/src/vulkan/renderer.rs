@@ -66,6 +66,48 @@ pub struct VulkanRenderer {
     pub swapchain_recreate_needed : bool
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug, Copy)]
+#[repr(C)]
+pub struct ViewUniformData {
+    pub view: glam::Mat4,
+    pub projection: glam::Mat4,
+    pub inverse_view: glam::Mat4,
+    pub inverse_projection: glam::Mat4,
+    pub eye_pos: glam::Vec3,
+    pub sun_dir: glam::Vec3,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
+
+}
+impl ViewUniformData {
+    pub fn new(camera: &Camera, viewport_width : f64, viewport_height :f64 ) -> Self {
+        Self{
+            view: camera.get_view(),
+            projection: camera.get_projection(),
+            inverse_view: camera.get_view().inverse(),
+            inverse_projection: camera.get_projection().inverse(),
+            eye_pos: camera.get_position(),
+            viewport_width: viewport_width as u32,
+            viewport_height: viewport_height as u32,
+
+        }
+    }
+    pub fn create_camera_buffer(&self, vk_context: &VkContext) -> Buffer
+    {
+        Buffer::new(
+            vk_context.device(),
+            Some(std::slice::from_ref(self)),
+            std::mem::size_of_val(self) as u64,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            gpu_allocator::MemoryLocation::CpuToGpu,
+            Some(String::from("camera_uniform_buffer"))
+        )
+    }
+
+}
+
+
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     pub bindless_descriptor_set: vk::DescriptorSet,
@@ -374,24 +416,7 @@ impl VulkanRenderer {
         self.internal_renderer
             .initialize(self.vk_context.arc_device());
     }
-    fn create_swapchain_image_views(
-        device: &Device,
-        swapchain_images: &[vk::Image],
-        swapchain_properties: SwapchainProperties,
-    ) -> Vec<vk::ImageView> {
-        swapchain_images
-            .iter()
-            .map(|image| {
-                Self::create_image_view(
-                    device,
-                    *image,
-                    swapchain_properties.format.format,
-                    1,
-                    vk::ImageAspectFlags::COLOR,
-                )
-            })
-            .collect::<Vec<_>>()
-    }
+
     pub fn submit_commands(&self, frame_index: usize) {
         //verbose!("Submitting commands on frame_index {}", frame_index);
         unsafe {
@@ -1208,24 +1233,6 @@ impl VulkanRenderer {
         unsafe { device.create_shader_module(&create_info, None).unwrap() }
     }
     
-    
-    fn create_command_pool(
-        device: &Device,
-        queue_families_indices: QueueFamiliesIndices,
-        create_flags: vk::CommandPoolCreateFlags,
-    ) -> vk::CommandPool {
-        let command_pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_families_indices.graphics_index)
-            .flags(vk::CommandPoolCreateFlags::empty())
-            .flags(create_flags)
-            .build();
-
-        unsafe {
-            device
-                .create_command_pool(&command_pool_info, None)
-                .unwrap()
-        }
-    }
 
     fn create_and_register_command_buffers(
         device: &Device,
@@ -1933,90 +1940,7 @@ impl Renderer for VulkanRenderer {
         unsafe { self.vk_context.device().device_wait_idle().unwrap() };
     }
     fn draw_frame(&mut self, frame_count :u32) {
-        log::trace!("Drawing frame.");
-        let sync_objects = self.in_flight_frames.next().unwrap();
-        let image_available_semaphore = sync_objects.image_available_semaphore;
-        let render_finished_semaphore = sync_objects.render_finished_semaphore;
-        let in_flight_fence = sync_objects.fence;
-        let wait_fences = [in_flight_fence];
-
-        unsafe {
-            self.vk_context
-                .device()
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)
-                .unwrap();
-            //self.logical_device.reset_fences(&wait_fences).unwrap();
-        };
-
-        let result = unsafe {
-            self.swapchain.acquire_next_image(
-                self.swapchain_khr,
-                std::u64::MAX,
-                image_available_semaphore,
-                vk::Fence::null(),
-            )
-        };
-        let image_index = match result {
-            Ok((image_index, _)) => image_index,
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                self.recreate_swapchain();
-                return;
-            }
-            Err(error) => panic!("Error while acquiring next image. Cause: {}", error),
-        };
-        unsafe { self.vk_context.device().reset_fences(&wait_fences).unwrap() }
-        self.update_uniform_buffers(image_index, frame_count);
-        let wait_semaphores = [image_available_semaphore];
-        let signal_semaphores = [render_finished_semaphore];
-
-        // Submit command buffer
-        {
-            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-            let command_buffers = [self.command_buffers[image_index as usize]];
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_semaphores(&wait_semaphores)
-                .wait_dst_stage_mask(&wait_stages)
-                .command_buffers(&command_buffers)
-                .signal_semaphores(&signal_semaphores)
-                .build();
-            let submit_infos = [submit_info];
-            unsafe {
-                self.vk_context
-                    .device()
-                    .queue_submit(self.graphics_queue, &submit_infos, in_flight_fence)
-                    .unwrap()
-            };
-        }
-
-        let swapchains = [self.swapchain_khr];
-        let images_indices = [image_index];
-
-        {
-            let present_info = vk::PresentInfoKHR::builder()
-                .wait_semaphores(&signal_semaphores)
-                .swapchains(&swapchains)
-                .image_indices(&images_indices)
-                // .results() null since we only have one swapchain
-                .build();
-            let result = unsafe {
-                self.swapchain
-                    .queue_present(self.present_queue, &present_info)
-            };
-            match result {
-                Ok(is_suboptimal) if is_suboptimal == true => {
-                    self.recreate_swapchain();
-                }
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    self.recreate_swapchain();
-                }
-                Err(error) => panic!("Failed to present queue. Cause: {}", error),
-                _ => {}
-            }
-
-            if self.resize_dimensions.is_some() {
-                self.recreate_swapchain();
-            }
-        }
+        todo!();
     }
 
     fn resize(&mut self, resize: PhysicalSize<u32> ){

@@ -12,7 +12,6 @@ pub struct EventHandler {
 }
 
 
-
 impl EventHandler {
     fn new() -> Self {
         EventHandler {
@@ -54,6 +53,8 @@ impl EventHandler {
     }
 }
 use lynch::{window::window::Window, renderer::Renderer};
+use lynch::{Camera};
+
 use lynch::vulkan::renderer::VulkanRenderer;
 use ash::vk;
 use glam::{Vec3, Mat4};
@@ -68,19 +69,33 @@ pub struct CooperApplication {
     renderer: VulkanRenderer,
     graph: RenderGraph,
     event_handler: EventHandler,
-    event_loop: EventLoop<()>
+    event_loop: EventLoop<()>,
+    pub camera: Camera,
 }
 impl CooperApplication {
     pub fn create() -> CooperApplication {
         let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         
         let renderer = VulkanRenderer::create(&window);
+
+
+        let camera = Camera::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(6.0, 6.0, 6.0),
+            60.0,
+            WIDTH / HEIGHT,
+            0.01,
+            1000.0,
+            0.20,
+        );
         let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count);
         let event_handler = EventHandler::new();
         CooperApplication {
             window,
             renderer,
-            event_handler
+            event_handler,
+            camera,
+            graph
         }
     }
     pub fn run(mut self) -> (){

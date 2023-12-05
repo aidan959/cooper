@@ -92,6 +92,39 @@ impl Camera {
         self.camera_rig.update(1.0); 
         movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
     }
+    // glamafied projection
+    pub fn get_projection(&self) -> Mat4 {
+        glam::Mat4::perspective_rh(
+            f32::to_radians(self.fov_degrees),
+            self.aspect_ratio,
+            self.z_near,
+            self.z_far,
+        )
+    }
+    #pub fn get_position(&self) -> Vec3 {
+        self.camera_rig.final_transform.position
+    }
+
+    pub fn get_forward(&self) -> Vec3 {
+        self.camera_rig.final_transform.forward()
+    }
+
+    pub fn set_position_target(&mut self, position: Vec3, target: Vec3) {
+        self.camera_rig.driver_mut::<Position>().position = position;
+
+        let rotation = Self::get_lookat_rotation(position, target);
+        self.camera_rig
+            .driver_mut::<YawPitch>()
+            .set_rotation_quat(rotation);
+    }
+
+    pub(crate) fn get_near_plane(&self) -> f32 {
+        self.z_near
+    }
+
+    pub(crate) fn get_far_plane(&self) -> f32 {
+        self.z_far
+    }
 }
 
 

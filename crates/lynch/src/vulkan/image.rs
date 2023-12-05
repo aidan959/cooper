@@ -29,7 +29,27 @@ pub struct ImageDesc {
     pub mip_levels: u32,
 }
 
-
+impl ImageDesc {
+    fn common_usage_flags() -> vk::ImageUsageFlags {
+        vk::ImageUsageFlags::TRANSFER_DST
+            | vk::ImageUsageFlags::SAMPLED
+            | vk::ImageUsageFlags::COLOR_ATTACHMENT
+    }
+    pub fn new_2d(width: u32, height: u32, format: vk::Format) -> Self {
+        ImageDesc {
+            width,
+            height,
+            depth: 1,
+            array_layers: 1,
+            format,
+            image_type: ImageType::Tex2d,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+            usage: Self::common_usage_flags()
+                | vk::ImageUsageFlags::TRANSFER_SRC
+            mip_levels: 1,
+        }
+    }
+}
 
 
 #[derive(Clone)]

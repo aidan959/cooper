@@ -28,53 +28,57 @@ pub const DESCRIPTOR_SET_INDEX_VIEW: u32 = 1;
 pub const DESCRIPTOR_SET_INDEX_INPUT_TEXTURES: u32 = 2;
 
 use crate::vulkan::surface::create_surface;
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+struct GpuMaterial {
+    diffuse_map: u32,
+    normal_map: u32,
+    metallic_roughness_map: u32,
+    occlusion_map: u32,
+    base_color_factor: Vec4,
+    metallic_factor: f32,
+    roughness_factor: f32,
+    padding: [f32; 2],
+}
 
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+struct GpuMesh {
+    vertex_buffer: u32,
+    index_buffer: u32,
+    material: u32,
+}
 pub struct VulkanRenderer {
-    resize_dimensions: Option<[u32; 2]>,
-    camera: Camera,
-    is_left_clicked: bool,
-    cursor_position: [i32; 2],
-    cursor_delta: Option<[i32; 2]>,
-    wheel_delta: Option<f32>,
-    vk_context: VkContext,
-    queue_families_indices: QueueFamiliesIndices,
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
-    swapchain: Swapchain,
-    swapchain_khr: vk::SwapchainKHR,
-    images: Vec<vk::Image>,
-    swapchain_properties: SwapchainProperties,
-    swapchain_image_views: Vec<vk::ImageView>,
-    render_pass: vk::RenderPass,
-    descriptor_set_layout: vk::DescriptorSetLayout,
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-    swapchain_framebuffers: Vec<vk::Framebuffer>,
-    command_pool: vk::CommandPool,
-    vertex_buffer: vk::Buffer,
-    transient_command_pool: vk::CommandPool,
-    msaa_samples: vk::SampleCountFlags,
-    color_texture: Texture,
-    depth_format: vk::Format,
-    depth_texture: Texture,
-    texture: Texture,
-    model_index_count: usize,
-    uniform_buffers: Vec<vk::Buffer>,
-    uniform_buffer_memories: Vec<vk::DeviceMemory>,
-    command_buffers: Vec<vk::CommandBuffer>,
-    vertex_buffer_memory: vk::DeviceMemory,
-    descriptor_pool: vk::DescriptorPool,
-    descriptor_sets: Vec<vk::DescriptorSet>,
-    index_buffer: vk::Buffer,
-    index_buffer_memory: vk::DeviceMemory,
-    current_frame: usize,
-    in_flight_frames: InFlightFrames
+    pub vk_context: VkContext,
+    pub sync_frames: Vec<Frame>,
+    pub command_pool: vk::CommandPool,
+    pub image_count: u32,
+    pub present_images: Vec<Image>,
+    pub depth_image: Image,
+    pub surface_format: vk::SurfaceFormatKHR,
+    pub surface_resolution: vk::Extent2D,
+    pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
+    pub camera_uniform_buffer: Vec<Buffer>,
+    pub view_data: ViewUniformData,
+    pub last_frame_end: Instant,
+    pub internal_renderer: RendererInternal,
+    pub current_frame: usize,
+    pub swapchain: vk::SwapchainKHR,
+    pub swapchain_loader: ash::extensions::khr::Swapchain,
+    pub num_frames_in_flight: u32,
+    pub swapchain_recreate_needed: bool,
 }
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     pub bindless_descriptor_set: vk::DescriptorSet,
     pub gpu_materials_buffer: Buffer,
     pub gpu_meshes_buffer: Buffer,
+    default_diffuse_map_index: u32,
+    default_normal_map_index: u32,
+    default_occlusion_map_index: u32,
+    default_metallic_roughness_map_index: u32,
+    next_bindless_image_index: u32,
+
 }
 impl RendererInternal {
     pub fn new(vk_context: &VkContext) -> Self {
@@ -98,16 +102,74 @@ impl RendererInternal {
             gpu_allocator::MemoryLocation::CpuToGpu,
             Some(String::from("gpu_mesh_buffer")),
         );
+
+        DescriptorSet::write_raw_storage_buffer(
+            vk_context.device(),
+            bindless_descriptor_set,
+            3,
+            &gpu_materials_buffer,
+        );
+        DescriptorSet::write_raw_storage_buffer(
+            vk_context.device(),
+            bindless_descriptor_set,
+            4,
+            &gpu_meshes_buffer,
+        );
         Self {
             bindless_descriptor_set,
             bindless_descriptor_set_layout,
             gpu_materials_buffer,
-            gpu_meshes_buffer
+            gpu_meshes_buffer,
+            default_diffuse_map_index: 0,
+            default_normal_map_index: 0,
+            default_occlusion_map_index: 0,
+            default_metallic_roughness_map_index: 0,
+            next_bindless_image_index: 0
         }
-            todo!("Needs to be implemented.")
+    }
+    pub fn initialize(&mut self, device: Arc<Device>) {
+        let default_diffuse_map =
+            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
+        let default_normal_map =
+            Texture::load(device.clone(), "assets/textures/def/flat_normal_map.png");
+        let default_occlusion_map =
+            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
+        let default_metallic_roughness_map =
+            Texture::load(device.clone(), "assets/textures/def/metallic_roughness.png");
+
+        self.default_diffuse_map_index = self.add_bindless_texture(&device, &default_diffuse_map);
+        self.default_normal_map_index = self.add_bindless_texture(&device, &default_normal_map);
+        self.default_occlusion_map_index =
+            self.add_bindless_texture(&device, &default_occlusion_map);
+        self.default_metallic_roughness_map_index =
+            self.add_bindless_texture(&device, &default_metallic_roughness_map);
+    }
+    fn add_bindless_texture(&mut self, device: &Device, texture: &Texture) -> u32 {
+        let new_image_index = self.next_bindless_image_index;
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(new_image_index)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&texture.descriptor_info))
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
+        };
+
+        self.next_bindless_image_index += 1;
+
+        new_image_index
     }
 impl VulkanRenderer {
-    
+    fn initialize(self: &mut Self) {
+        self.internal_renderer
+            .initialize(self.vk_context.arc_device());
+    }
     fn create_swapchain_image_views(
         device: &Device,
         swapchain_images: &[vk::Image],
@@ -967,59 +1029,6 @@ impl VulkanRenderer {
             vertices.push(vertex);
         }
         (vertices, mesh.indices.clone())
-    }
-    fn create_image(
-        vk_context: &VkContext,
-        mem_properties: vk::MemoryPropertyFlags,
-        extent: vk::Extent2D,
-        mip_levels: u32,
-        sample_count: vk::SampleCountFlags,
-        format: vk::Format,
-        tiling: vk::ImageTiling,
-        usage: vk::ImageUsageFlags,
-    ) -> (vk::Image, vk::DeviceMemory) {
-        let image_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .extent(vk::Extent3D {
-                width: extent.width,
-                height: extent.height,
-                depth: 1,
-            })
-            .mip_levels(mip_levels)
-            .array_layers(1)
-            .format(format)
-            .tiling(tiling)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(sample_count)
-            .flags(vk::ImageCreateFlags::empty())
-            .build();
-
-        let image = unsafe { vk_context.device().create_image(&image_info, None).unwrap() };
-        let mem_requirements = unsafe { vk_context.device().get_image_memory_requirements(image) };
-        let mem_type_index = Self::find_memory_type(
-            mem_requirements,
-            vk_context.get_mem_properties(),
-            mem_properties,
-        );
-        let alloc_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(mem_requirements.size)
-            .memory_type_index(mem_type_index)
-            .build();
-        let memory = unsafe {
-            let mem = vk_context
-                .device()
-                .allocate_memory(&alloc_info, None)
-                .unwrap();
-            vk_context
-                .device()
-                .bind_image_memory(image, mem, 0)
-                .unwrap();
-            mem
-        };
-
-        (image, memory)
     }
 
     fn transition_image_layout(
@@ -2155,139 +2164,35 @@ impl Renderer for VulkanRenderer {
             );
         let command_pool = Self::create_command_pool(&vk_context);
 
-        todo!();
-        let swapchain_image_views =
-            Self::create_swapchain_image_views(vk_context.device(), &images, properties);
-
-        let msaa_samples = vk_context.get_max_usable_sample_count();
-        let depth_format = Self::find_depth_format(&vk_context);
-
-        let render_pass =
-            Self::create_render_pass(vk_context.device(), properties, msaa_samples, depth_format);
-        let descriptor_set_layout = Self::create_descriptor_set_layout(vk_context.device());
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            vk_context.device(),
-            properties,
-            render_pass,
-            descriptor_set_layout,
-            msaa_samples,
-        );
-
-        let command_pool = Self::create_command_pool(
-            vk_context.device(),
-            queue_families_indices,
-            vk::CommandPoolCreateFlags::empty(),
-        );
-        let transient_command_pool = Self::create_command_pool(
-            vk_context.device(),
-            queue_families_indices,
-            vk::CommandPoolCreateFlags::TRANSIENT,
-        );
-        let color_texture = Self::create_color_texture(
-            &vk_context,
-            command_pool,
-            graphics_queue,
-            properties,
-            msaa_samples,
-        );
-        let depth_texture = Self::create_depth_texture(
-            &vk_context,
-            command_pool,
-            graphics_queue,
-            depth_format,
-            properties.extent,
-            msaa_samples,
-        );
-        let swapchain_framebuffers = Self::create_framebuffers(
-            vk_context.device(),
-            &swapchain_image_views,
-            color_texture,
-            depth_texture,
-            render_pass,
-            properties,
-        );
-
-        
-        let texture = Self::create_texture_image("textures/coop.png",&vk_context, command_pool, graphics_queue);
-        let (vertices, indices) = Self::load_model();
-        let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
-            &vk_context,
-            transient_command_pool,
-            graphics_queue,
-            &vertices,
-        );
-        let (index_buffer, index_buffer_memory) = Self::create_index_buffer(
-            &vk_context,
-            transient_command_pool,
-            graphics_queue,
-            &indices,
-        );
-        let (uniform_buffers, uniform_buffer_memories) =
-            Self::create_uniform_buffers(&vk_context, images.len());
-        let descriptor_pool = Self::create_descriptor_pool(vk_context.device(), images.len() as _);
-        let descriptor_sets = Self::create_descriptor_sets(
-            vk_context.device(),
-            descriptor_pool,
-            descriptor_set_layout,
-            &uniform_buffers,
-            texture
-        );
-        let command_buffers = Self::create_and_register_command_buffers(
-            vk_context.device(),
-            command_pool,
-            &swapchain_framebuffers,
-            render_pass,
-            properties,
-            vertex_buffer,
-            index_buffer,
-            indices.len(),
-            pipeline_layout,
-            &descriptor_sets,
-            pipeline,
-        );
-        let in_flight_frames = Self::create_sync_objects(vk_context.device());
+        let sync_frames =
+            Self::create_synchronization_frames(&vk_context, command_pool, image_count);
 
         let internal_renderer = RendererInternal::new(&vk_context);
+        let view_data = ViewUniformData::new(&camera, surface_resolution);
+        let camera_uniform_buffer = (0..image_count)
+            .map(|_| view_data.create_camera_buffer(&vk_context))
+            .collect::<Vec<_>>();
+
+
         Self {
-            queue_families_indices,
             vk_context,
-            graphics_queue,
-            present_queue,
-            swapchain,
-            swapchain_khr,
-            swapchain_properties: properties,
-            images: images,
-            swapchain_image_views,
-            render_pass,
-            descriptor_set_layout,
-            pipeline_layout,
-            pipeline,
-            swapchain_framebuffers,
+            sync_frames,
             command_pool,
-            command_buffers,
+            image_count,
+            present_images,
+            depth_image,
+            surface_format,
+            surface_resolution,
+            swapchain,
+            swapchain_loader,
+            debug_utils_messenger,
+            internal_renderer,
             current_frame: 0,
-            in_flight_frames,
-            descriptor_pool,
-            descriptor_sets,
-            resize_dimensions: None,
-            camera: Default::default(),
-            is_left_clicked: false,
-            cursor_position: [0, 0],
-            cursor_delta: None,
-            wheel_delta: None,
-            msaa_samples,
-            color_texture,
-            model_index_count: indices.len(),
-            vertex_buffer,
-            depth_format,
-            depth_texture,
-            texture,
-            index_buffer,
-            index_buffer_memory,
-            uniform_buffers,
-            uniform_buffer_memories,
-            vertex_buffer_memory,
-            transient_command_pool
+            num_frames_in_flight: image_count,
+            swapchain_recreate_needed: false,
+            camera_uniform_buffer,
+            view_data,
+            last_frame_end: Instant::now(),
         }
     }
     fn wait_gpu_idle(&self) {

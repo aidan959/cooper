@@ -75,6 +75,54 @@ impl Image {
             self.device.ash_device.destroy_image(self.image, None);
         }
     }
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_image_view(
+        device: &Device,
+        image: vk::Image,
+        format: vk::Format,
+        aspect_flags: vk::ImageAspectFlags,
+        view_type: vk::ImageViewType,
+        base_array_layer: u32,
+        layer_count: u32,
+        mip_levels: u32,
+    ) -> vk::ImageView {
+        let image_aspect_flags = vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL;
+        let components = match aspect_flags {
+            vk::ImageAspectFlags::COLOR => vk::ComponentMapping {
+                r: vk::ComponentSwizzle::R,
+                g: vk::ComponentSwizzle::G,
+                b: vk::ComponentSwizzle::B,
+                a: vk::ComponentSwizzle::A,
+            },
+            vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH => {
+                vk::ComponentMapping::default()
+            }
+            n if n == image_aspect_flags => vk::ComponentMapping::default(),
+            _ => unimplemented!(),
+        };
+
+        let image_view_info = vk::ImageViewCreateInfo {
+            view_type,
+            format,
+            components,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: aspect_flags,
+                base_array_layer,
+                layer_count,
+                base_mip_level: 0,
+                level_count: mip_levels,
+            },
+            image,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .ash_device
+                .create_image_view(&image_view_info, None)
+                .unwrap()
+        }
+    }
     pub fn new_from_desc(device: Arc<Device>, desc: ImageDesc) -> Image {
         unsafe {
             let initial_layout = vk::ImageLayout::UNDEFINED;
@@ -180,6 +228,39 @@ impl Image {
                 debug_name: "unnamed_image".to_string(),
                 device,
             }
+        }
+    }
+    pub fn new_from_handle(device: Arc<Device>, image: vk::Image, desc: ImageDesc) -> Image {
+        let view_type = if desc.image_type == ImageType::Tex2d && desc.array_layers == 1 {
+            vk::ImageViewType::TYPE_2D
+        } else if desc.image_type == ImageType::Tex2dArray && desc.array_layers > 1 {
+            vk::ImageViewType::TYPE_2D_ARRAY
+        } else if desc.image_type == ImageType::Cube {
+            vk::ImageViewType::CUBE
+        } else {
+            unimplemented!()
+        };
+
+        let image_view = Image::create_image_view(
+            &device,
+            image,
+            desc.format,
+            desc.aspect_flags,
+            view_type,
+            0,
+            1,
+            desc.mip_levels,
+        );
+
+        Image {
+            image,
+            image_view,
+            layer_views: vec![],
+            device_memory: vk::DeviceMemory::null(),
+            current_layout: vk::ImageLayout::UNDEFINED,
+            desc,
+            debug_name: "unnamed_image".to_string(),
+            device,
         }
     }
 }

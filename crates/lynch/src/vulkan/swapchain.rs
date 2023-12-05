@@ -49,6 +49,9 @@ impl SwapchainSupportDetails {
     }
 
     /// Choose the swapchain surface format.
+    ///
+    /// Will choose B8G8R8A8_UNORM/SRGB_NONLINEAR if possible or
+    /// the first available otherwise.
     fn choose_swapchain_surface_format(
         available_formats: &[vk::SurfaceFormatKHR],
     ) -> vk::SurfaceFormatKHR {
@@ -69,6 +72,9 @@ impl SwapchainSupportDetails {
     }
 
     /// Choose the swapchain present mode.
+    ///
+    /// Will favor MAILBOX if present otherwise FIFO.
+    /// If none is present it will fallback to IMMEDIATE.
     fn choose_swapchain_surface_present_mode(
         available_present_modes: &[vk::PresentModeKHR],
     ) -> vk::PresentModeKHR {
@@ -82,6 +88,10 @@ impl SwapchainSupportDetails {
     }
 
     /// Choose the swapchain extent.
+    ///
+    /// If a current extent is defined it will be returned.
+    /// Otherwise the surface extent clamped between the min
+    /// and max image extent will be returned.
     fn choose_swapchain_extent(
         capabilities: vk::SurfaceCapabilitiesKHR,
         preferred_dimensions: [u32; 2],

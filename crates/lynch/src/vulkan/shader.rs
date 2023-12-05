@@ -4,12 +4,7 @@ use shaderc::EnvVersion;
 use shaderc::ShaderKind;
 use shaderc::TargetEnv;
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
-    io::Cursor,
-    path::Path,
-};
+use std::{collections::{BTreeMap, HashMap},fs,io::Cursor,path::Path};
 
 use rspirv_reflect;
 use shaderc;
@@ -25,16 +20,16 @@ pub struct Binding {
 }
 
 #[derive(Default)]
-pub struct ShaderReflect {
+pub struct Reflection {
     pub descriptor_set_reflections: DescriptorSetMap,
     pub push_constant_reflections: Vec<rspirv_reflect::PushConstantInfo>,
     pub binding_mappings: HashMap<String, Binding>,
 }
 
-const MAIN_ENTRY_POINT: &'static str = "main";
-
-impl ShaderReflect {
-    pub fn new(shader_stages: &[&[u8]]) -> ShaderReflect {
+const MAIN_ENTRY_POINT : &'static str = "main";
+ 
+impl Reflection {
+    pub fn new(shader_stages: &[&[u8]]) -> Reflection {
         let mut descriptor_sets_combined: DescriptorSetMap = BTreeMap::new();
         let mut push_constant_ranges: Vec<rspirv_reflect::PushConstantInfo> = vec![];
 
@@ -98,7 +93,7 @@ impl ShaderReflect {
             })
             .collect();
 
-        ShaderReflect {
+        Reflection {
             descriptor_set_reflections: descriptor_sets_combined,
             push_constant_reflections: push_constant_ranges,
             binding_mappings,
@@ -129,25 +124,25 @@ impl ShaderReflect {
 #[must_use]
 pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, shaderc::Error> {
     let binding = fs::read_to_string(path);
-    let source = match &binding {
+    let source = match &binding{
         Ok(source) => source,
-        Err(err) => panic!(
-            "Error reading shader: Cannot find path: {}.\nOs Error:({})",
-            path, err
-        ),
+        Err(err) => panic!("Error reading shader: Cannot find path: {}.\nOs Error:({})", path, err),
     };
 
     let shader_kind = match path.get(path.len().saturating_sub(5)..) {
         Some(".vert") => ShaderKind::Vertex,
         Some(".frag") => ShaderKind::Fragment,
         Some(".comp") => ShaderKind::Compute,
-        _ => todo!("Unsupported shader extension."),
+        _ => todo!("Unsupported shader extension.")
     };
 
     let mut compiler = shaderc::Compiler::new().unwrap();
     let mut options = shaderc::CompileOptions::new().unwrap();
     options.add_macro_definition("EP", Some(MAIN_ENTRY_POINT));
-    options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_2 as u32);
+    options.set_target_env(
+        TargetEnv::Vulkan,
+        EnvVersion::Vulkan1_2 as u32,
+    );
     options.set_generate_debug_info();
     options.set_include_callback(|include_request, _include_type, _source, _size| {
         let include_path = Path::new(path).parent().unwrap();
@@ -156,8 +151,10 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
             include_path = Path::new("assets/shaders").join(include_request);
         }
 
+
         let include_source =
-            &fs::read_to_string(include_path).expect("Error reading included file")[..];
+            &fs::read_to_string(include_path)
+            .expect("Error reading included file")[..];
 
         shaderc::IncludeCallbackResult::Ok(shaderc::ResolvedInclude {
             resolved_name: include_request.to_string(),
@@ -182,7 +179,7 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
 #[must_use]
 pub fn create_layouts_from_reflection(
     device: &ash::Device,
-    reflection: &ShaderReflect,
+    reflection: &Reflection,
     bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
 ) -> (
     vk::PipelineLayout,
@@ -276,7 +273,7 @@ pub fn create_layouts_from_reflection(
         push_constant_ranges,
     )
 }
-// TODO the receiver who takes ownersgip of this must clean this up vulkan side
+
 #[must_use]
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {
     let shader_code = read_spv(&mut spv_file).expect("Failed to read shader SPIR-V shader mod.");

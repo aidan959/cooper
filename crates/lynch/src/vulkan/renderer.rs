@@ -339,6 +339,38 @@ impl VulkanRenderer {
 
         (graphics, present)
     }
+    pub fn present_frame(&self, present_index: usize, current_frame: usize) {
+        unsafe {
+            let wait_semaphores = [self.sync_frames[current_frame].render_finished_semaphore];
+            let swapchains = [self.swapchain];
+            let image_indices = [present_index as u32];
+
+            self.vk_context.device().execute_and_submit(|device, cb| {
+
+                super::image_pipeline_barrier(
+                    self.device(),
+                    cb,
+                    &Image::new_from_handle(
+                        device,
+                        self.swapchain_loader.get_swapchain_images(self.swapchain).expect("Error getting swapchain images")[present_index],
+                        ImageDesc::new_2d(
+                            self.surface_resolution.width,
+                            self.surface_resolution.height,
+                            self.surface_format.format,
+                        ),
+                    )
+                    , vk_sync::AccessType::Nothing, vk_sync::AccessType::Present, false);
+            });
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&wait_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&image_indices);
+
+            self.swapchain_loader
+                .queue_present(self.device().queue, &present_info)
+                .unwrap();
+        }
+    }
     fn get_logical_device_queue(
         instance: &Instance,
         device: vk::PhysicalDevice,

@@ -135,6 +135,200 @@ impl RendererInternal {
             need_environment_map_update: true,
         }
     }
+    
+    pub fn add_model(&mut self, device: &Device, mut model: Model, transform: glam::Mat4) {
+        for mesh in &mut model.meshes {
+            let diffuse_bindless_index = match mesh.material.diffuse_map {
+                DEFAULT_TEXTURE_MAP => self.default_diffuse_map_index,
+                _ => self.add_bindless_texture(
+                    device,
+                    &model.textures[mesh.material.diffuse_map as usize],
+                ),
+            };
+
+            let normal_bindless_index = match mesh.material.normal_map {
+                DEFAULT_TEXTURE_MAP => self.default_normal_map_index,
+                _ => self.add_bindless_texture(
+                    device,
+                    &model.textures[mesh.material.normal_map as usize],
+                ),
+            };
+
+            let metallic_roughness_bindless_index = match mesh.material.metallic_roughness_map {
+                DEFAULT_TEXTURE_MAP => self.default_metallic_roughness_map_index,
+                _ => self.add_bindless_texture(
+                    device,
+                    &model.textures[mesh.material.metallic_roughness_map as usize],
+                ),
+            };
+
+            let occlusion_bindless_index = match mesh.material.occlusion_map {
+                DEFAULT_TEXTURE_MAP => self.default_occlusion_map_index,
+                _ => self.add_bindless_texture(
+                    device,
+                    &model.textures[mesh.material.occlusion_map as usize],
+                ),
+            };
+
+            let vertex_buffer_bindless_idx =
+                self.add_bindless_vertex_buffer(device, &mesh.primitive.vertex_buffer);
+            let index_buffer_bindless_idx =
+                self.add_bindless_index_buffer(device, &mesh.primitive.index_buffer);
+            let material_index = self.add_material(GpuMaterial {
+                diffuse_map: diffuse_bindless_index,
+                normal_map: normal_bindless_index,
+                metallic_roughness_map: metallic_roughness_bindless_index,
+                occlusion_map: occlusion_bindless_index,
+                base_color_factor: mesh.material.base_color_factor,
+                metallic_factor: mesh.material.metallic_factor,
+                roughness_factor: mesh.material.roughness_factor,
+                padding: [0.0; 2],
+            });
+
+            let mesh_index = self.add_mesh(GpuMesh {
+                vertex_buffer: vertex_buffer_bindless_idx,
+                index_buffer: index_buffer_bindless_idx,
+                material: material_index,
+            });
+            info!("vertex_buffer_bindless_idx: \t{} \nindex_buffer_bindless_idx: \t{}\nmaterial_index: \t{}\nmesh_index: \t{}", vertex_buffer_bindless_idx,index_buffer_bindless_idx, material_index, mesh_index);
+
+            mesh.gpu_mesh = mesh_index;
+        }
+
+        self.gpu_meshes_buffer
+            .update_memory(device, self.gpu_meshes.as_slice());
+        self.gpu_materials_buffer
+            .update_memory(device, self.gpu_materials.as_slice());
+
+        self.instances.push(ModelInstance { model, transform });
+    }
+    fn add_mesh(&mut self, gpu_mesh: GpuMesh) -> u32 {
+        let gpu_index = self.gpu_meshes.len() as u32;
+        self.gpu_meshes.push(gpu_mesh);
+        println!("{}", self.gpu_meshes.len());
+        gpu_index
+    }
+    fn get_instance(&mut self, _instance_index: u32) {
+        //self.instances.get(instance_index).unwrap() 
+    }
+    pub fn draw_meshes(
+        &self,
+        device: &Device,
+        command_buffer: vk::CommandBuffer,
+        pipeline_layout: vk::PipelineLayout,
+    ) {
+        unsafe {
+            for instance in &self.instances {
+                for (i, mesh) in instance.model.meshes.iter().enumerate() {
+                    device.cmd_push_constants(
+                        command_buffer,
+                        pipeline_layout,
+                        (
+                            instance.transform * instance.model.transforms[i],
+                            glam::Vec4::new(1.0, 0.5, 0.2, 1.0),
+                            mesh.gpu_mesh,
+                            [0; 3],
+                        ),
+                    );
+
+                    device.device().cmd_bind_vertex_buffers(
+                        command_buffer,
+                        0,
+                        &[mesh.primitive.vertex_buffer.buffer],
+                        &[0],
+                    );
+                    device.device().cmd_bind_index_buffer(
+                        command_buffer,
+                        mesh.primitive.index_buffer.buffer,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.device().cmd_draw_indexed(
+                        command_buffer,
+                        mesh.primitive.indices.len() as u32,
+                        1,
+                        0,
+                        0,
+                        1,
+                    );
+                }
+            }
+        }
+    }
+    fn add_bindless_texture(&mut self, device: &Device, texture: &Texture) -> u32 {
+        let new_image_index = self.next_bindless_image_index;
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(new_image_index)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&texture.descriptor_info))
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
+        };
+
+        self.next_bindless_image_index += 1;
+
+        new_image_index
+    }
+
+    fn add_bindless_vertex_buffer(&mut self, device: &Device, buffer: &Buffer) -> u32 {
+        let new_buffer_index = self.next_bindless_vertex_buffer_index;
+
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(buffer.buffer)
+            .range(buffer.size)
+            .build();
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(new_buffer_index)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(std::slice::from_ref(&buffer_info))
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
+        };
+
+        self.next_bindless_vertex_buffer_index += 1;
+
+        new_buffer_index
+    }
+
+    fn add_bindless_index_buffer(&mut self, device: &Device, buffer: &Buffer) -> u32 {
+        let new_buffer_index = self.next_bindless_index_buffer_index;
+
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(buffer.buffer)
+            .range(buffer.size)
+            .build();
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set)
+            .dst_binding(2)
+            .dst_array_element(new_buffer_index)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(std::slice::from_ref(&buffer_info))
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
+        };
+
+        self.next_bindless_index_buffer_index += 1;
+
+        new_buffer_index
     }
     pub fn initialize(&mut self, device: Arc<Device>) {
         let default_diffuse_map =

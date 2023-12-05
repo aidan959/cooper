@@ -44,6 +44,75 @@ pub struct Model {
     pub transforms: Vec<Mat4>,
 }
 
+
+pub fn load_gltf(device: Arc<Device>, path: &str) -> Model {
+    let (gltf, buffers, mut images) = match gltf::import(path) {
+        Ok(result) => result,
+        Err(err) => panic!("Loading model {} failed with error: {}", path, err),
+    };
+
+    let mut model = Model {
+        meshes: vec![],
+        transforms: vec![],
+        textures: vec![],
+    };
+
+    for image in &mut images {
+        // Convert images from rgb8 to rgba8
+        if image.format == gltf::image::Format::R8G8B8 {
+            let dynamic_image = image::DynamicImage::ImageRgb8(
+                image::RgbImage::from_raw(
+                    image.width,
+                    image.height,
+                    std::mem::take(&mut image.pixels),
+                )
+                .unwrap(),
+            );
+
+            let rgba_image = dynamic_image.to_rgba();
+            image.format = gltf::image::Format::R8G8B8A8;
+            image.pixels = rgba_image.into_raw();
+        }
+
+        if image.format != gltf::image::Format::R8G8B8A8 {
+            panic!("Unsupported image format!");
+        }
+
+        let texture = Texture::create(
+            device.clone(),
+            Some(&image.pixels),
+            ImageDesc::new_2d(image.width, image.height, vk::Format::R8G8B8A8_UNORM),
+            path,
+        );
+
+        model.textures.push(texture);
+    }
+
+    for scene in gltf.scenes() {
+        for node in scene.nodes() {
+            load_node(
+                device.clone(),
+                &node,
+                &mut model,
+                &buffers,
+                Mat4::IDENTITY,
+                path,
+            );
+        }
+    }
+
+    model
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct Vertex {
+    pub pos: Vec4,
+    pub normal: Vec4,
+    pub uv: Vec2,
+    pub color: Vec4,
+    pub tangent: Vec4,
+}
 pub struct Primitive {
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,

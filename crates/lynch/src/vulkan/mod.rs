@@ -8,3 +8,4 @@ mod buffer;
 mod descriptor;
 mod shader;
 mod texture;
+mod mesh_loader;

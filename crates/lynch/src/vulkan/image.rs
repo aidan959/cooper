@@ -263,4 +263,78 @@ impl Image {
             device,
         }
     }
+    pub fn transition_layout(
+        &self,
+        device: &Device,
+        cb: vk::CommandBuffer,
+        new_layout: vk::ImageLayout,
+    ) {
+        let (src_access_mask, src_stage_mask) = match self.current_layout {
+            ImageLayout::UNDEFINED => (AccessFlags::HOST_WRITE, PipelineStageFlags::HOST),
+            ImageLayout::PREINITIALIZED => (AccessFlags::HOST_WRITE, PipelineStageFlags::HOST),
+            ImageLayout::TRANSFER_DST_OPTIMAL => {
+                (AccessFlags::TRANSFER_WRITE, PipelineStageFlags::TRANSFER)
+            }
+            ImageLayout::TRANSFER_SRC_OPTIMAL => {
+                (AccessFlags::TRANSFER_READ, PipelineStageFlags::TRANSFER)
+            }
+            ImageLayout::GENERAL => (AccessFlags::HOST_WRITE, PipelineStageFlags::HOST),
+            ImageLayout::SHADER_READ_ONLY_OPTIMAL => {
+                (AccessFlags::HOST_WRITE, PipelineStageFlags::HOST)
+            }
+            ImageLayout::COLOR_ATTACHMENT_OPTIMAL => (
+                AccessFlags::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            ),
+            _ => unimplemented!(),
+        };
+
+        let (dst_access_mask, dst_stage_mask) = match new_layout {
+            ImageLayout::TRANSFER_SRC_OPTIMAL => {
+                (AccessFlags::TRANSFER_READ, PipelineStageFlags::TRANSFER)
+            }
+            ImageLayout::TRANSFER_DST_OPTIMAL => {
+                (AccessFlags::TRANSFER_WRITE, PipelineStageFlags::TRANSFER)
+            }
+            ImageLayout::SHADER_READ_ONLY_OPTIMAL => (
+                AccessFlags::SHADER_READ,
+                PipelineStageFlags::FRAGMENT_SHADER,
+            ),
+            ImageLayout::COLOR_ATTACHMENT_OPTIMAL => (
+                AccessFlags::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            ),
+            ImageLayout::GENERAL => (
+                AccessFlags::SHADER_READ,
+                PipelineStageFlags::FRAGMENT_SHADER,
+            ),
+            _ => unimplemented!(),
+        };
+
+        let texture_barrier = vk::ImageMemoryBarrier {
+            src_access_mask,
+            dst_access_mask,
+            new_layout,
+            image: self.image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: self.desc.aspect_flags,
+                level_count: 1,
+                layer_count: self.desc.array_layers,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        unsafe {
+            device.ash_device.cmd_pipeline_barrier(
+                cb,
+                src_stage_mask,
+                dst_stage_mask,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[texture_barrier],
+            );
+        }
+    }
 }

@@ -22,7 +22,7 @@ pub struct GraphBuffer {
 
 
 // TODO These need to be destroyed on release
-pub struct GraphResources {
+pub struct RenderGraphResources {
     pub buffers: Vec<GraphBuffer>,
     pub textures: Vec<GraphTexture>,
     pub pipelines: Vec<Pipeline>,
@@ -72,7 +72,7 @@ impl RenderGraph {
                 .collect(),
             pipeline_descs: vec![],
             current_frame: 0,
-            device: device,
+            device: device.clone(),
         }
     }
     pub fn recompile_all_shaders(
@@ -164,9 +164,13 @@ pub struct RenderPassBuilder {
     pub pipeline_handle: PipelineId,
     pub reads: Vec<Resource>,
     pub writes: Vec<Attachment>,
-    pub render_func: Option<
-        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
-    >,
+    pub render_func:
+        Option<Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>>,
+    pub depth_attachment: Option<DepthAttachment>,
+    pub presentation_pass: bool,
+    pub uniforms: HashMap<String, (String, UniformData)>,
+    pub copy_command: Option<TextureCopy>,
+    pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
 }
 
 impl RenderPassBuilder {
@@ -229,6 +233,80 @@ impl RenderPassBuilder {
         });
         self
     }
+    pub fn record_render(
+        mut self,
+        render_func: impl Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)
+            + 'static,
+    ) -> Self {
+        self.render_func.replace(Box::new(render_func));
+        self
+    }
+    pub fn dispatch(mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) -> Self {
+        self.render_func
+            .replace(Box::new(move |device, command_buffer, _, _, _| unsafe {
+                device.device().cmd_dispatch(
+                    *command_buffer,
+                    group_count_x,
+                    group_count_y,
+                    group_count_z,
+                );
+            }));
+        self
+    }
+    pub fn presentation_pass(mut self, is_presentation_pass: bool) -> Self {
+        self.presentation_pass = is_presentation_pass;
+        self
+    }
+    pub fn depth_attachment(mut self, depth_attachment: TextureId) -> Self {
+        self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
+            texture: depth_attachment,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::CLEAR, // Todo
+        }));
+        self
+    }
+    pub fn external_depth_attachment(
+        mut self,
+        depth_attachment: Image,
+        load_op: vk::AttachmentLoadOp,
+    ) -> Self {
+        self.depth_attachment = Some(DepthAttachment::External(depth_attachment, load_op));
+        self
+    }
+    pub fn external_depth_attachment(
+        mut self,
+        depth_attachment: Image,
+        load_op: vk::AttachmentLoadOp,
+    ) -> Self {
+        self.depth_attachment = Some(DepthAttachment::External(depth_attachment, load_op));
+        self
+    }
+    pub fn uniforms<T: Copy + std::fmt::Debug>(mut self, name: &str, data: &T) -> Self {
+
+        unsafe {
+            let ptr = data as *const _ as *const MaybeUninit<u8>;
+            let size = std::mem::size_of::<T>();
+            let data_u8 = std::slice::from_raw_parts(ptr, size);
+
+            assert!(data_u8.len() < MAX_UNIFORMS_SIZE);
+
+            let unique_name = self.name.clone() + "_" + name;
+
+            if let Some(entry) = self.uniforms.get_mut(&unique_name) {
+                entry.1.data[..data_u8.len()].copy_from_slice(data_u8);
+                entry.1.size = size as u64;
+            } else {
+                let mut new_entry = UniformData {
+                    data: [MaybeUninit::zeroed(); MAX_UNIFORMS_SIZE],
+                    size: size as u64,
+                };
+                new_entry.data[..data_u8.len()].copy_from_slice(data_u8);
+                self.uniforms
+                    .insert(unique_name.to_string(), (name.to_string(), new_entry));
+            }
+        }
+        self
+    }
     pub fn build(self, graph: &mut RenderGraph) {
         let mut pass = RenderPass::new(
             self.name,
@@ -247,5 +325,26 @@ impl RenderPassBuilder {
 
 
         graph.passes[graph.current_frame].push(pass);
+    }
+}
+impl RenderGraphResources {
+    fn new() -> RenderGraphResources {
+        RenderGraphResources {
+            buffers: vec![],
+            textures: vec![],
+            pipelines: vec![],
+        }
+    }
+
+    pub fn buffer(&self, id: BufferId) -> &GraphBuffer {
+        &self.buffers[id]
+    }
+
+    pub fn texture(&self, id: TextureId) -> &GraphTexture {
+        &self.textures[id]
+    }
+
+    pub fn pipeline(&self, id: PipelineId) -> &Pipeline {
+        &self.pipelines[id]
     }
 }

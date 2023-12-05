@@ -1695,7 +1695,69 @@ impl VulkanRenderer {
         self.swapchain_framebuffers = swapchain_framebuffers;
         self.command_buffers = command_buffers;
     }
-    
+    fn setup_swapchain_images(
+        vk_context: &VkContext,
+        swapchain: vk::SwapchainKHR,
+        swapchain_loader: &Swapchain,
+        surface_format: vk::SurfaceFormatKHR,
+        surface_resolution: vk::Extent2D,
+    ) -> (Vec<Image>, Image) {
+        unsafe {
+            let present_images = swapchain_loader
+                .get_swapchain_images(swapchain)
+                .expect("Error getting swapchain images");
+
+            let present_images: Vec<Image> = present_images
+                .iter()
+                .map(|&image| {
+                    Image::new_from_handle(
+                        vk_context.arc_device(),
+                        image,
+                        ImageDesc::new_2d(
+                            surface_resolution.width,
+                            surface_resolution.height,
+                            surface_format.format,
+                        ),
+                    )
+                })
+                .collect();
+
+            let depth_image = Image::new_from_desc(
+                vk_context.arc_device(),
+                ImageDesc::new_2d(
+                    surface_resolution.width,
+                    surface_resolution.height,
+                    vk::Format::D32_SFLOAT_S8_UINT,
+                )
+                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                .aspect(vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL),
+            );
+
+            vk_context.arc_device().execute_and_submit(|cb| {
+                for present_image in &present_images {
+                    super::image_pipeline_barrier(
+                        &vk_context.arc_device(),
+                        cb,
+                        present_image,
+                        vk_sync::AccessType::Nothing,
+                        vk_sync::AccessType::Present,
+                        true,
+                    );
+                }
+
+                super::image_pipeline_barrier(
+                    &vk_context.arc_device(),
+                    cb,
+                    &depth_image,
+                    vk_sync::AccessType::Nothing,
+                    vk_sync::AccessType::DepthStencilAttachmentWrite,
+                    true,
+                );
+            });
+
+            (present_images, depth_image)
+        }
+    }
     fn update_uniform_buffers(&mut self, current_image: u32, frame_count : u32) {
         if self.is_left_clicked && self.cursor_delta.is_some() {
             let delta = self.cursor_delta.take().unwrap();
@@ -2050,7 +2112,7 @@ impl VulkanRenderer {
 
 impl Renderer for VulkanRenderer {
 
-    fn create(window: &Window) -> Self {
+    fn create(window: &Window, camera: &Camera) -> Self {
         log::debug!("Creating application.");
         let entry = ash::Entry::linked();
         let instance = Self::create_instance(&entry);
@@ -2069,8 +2131,13 @@ impl Renderer for VulkanRenderer {
         );
         let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count) =
             Self::create_swapchain(&vk_context);
-        //let in_flight_frames = Self::create_sync_objects(vk_context.device());
-
+        let (present_images, depth_image) = Self::setup_swapchain_images(
+                &vk_context,
+                swapchain,
+                &swapchain_loader,
+                surface_format,
+                surface_resolution,
+            );
         let swapchain_image_views =
             Self::create_swapchain_image_views(vk_context.device(), &images, properties);
 

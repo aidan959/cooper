@@ -230,39 +230,6 @@ impl Image {
             }
         }
     }
-    pub fn new_from_handle(device: Arc<Device>, image: vk::Image, desc: ImageDesc) -> Image {
-        let view_type = if desc.image_type == ImageType::Tex2d && desc.array_layers == 1 {
-            vk::ImageViewType::TYPE_2D
-        } else if desc.image_type == ImageType::Tex2dArray && desc.array_layers > 1 {
-            vk::ImageViewType::TYPE_2D_ARRAY
-        } else if desc.image_type == ImageType::Cube {
-            vk::ImageViewType::CUBE
-        } else {
-            unimplemented!()
-        };
-
-        let image_view = Image::create_image_view(
-            &device,
-            image,
-            desc.format,
-            desc.aspect_flags,
-            view_type,
-            0,
-            1,
-            desc.mip_levels,
-        );
-
-        Image {
-            image,
-            image_view,
-            layer_views: vec![],
-            device_memory: vk::DeviceMemory::null(),
-            current_layout: vk::ImageLayout::UNDEFINED,
-            desc,
-            debug_name: "unnamed_image".to_string(),
-            device,
-        }
-    }
     pub fn transition_layout(
         &self,
         device: &Device,
@@ -307,6 +274,14 @@ impl Image {
             ImageLayout::GENERAL => (
                 AccessFlags::SHADER_READ,
                 PipelineStageFlags::FRAGMENT_SHADER,
+            ),
+            ImageLayout::PRESENT_SRC_KHR => (
+                AccessFlags::COLOR_ATTACHMENT_READ,
+                PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            ),
+            ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL => (
+                AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ,
+                PipelineStageFlags::EARLY_FRAGMENT_TESTS,
             ),
             _ => unimplemented!(),
         };

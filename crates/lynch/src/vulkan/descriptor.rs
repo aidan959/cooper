@@ -1,28 +1,23 @@
-use std::sync::Arc;
-
 use ash::vk;
 
 use crate::Texture;
 
+use super::{shader::BindingMap, Device, Buffer, Image};
+
+pub struct DescriptorSet {
+    pub handle: vk::DescriptorSet,
+    pub pool: vk::DescriptorPool,
+    binding_map: BindingMap,
+}
 
 pub enum DescriptorIdentifier {
     Name(String),
     Index(u32),
 }
 
-
-pub struct DescriptorSet {
-    pub handle: vk::DescriptorSet,
-    pub pool: vk::DescriptorPool,
-    layout: vk::DescriptorSetLayout,
-    binding_map: BindingMap,
-    device: Arc<Device>,
-}
-
-
 impl DescriptorSet {
     pub fn new(
-        device: Arc<Device>,
+        device: &Device,
         layout: vk::DescriptorSetLayout,
         binding_map: BindingMap,
     ) -> DescriptorSet {
@@ -50,10 +45,12 @@ impl DescriptorSet {
 
                 vk::DescriptorPoolSize::builder()
                     .ty(descriptor_type)
-                    .descriptor_count(1)
+                    .descriptor_count(1) 
                     .build()
             })
             .collect::<Vec<_>>();
+
+
         let descriptor_pool = {
             let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&descriptor_pool_sizes)
@@ -84,96 +81,14 @@ impl DescriptorSet {
                     .expect("Error allocating descriptor sets")
             }
         };
-        
+
         DescriptorSet {
             handle: descriptor_sets[0],
             pool: descriptor_pool,
             binding_map,
-            device,
-            layout,
-        };
+        }
     }
-    pub fn write_storage_image(&self, device: &Device, name: DescriptorIdentifier, image: &Image) {
-        let binding = match name {
-            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
-                Some(binding) => binding.binding,
-                None => panic!("No descriptor binding found with name: \"{}\"", name),
-            },
-            DescriptorIdentifier::Index(index) => index,
-        };
 
-        let descriptor_info = vk::DescriptorImageInfo {
-            image_layout: vk::ImageLayout::GENERAL,
-            image_view: image.image_view,
-            sampler: vk::Sampler::null(),
-        };
-
-        let descriptor_writes = vk::WriteDescriptorSet::builder()
-            .dst_set(self.handle)
-            .build();
-
-        unsafe {
-            device
-                .device()
-                .update_descriptor_sets(&[descriptor_writes], &[])
-        };
-    }
-    pub fn write_acceleration_structure(
-        &self,
-        device: &Device,
-        name: DescriptorIdentifier,
-        acceleration_structure: vk::AccelerationStructureKHR,
-    ) {
-        let binding = match name {
-            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
-                Some(binding) => binding.binding,
-                None => panic!("No descriptor binding found with name: \"{}\"", name),
-            },
-            DescriptorIdentifier::Index(index) => index,
-        };
-
-        let mut descriptor_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-            .acceleration_structures(std::slice::from_ref(&acceleration_structure))
-            .build();
-
-        let mut descriptor_writes = vk::WriteDescriptorSet::builder()
-            .dst_set(self.handle)
-            .dst_binding(binding)
-            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .push_next(&mut descriptor_info)
-            .build();
-        descriptor_writes.descriptor_count = 1; // Not set for acceleration structures
-
-        unsafe {
-            device
-                .device()
-                .update_descriptor_sets(&[descriptor_writes], &[])
-        };
-    }
-    pub fn write_raw_storage_buffer(
-        device: &Device,
-        descriptor_set: vk::DescriptorSet,
-        binding: u32,
-        buffer: &Buffer,
-    ) {
-        let buffer_info = vk::DescriptorBufferInfo::builder()
-            .buffer(buffer.buffer)
-            .range(buffer.size)
-            .build();
-
-        let descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(descriptor_set)
-            .dst_binding(binding)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(std::slice::from_ref(&buffer_info))
-            .build();
-
-        unsafe {
-            device
-                .device()
-                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
-        };
-    }
     pub fn write_uniform_buffer(&self, device: &Device, name: String, buffer: &Buffer) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .offset(0)
@@ -199,31 +114,7 @@ impl DescriptorSet {
                 .update_descriptor_sets(&[descriptor_writes], &[])
         };
     }
-    pub fn write_combined_image(
-        &self,
-        device: &Device,
-        name: DescriptorIdentifier,
-        texture: &Texture,
-    ) {
-        let binding = match name {
-            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
-                Some(binding) => binding.binding,
-                None => panic!("No descriptor binding found with name: \"{}\"", name),
-            },
-            DescriptorIdentifier::Index(index) => index,
-        };
 
-        let descriptor_writes = vk::WriteDescriptorSet::builder()
-            .dst_set(self.handle)
-            .dst_binding(binding)
-            .build();
-
-        unsafe {
-            device
-                .device()
-                .update_descriptor_sets(&[descriptor_writes], &[])
-        };
-    }
     pub fn write_storage_buffer(
         &self,
         device: &Device,
@@ -257,6 +148,123 @@ impl DescriptorSet {
                 .update_descriptor_sets(&[descriptor_writes], &[])
         };
     }
+
+    pub fn write_combined_image(
+        &self,
+        device: &Device,
+        name: DescriptorIdentifier,
+        texture: &Texture,
+    ) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[texture.descriptor_info])
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
+
+    pub fn write_storage_image(&self, device: &Device, name: DescriptorIdentifier, image: &Image) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let descriptor_info = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: image.image_view,
+            sampler: vk::Sampler::null(),
+        };
+
+        let descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(&[descriptor_info])
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
+
+    pub fn write_acceleration_structure(
+        &self,
+        device: &Device,
+        name: DescriptorIdentifier,
+        acceleration_structure: vk::AccelerationStructureKHR,
+    ) {
+        let binding = match name {
+            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
+                Some(binding) => binding.binding,
+                None => panic!("No descriptor binding found with name: \"{}\"", name),
+            },
+            DescriptorIdentifier::Index(index) => index,
+        };
+
+        let mut descriptor_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+            .acceleration_structures(std::slice::from_ref(&acceleration_structure))
+            .build();
+
+        let mut descriptor_writes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.handle)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .push_next(&mut descriptor_info)
+            .build();
+        descriptor_writes.descriptor_count = 1; // Not set for acceleration structures
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(&[descriptor_writes], &[])
+        };
+    }
+
+
+    pub fn write_raw_storage_buffer(
+        device: &Device,
+        descriptor_set: vk::DescriptorSet,
+        binding: u32,
+        buffer: &Buffer,
+    ) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(buffer.buffer)
+            .range(buffer.size)
+            .build();
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(binding)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(std::slice::from_ref(&buffer_info))
+            .build();
+
+        unsafe {
+            device
+                .device()
+                .update_descriptor_sets(std::slice::from_ref(&descriptor_write), &[])
+        };
+    }
+
     pub fn get_set_index(&self) -> u32 {
         self.binding_map
             .iter()

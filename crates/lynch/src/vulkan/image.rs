@@ -59,3 +59,16 @@ pub struct Image {
     pub desc: ImageDesc,
     pub device: Arc<Device>,
 }
+
+
+impl Image {
+    pub fn clean_vk_resources(&self) {
+        unsafe {
+            self.device.ash_device.device_wait_idle().unwrap();
+            self.device
+                .ash_device
+                .destroy_image_view(self.image_view, None);
+            self.device.ash_device.destroy_image(self.image, None);
+        }
+    }
+}

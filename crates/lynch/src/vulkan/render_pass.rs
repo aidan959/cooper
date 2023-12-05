@@ -66,9 +66,6 @@ impl RenderPass {
         buffers: &[GraphBuffer],
         _tlas: vk::AccelerationStructureKHR,
     ) {
-
-
-        // If there are input textures then create the descriptor set used to read them
         if !self.reads.is_empty() && self.read_resources_descriptor_set.is_none() {
             let descriptor_set_read_resources = DescriptorSet::new(
                 device,

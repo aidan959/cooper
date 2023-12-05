@@ -75,6 +75,72 @@ impl RenderGraph {
             device: device.clone(),
         }
     }
+    pub fn render(
+        &mut self,
+        command_buffer: &vk::CommandBuffer,
+        renderer: &VulkanRenderer,
+        present_image: &[Image], // Todo: pass single value
+    ) {
+        let device = renderer.device();
+        for pass in &self.passes[self.current_frame] {
+
+            let pass_pipeline = &self.resources.pipelines[pass.pipeline_handle];
+
+            for read in &pass.reads {
+
+                match read {
+                    Resource::Texture(read) => {
+                        let next_access = vulkan::image_pipeline_barrier(
+                            device,
+                            *command_buffer,
+                            &self.resources.textures[read.texture].texture.image,
+                            self.resources.textures[read.texture].prev_access,
+                            read.access_type,
+                            false,
+                        );
+
+                        self.resources
+                            .textures
+                            .get_mut(read.texture)
+                            .unwrap()
+                            .prev_access = next_access;
+                    }
+
+                    Resource::Buffer(read) => {
+                        let next_access = vulkan::global_pipeline_barrier(
+                            device,
+                            *command_buffer,
+                            self.resources.buffers[read.buffer].prev_access,
+                            read.access_type,
+                        );
+
+                        self.resources
+                            .buffers
+                            .get_mut(read.buffer)
+                            .unwrap()
+                            .prev_access = next_access;
+                    
+                    }
+                }
+            }
+
+            if let Some(extra_barriers) = &pass.extra_barriers {
+                for (buffer_id, access_type) in extra_barriers {
+                    let next_access = vulkan::global_pipeline_barrier(
+                        device,
+                        *command_buffer,
+                        self.resources.buffers[*buffer_id].prev_access,
+                        *access_type,
+                    );
+
+                    if let Some(buffer) = self.resources.buffers.get_mut(*buffer_id) {
+                        buffer.prev_access = next_access;
+                    }
+                }
+            }
+        }
+        todo!(); // complete
+    }
     pub fn recompile_all_shaders(
         &mut self,
         device: &Device,

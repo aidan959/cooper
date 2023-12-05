@@ -138,6 +138,106 @@ impl RenderGraph {
                     }
                 }
             }
+            let mut writes_for_synch = pass.writes.clone();
+            // If the depth attachment is owned by the graph make sure it gets a barrier as well
+            if pass.depth_attachment.is_some() {
+                if let DepthAttachment::GraphHandle(depth_attachment) =
+                    pass.depth_attachment.as_ref().unwrap()
+                {
+                    writes_for_synch.push(*depth_attachment);
+                }
+            }
+
+            for write in &writes_for_synch {
+                let next_access = vulkan::image_pipeline_barrier(
+                    device,
+                    *command_buffer,
+                    &self.resources.textures[write.texture].texture.image,
+                    self.resources.textures[write.texture].prev_access,
+                    if Image::is_depth_image_fmt(
+                        self.resources.textures[write.texture]
+                            .texture
+                            .image
+                            .desc
+                            .format,
+                    ) {
+                        vk_sync::AccessType::DepthStencilAttachmentWrite
+                    } else {
+                        vk_sync::AccessType::ColorAttachmentWrite
+                    },
+                    false,
+                );
+
+                self.resources
+                    .textures
+                    .get_mut(write.texture)
+                    .unwrap()
+                    .prev_access = next_access;
+            }
+
+            if pass.presentation_pass {
+                vulkan::image_pipeline_barrier(
+                    device,
+                    *command_buffer,
+                    &present_image[0],
+                    vk_sync::AccessType::Present,
+                    vk_sync::AccessType::ColorAttachmentWrite,
+                    false,
+                );
+            }
+
+            let write_attachments: Vec<(Image, ViewType, vk::AttachmentLoadOp)> = pass
+                .writes
+                .iter()
+                .map(|write| {
+                    (
+                        self.resources.textures[write.texture].texture.image.clone(),
+                        write.view,
+                        write.load_op,
+                    )
+                })
+                .collect();
+                let extent = if !pass.writes.is_empty() {
+                    vk::Extent2D {
+                        width: self.resources.textures[pass.writes[0].texture]
+                            .texture
+                            .image
+                            .width(),
+                        height: self.resources.textures[pass.writes[0].texture]
+                            .texture
+                            .image
+                            .height(),
+                    }
+                } else if pass.depth_attachment.is_some() {
+                    match pass.depth_attachment.as_ref().unwrap() {
+                        DepthAttachment::GraphHandle(depth_attachment) => vk::Extent2D {
+                            width: self.resources.textures[depth_attachment.texture]
+                                .texture
+                                .image
+                                .width(),
+                            height: self.resources.textures[depth_attachment.texture]
+                                .texture
+                                .image
+                                .height(),
+                        },
+                        DepthAttachment::External(depth_attachment, _) => vk::Extent2D {
+                            width: depth_attachment.width(),
+                            height: depth_attachment.height(),
+                        },
+                    }
+                } else {
+                    vk::Extent2D {
+                        width: 1,
+                        height: 1,
+                    }
+                };
+    
+                assert_eq!(present_image.len(), 1);
+                let present_image = [(
+                    present_image[0].clone(),
+                    ViewType::Full(),
+                    vk::AttachmentLoadOp::CLEAR,
+                )];
         }
         todo!(); // complete
     }

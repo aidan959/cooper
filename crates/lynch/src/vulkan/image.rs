@@ -312,4 +312,44 @@ impl Image {
             );
         }
     }
+    pub fn layer_view(&self, layer: u32) -> vk::ImageView {
+        assert!(layer < self.layer_views.len() as u32);
+        self.layer_views[layer as usize]
+    }
+
+    pub fn width(&self) -> u32 {
+        self.desc.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.desc.height
+    }
+
+    pub fn extent(&self) -> vk::Extent3D {
+        vk::Extent3D {
+            width: self.desc.width,
+            height: self.desc.height,
+            depth: 1,
+        }
+    }
+
+    pub fn format(&self) -> vk::Format {
+        self.desc.format
+    }
+
+    pub(crate) fn _num_mips(&self) -> u32 {
+        self.desc.mip_levels
+    }
+
+    pub fn is_depth_image_fmt(format: vk::Format) -> bool {
+        format == vk::Format::D32_SFLOAT
+            || format == vk::Format::D32_SFLOAT_S8_UINT
+            || format == vk::Format::D16_UNORM_S8_UINT
+            || format == vk::Format::D16_UNORM
+            || format == vk::Format::D24_UNORM_S8_UINT
+    }
+}
+
+pub struct ImageCopyDescBuilder {
+    image_copy: vk::ImageCopy,
 }

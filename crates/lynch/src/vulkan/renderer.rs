@@ -68,14 +68,19 @@ pub struct VulkanRenderer {
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     pub bindless_descriptor_set: vk::DescriptorSet,
+    pub instances: Vec<ModelInstance>,
     pub gpu_materials_buffer: Buffer,
     pub gpu_meshes_buffer: Buffer,
+    gpu_materials: Vec<GpuMaterial>,
+    gpu_meshes: Vec<GpuMesh>,
     default_diffuse_map_index: u32,
     default_normal_map_index: u32,
     default_occlusion_map_index: u32,
     default_metallic_roughness_map_index: u32,
     next_bindless_image_index: u32,
-
+    next_bindless_vertex_buffer_index: u32,
+    next_bindless_index_buffer_index: u32,
+    pub need_environment_map_update: bool,
 }
 impl RendererInternal {
     pub fn new(vk_context: &VkContext) -> Self {
@@ -113,16 +118,23 @@ impl RendererInternal {
             &gpu_meshes_buffer,
         );
         Self {
-            bindless_descriptor_set,
             bindless_descriptor_set_layout,
-            gpu_materials_buffer,
+            bindless_descriptor_set,
+            instances: vec![],
+            gpu_materials: vec![],
+            gpu_meshes: vec![],
             gpu_meshes_buffer,
+            gpu_materials_buffer,
+            next_bindless_image_index: 0,
+            next_bindless_vertex_buffer_index: 0,
+            next_bindless_index_buffer_index: 0,
             default_diffuse_map_index: 0,
             default_normal_map_index: 0,
             default_occlusion_map_index: 0,
             default_metallic_roughness_map_index: 0,
-            next_bindless_image_index: 0
+            need_environment_map_update: true,
         }
+    }
     }
     pub fn initialize(&mut self, device: Arc<Device>) {
         let default_diffuse_map =

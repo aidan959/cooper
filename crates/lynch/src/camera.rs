@@ -92,6 +92,15 @@ impl Camera {
         self.camera_rig.update(1.0); 
         movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
     }
+    pub fn get_view(&self) -> Mat4 {
+        let transform = self.camera_rig.final_transform;
+
+        glam::Mat4::look_at_rh(
+            transform.position,
+            transform.position + transform.forward(),
+            transform.up(),
+        )
+    }
     // glamafied projection
     pub fn get_projection(&self) -> Mat4 {
         glam::Mat4::perspective_rh(

@@ -57,16 +57,13 @@ pub struct VulkanRenderer {
     pub depth_image: Image,
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_resolution: vk::Extent2D,
-    pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
-    pub camera_uniform_buffer: Vec<Buffer>,
-    pub view_data: ViewUniformData,
-    pub last_frame_end: Instant,
-    pub internal_renderer: RendererInternal,
-    pub current_frame: usize,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_loader: ash::extensions::khr::Swapchain,
+    pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
+    pub internal_renderer : RendererInternal,
+    pub current_frame: usize,
     pub num_frames_in_flight: u32,
-    pub swapchain_recreate_needed: bool,
+    pub swapchain_recreate_needed : bool
 }
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
@@ -1597,6 +1594,42 @@ impl VulkanRenderer {
 
         buffers
     }
+    fn create_synchronization_frames(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        image_count: u32,
+    ) -> Vec<Frame> {
+        (0..image_count)
+            .map(|_| unsafe {
+                Frame {
+                    command_buffer: 
+                        vk_context.ash_device()
+                            .allocate_command_buffers(
+                                &vk::CommandBufferAllocateInfo::builder()
+                                    .command_buffer_count(1)
+                                    .command_pool(command_pool)
+                                    .level(vk::CommandBufferLevel::PRIMARY),
+                            )
+                            .expect("Failed to allocate command buffer")[0],
+                    command_buffer_reuse_fence:
+                        vk_context.ash_device()
+                            .create_fence(
+                                &vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED),
+                                None,
+                            )
+                            .expect("Failed to create fence"),
+                    render_finished_semaphore:
+                        vk_context.ash_device()
+                            .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                            .expect("Failed to create semaphore"),
+                    image_available_semaphore:
+                        vk_context.ash_device()
+                            .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                            .expect("Failed to create semaphore"),
+                }
+            })
+            .collect()
+    }
     fn create_framebuffers(
         logical_device: &Device,
         swapchain_image_views: &[vk::ImageView],
@@ -2187,16 +2220,16 @@ impl VulkanRenderer {
 
 impl Renderer for VulkanRenderer {
 
-    fn create(window: &Window, camera: &Camera) -> Self {
+    fn create(window: &Window) -> Self {
         log::debug!("Creating application.");
         let entry = ash::Entry::linked();
         let instance = Self::create_instance(&entry);
+        let (debug_utils, debug_utils_messenger) = Self::create_debug_utils(&entry,&instance);
         let surface = Surface::new(&entry, &instance);
-        let (debug_utils, debug_utils_messenger) = Self::create_debug_utils(&entry, &instance);
-        let surface_khr =
-            unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
-        let debug_report_callback = setup_debug_messenger(&entry, &instance);
-        let device = Device::new(&instance, surface_khr, &surface, debug_utils);
+        let surface_khr =unsafe { create_surface(&entry, &instance, &window.window) }.expect("creating surface failed");
+
+        let device = Device::new( &instance, surface_khr, &surface, debug_utils);
+
         let vk_context = VkContext::new(
             entry,
             instance,
@@ -2204,26 +2237,26 @@ impl Renderer for VulkanRenderer {
             surface_khr,
             device
         );
+
         let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count) =
-            Self::create_swapchain(&vk_context);
-        let (present_images, depth_image) = Self::setup_swapchain_images(
-                &vk_context,
-                swapchain,
-                &swapchain_loader,
-                surface_format,
-                surface_resolution,
+            Self::create_swapchain(
+                &vk_context
             );
+
+
+        let (present_images, depth_image) = Self ::setup_swapchain_images(
+            &vk_context,
+            swapchain,
+            &swapchain_loader,
+            surface_format,
+            surface_resolution,
+        );
+
         let command_pool = Self::create_command_pool(&vk_context);
 
-        let sync_frames =
-            Self::create_synchronization_frames(&vk_context, command_pool, image_count);
-
+        let sync_frames = Self::create_synchronization_frames(&vk_context, command_pool, image_count);
+        
         let internal_renderer = RendererInternal::new(&vk_context);
-        let view_data = ViewUniformData::new(&camera, surface_resolution);
-        let camera_uniform_buffer = (0..image_count)
-            .map(|_| view_data.create_camera_buffer(&vk_context))
-            .collect::<Vec<_>>();
-
 
         Self {
             vk_context,
@@ -2238,12 +2271,9 @@ impl Renderer for VulkanRenderer {
             swapchain_loader,
             debug_utils_messenger,
             internal_renderer,
-            current_frame: 0,
-            num_frames_in_flight: image_count,
-            swapchain_recreate_needed: false,
-            camera_uniform_buffer,
-            view_data,
-            last_frame_end: Instant::now(),
+            current_frame:0,
+            num_frames_in_flight:image_count,
+            swapchain_recreate_needed:false
         }
     }
     fn wait_gpu_idle(&self) {

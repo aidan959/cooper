@@ -59,6 +59,39 @@ impl Camera {
     pub fn forward(&mut self, r: f32) {
         self.r -= r;
     }
+    pub fn update(&mut self, input: &Input) -> bool {
+        let transform = self.camera_rig.final_transform;
+        // TODO abstract to ecs / get inpputs from ecs
+        // two ideas: One -> ECS passes input and this is just handled
+        // in "update" blocks by anything that has Input struct
+        // Two -> Update is handled as system in and of itself and
+        // and we just 
+        let mut movement = Vec3::new(0.0, 0.0, 0.0);
+        if input.key_down(winit::keyboard::KeyCode::KeyW) {
+            movement += self.speed * transform.forward();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyS) {
+            movement -= self.speed * transform.forward();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyA) {
+            movement -= self.speed * transform.right();
+        }
+        if input.key_down(winit::keyboard::KeyCode::KeyD) {
+            movement += self.speed * transform.right();
+        }
+
+        self.camera_rig.driver_mut::<Position>().translate(movement);
+
+        let mut view_changed = false;
+        if input.right_mouse_down {
+            self.camera_rig
+                .driver_mut::<YawPitch>()
+                .rotate_yaw_pitch(-0.3 * input.mouse_delta.x, -0.3 * input.mouse_delta.y);
+            view_changed = true;
+        }
+        self.camera_rig.update(1.0); 
+        movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
+    }
 }
 
 

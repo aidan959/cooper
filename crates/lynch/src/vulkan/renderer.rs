@@ -2073,6 +2073,21 @@ impl VulkanRenderer {
             )
         }
     }
+    fn create_command_pool(vk_context: &VkContext) -> vk::CommandPool {
+        let command_pool = unsafe {
+            vk_context
+                .ash_device()
+                .create_command_pool(
+                    &vk::CommandPoolCreateInfo::builder()
+                        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                        .queue_family_index(vk_context.device().queue_family_index),
+                    None,
+                )
+                .expect("Failed to create command pool")
+        };
+
+        command_pool
+    }
     fn create_debug_utils(
         entry: &ash::Entry,
         instance: &ash::Instance,
@@ -2138,6 +2153,9 @@ impl Renderer for VulkanRenderer {
                 surface_format,
                 surface_resolution,
             );
+        let command_pool = Self::create_command_pool(&vk_context);
+
+        todo!();
         let swapchain_image_views =
             Self::create_swapchain_image_views(vk_context.device(), &images, properties);
 

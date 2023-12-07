@@ -1,17 +1,9 @@
-use crate::{vulkan::{Device, PipelineDesc}, graph::{TextureId, Graph}};
+use crate::{vulkan::{PipelineDesc}, render_graph::{TextureId, RenderGraph}};
 
-#[allow(dead_code)]
-struct PushConstants {
-    world: glam::Mat4,
-    color: glam::Vec4,
-    mesh_index: u32,
-    pad: [u32; 3],
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn setup_deferred_pass(
-    device: &Device,
-    graph: &mut Graph,
+    graph: &mut RenderGraph,
     gbuffer_position: TextureId,
     gbuffer_normal: TextureId,
     gbuffer_albedo: TextureId,
@@ -47,5 +39,5 @@ pub fn setup_deferred_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(device, graph);
+        .build(graph);
 }

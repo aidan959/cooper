@@ -28,38 +28,44 @@ impl Default for Input {
 }
 
 impl Input {
+    pub fn reset_mouse(&mut self) {
+        self.mouse_delta.x =0.;
+        self.mouse_delta.y =0.  ;
+    }
     pub fn update(&mut self, event: &WindowEvent) {
         self.prev_key_states = self.key_states.clone();
-        let prev_mouse_pos = self.mouse_pos;
+        let prev_mouse_pos = (self.mouse_pos.x, self.mouse_pos.y);
+
+
         if let WindowEvent::KeyboardInput { event, .. } = event {
             if let Some(key) = match event.physical_key {
                 PhysicalKey::Code(key) => Some(key), PhysicalKey::Unidentified(_) => None}
                 {
-                    if event.state == ElementState::Pressed && !event.repeat {
+                    if event.state == ElementState::Pressed //&& !event.repeat 
+                    {
                         self.key_states.entry(key).or_insert(true);
                     } else {
                         self.key_states.remove(&key);
                     }            
                     
                 };
-        }
-        if let WindowEvent::CursorMoved { position, .. } = event {
-            self.mouse_pos = *position;
-        }
-        if let WindowEvent::MouseInput { state, button, .. } = event {
-            if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
-                self.right_mouse_down = true;
             }
-            if *button == winit::event::MouseButton::Right && *state == ElementState::Released {
-                self.right_mouse_down = false;
+            if let WindowEvent::CursorMoved { position, .. } = event {
+                self.mouse_pos = *position;
             }
-        }
-        if prev_mouse_pos.x != 0.0 && prev_mouse_pos.y != 0.0 {
-            self.mouse_delta = Vec2::new(
-                (self.mouse_pos.x - prev_mouse_pos.x) as f32,
-                (self.mouse_pos.y - prev_mouse_pos.y) as f32,
-            );
-        }
+            if let WindowEvent::MouseInput { state, button, .. } = event {
+                if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
+                    self.right_mouse_down = true;
+                }
+                if *button == winit::event::MouseButton::Right && *state == ElementState::Released {
+                    self.right_mouse_down = false;
+                }
+            }
+
+        self.mouse_delta.x = (self.mouse_pos.x - prev_mouse_pos.0) as f32;
+        self.mouse_delta.y = (self.mouse_pos.y - prev_mouse_pos.1) as f32;
+
+
     }
     pub fn key_pressed(&self, key: KeyCode ) -> bool {
         self.key_states.contains_key(&key) && !self.prev_key_states.contains_key(&key)

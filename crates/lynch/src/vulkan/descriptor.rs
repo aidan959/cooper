@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ash::vk;
 
 use crate::Texture;
@@ -7,7 +9,9 @@ use super::{shader::BindingMap, Device, Buffer, Image};
 pub struct DescriptorSet {
     pub handle: vk::DescriptorSet,
     pub pool: vk::DescriptorPool,
+    layout: vk::DescriptorSetLayout,
     binding_map: BindingMap,
+    device: Arc<Device>
 }
 
 pub enum DescriptorIdentifier {
@@ -17,7 +21,7 @@ pub enum DescriptorIdentifier {
 
 impl DescriptorSet {
     pub fn new(
-        device: &Device,
+        device: Arc<Device>,
         layout: vk::DescriptorSetLayout,
         binding_map: BindingMap,
     ) -> DescriptorSet {
@@ -40,15 +44,12 @@ impl DescriptorSet {
                     rspirv_reflect::DescriptorType::STORAGE_BUFFER => {
                         vk::DescriptorType::STORAGE_BUFFER
                     }
-                    rspirv_reflect::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
-                        vk::DescriptorType::ACCELERATION_STRUCTURE_KHR
-                    }
                     _ => unimplemented!(),
                 };
 
                 vk::DescriptorPoolSize::builder()
                     .ty(descriptor_type)
-                    .descriptor_count(1) // Todo: val.info.binding_count)
+                    .descriptor_count(1)
                     .build()
             })
             .collect::<Vec<_>>();
@@ -89,10 +90,12 @@ impl DescriptorSet {
             handle: descriptor_sets[0],
             pool: descriptor_pool,
             binding_map,
+            device,
+            layout
         }
     }
 
-    pub fn write_uniform_buffer(&self, device: &Device, name: String, buffer: &Buffer) {
+    pub fn write_uniform_buffer(&self, name: String, buffer: &Buffer) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .offset(0)
             .range(buffer.size)
@@ -103,16 +106,14 @@ impl DescriptorSet {
             Some(binding) => binding,
             None => panic!("No descriptor binding found with name: \"{}\"", name),
         };
-
         let descriptor_writes = vk::WriteDescriptorSet::builder()
             .dst_set(self.handle)
             .dst_binding(binding.binding)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(&[buffer_info])
             .build();
-
         unsafe {
-            device
+            self.device
                 .device()
                 .update_descriptor_sets(&[descriptor_writes], &[])
         };
@@ -233,7 +234,7 @@ impl DescriptorSet {
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .push_next(&mut descriptor_info)
             .build();
-        descriptor_writes.descriptor_count = 1; // Not set for acceleration structures
+        descriptor_writes.descriptor_count = 1;
 
         unsafe {
             device
@@ -275,5 +276,11 @@ impl DescriptorSet {
             .expect("Empty DescriptorSet")
             .1
             .set
+    }
+    pub fn clean_vk_resources(&self) {
+        unsafe {
+            self.device.device().destroy_descriptor_pool(self.pool, None);
+            self.device.device().destroy_descriptor_set_layout(self.layout, None);
+        };
     }
 }

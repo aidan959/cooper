@@ -1,13 +1,15 @@
+use std::sync::Arc;
+
 use ash::vk;
 use glam::{Mat4, Vec3};
 
-use crate::{vulkan::{Device, renderer::VulkanRenderer, PipelineDesc, ImageDesc, ImageCopyDescBuilder}, graph::{Graph, TextureId}};
+use crate::{vulkan::{Device, renderer::VulkanRenderer, PipelineDesc, ImageDesc, ImageCopyDescBuilder}, render_graph::{RenderGraph, TextureId}};
 
 use super::viewport;
-
+const PASS_AMOUNT : u8 = 6;
 pub fn setup_cubemap_pass(
-    device: &Device,
-    graph: &mut Graph,
+    device: Arc<Device>,
+    graph: &mut RenderGraph,
     renderer: &VulkanRenderer,
 ) -> (
     TextureId,
@@ -22,31 +24,31 @@ pub fn setup_cubemap_pass(
 
     let environment_map = graph.create_texture(
         "environment_map",
-        device,
+        device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt).mip_levels(num_mips),
     );
 
     let irradiance_map = graph.create_texture(
         "irradiance_map",
-        device,
+        device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt),
     );
 
     let specular_map = graph.create_texture(
         "specular_map",
-        device,
+        device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt).mip_levels(num_mips),
     );
 
     let offscreen = graph.create_texture(
         "cubemap_offscreen",
-        device,
+        device.clone(),
         ImageDesc::new_2d(mip0_size, mip0_size, rgba32_fmt),
     );
 
     let brdf_lut = graph.create_texture(
         "brdf_lut",
-        device,
+        device.clone(),
         ImageDesc::new_2d(512, 512, vk::Format::R16G16_SFLOAT),
     );
 
@@ -59,8 +61,6 @@ pub fn setup_cubemap_pass(
         Mat4::look_at_rh(Vec3::ZERO, Vec3::Z, -Vec3::Y),
         Mat4::look_at_rh(Vec3::ZERO, -Vec3::Z, -Vec3::Y),
     ];
-
-    // Do not add any passes to the graph if we don't need to update the environment map
     if !renderer.internal_renderer.need_environment_map_update {
         return (environment_map, irradiance_map, specular_map, brdf_lut);
     }
@@ -68,7 +68,7 @@ pub fn setup_cubemap_pass(
     for mip in 0..num_mips {
         let size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..6 {
+        for layer in 0..PASS_AMOUNT {
             graph
                 .add_pass_from_desc(
                     format!("cubemap_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -87,16 +87,15 @@ pub fn setup_cubemap_pass(
                     offscreen,
                     environment_map,
                     ImageCopyDescBuilder::new(size, size)
-                        .dst_base_array_layer(layer)
+                        .dst_base_array_layer(layer as u32)
                         .dst_mip_level(mip)
                         .build(),
                 )
-                .build(device, graph);
+                .build(graph);
         }
     }
 
-    // Irradiance filter pass (mip 0 only)
-    for layer in 0..6 {
+    for layer in 0..PASS_AMOUNT {
         graph
             .add_pass_from_desc(
                 format!("irradiance_filter_pass_layer_{layer}").as_str(),
@@ -105,21 +104,20 @@ pub fn setup_cubemap_pass(
                     .fragment_path("assets/shaders/irradiance_filter.frag"),
             )
             .read(environment_map)
-            .write_layer(irradiance_map, layer)
+            .write_layer(irradiance_map, layer as u32)
             .uniforms("params", &(view_matrices[layer as usize], projection))
             .record_render(move |device, cb, _renderer, _pass, _resources| unsafe {
                 let viewport = [viewport(mip0_size, mip0_size)];
                 device.device().cmd_set_viewport(*cb, 0, &viewport);
                 device.device().cmd_draw(*cb, 3, 1, 0, 0);
             })
-            .build(device, graph);
+            .build(graph);
     }
 
-    // Specular filter pass (all mip levels)
     for mip in 0..num_mips {
         let mip_size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..6 {
+        for layer in 0..PASS_AMOUNT {
             graph
                 .add_pass_from_desc(
                     format!("specular_filter_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -148,11 +146,11 @@ pub fn setup_cubemap_pass(
                     offscreen,
                     specular_map,
                     ImageCopyDescBuilder::new(mip_size, mip_size)
-                        .dst_base_array_layer(layer)
+                        .dst_base_array_layer(layer as u32)
                         .dst_mip_level(mip)
                         .build(),
                 )
-                .build(device, graph);
+                .build(graph);
         }
     }
 
@@ -167,7 +165,7 @@ pub fn setup_cubemap_pass(
         .record_render(move |device, command_buffer, _, _, _| unsafe {
             device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
         })
-        .build(device, graph);
+        .build(graph);
 
     (environment_map, irradiance_map, specular_map, brdf_lut)
 }

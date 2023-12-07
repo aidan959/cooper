@@ -1,15 +1,14 @@
-use crate::{vulkan::{Device, PipelineDesc}, graph::{Graph, TextureId}};
+use crate::{vulkan::PipelineDesc, render_graph::{RenderGraph, TextureId}};
 
 pub fn setup_ssao_pass(
-    device: &Device,
-    graph: &mut Graph,
+    graph: &mut RenderGraph,
     gbuffer_position: TextureId,
     gbuffer_normal: TextureId,
     ssao_output: TextureId,
     enabled: bool,
 ) {
     let radius_bias = glam::Vec4::new(0.1, 0.0, 0.0, 0.0);
-
+    // TODO additional blur pass
     graph
         .add_pass_from_desc(
             "ssao_pass",
@@ -29,8 +28,6 @@ pub fn setup_ssao_pass(
                 }
             },
         )
-        .build(device, graph);
+        .build(graph);
 
-    // It is common to also have a blur pass for SSAO which can be added here.
-    // The SSAO effect looks decent without it, but it should be added here in the future.
 }

@@ -11,3 +11,6 @@ frost = { path = "../frost", version = "0.0.1-dev"}
 ash = { version = "0.37.0", features = ["linked", "debug"]}
 winit = "0.29.2"
 glam = "0.20.2"
+log = "0.4.20"
+env_logger = "0.10.1"
+rand = "0.8.5"

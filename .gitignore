@@ -7,3 +7,6 @@ target
 tmp
 *-aidan-laptop.*
 models
+src/main.rs
+.gitignore
+Cooper Report.docx

@@ -1,28 +1,23 @@
 
 
-use crate::{Texture , vulkan::cont::*, vulkan::debug::*,  window::window::Window, renderer::Renderer, gltf_loader::Model, Camera};
+use crate::{Texture , vulkan::cont::*, vulkan::debug::*,  window::window::Window, renderer::Renderer, gltf_loader::Model, Camera, render_graph::RenderGraph, render_tools};
 use ash::{extensions::{
         ext::DebugUtils,
         khr::{Surface, Swapchain}
     }, vk::Extent2D};
 use ash::{vk,  Entry, Instance};
-use cgmath:: Matrix4;
 use log::{info, warn, error};
-use memoffset::offset_of;
 use std::{
-    ffi::{CString},
-    fmt::Display, mem::{size_of},
+    ffi::CString, sync::Arc, time::Instant,
 };
-use glam::{self, Vec4, Vec3};
+use glam::{self, Vec4, Vec3, Mat4};
 use super::{Device, Image, ImageDesc, Buffer, descriptor::DescriptorSet};
-
-const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 pub const MAX_NUM_GPU_MATERIALS: usize = 1024;
 pub const MAX_NUM_GPU_MESHES: usize = 1024;
 pub const DESCRIPTOR_SET_INDEX_BINDLESS: u32 = 0;
 pub const DESCRIPTOR_SET_INDEX_VIEW: u32 = 1;
 pub const DESCRIPTOR_SET_INDEX_INPUT_TEXTURES: u32 = 2;
-pub const DEFAULT_TEXTURE_MAP: u32 = u32::MAX;
+pub const DEFAULT_TEXTURE: u32 = u32::MAX;
 
 use crate::vulkan::surface::create_surface;
 pub struct ModelInstance {
@@ -50,7 +45,10 @@ pub struct VulkanRenderer {
     pub internal_renderer : RendererInternal,
     pub current_frame: usize,
     pub num_frames_in_flight: u32,
-    pub swapchain_recreate_needed : bool
+    pub swapchain_recreate_needed : bool,
+    pub camera_uniform_buffer: Vec<Buffer>,
+    pub view_data: ViewUniformData,
+    pub last_frame_end: Instant
 }
 
 pub struct RendererInternal {
@@ -70,7 +68,7 @@ pub struct RendererInternal {
     next_bindless_index_buffer_index: u32,
     pub need_environment_map_update: bool,
 }
-#[allow(dead_code)]
+
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
 pub struct ViewUniformData {
@@ -89,15 +87,15 @@ pub struct ViewUniformData {
     pub ibl_enabled: u32,
 }
 impl ViewUniformData {
-    pub fn new(camera: &Camera, viewport_width : f64, viewport_height :f64 ) -> Self {
+    pub fn new(camera: &Camera, surface_resolution:Extent2D ) -> Self {
         Self{
             view: camera.get_view(),
             projection: camera.get_projection(),
             inverse_view: camera.get_view().inverse(),
             inverse_projection: camera.get_projection().inverse(),
             eye_pos: camera.get_position(),
-            viewport_width: viewport_width as u32,
-            viewport_height: viewport_height as u32,
+            viewport_width: surface_resolution.width,
+            viewport_height: surface_resolution.height,
             sun_dir: Vec3::new(0.0, 0.9, 0.15).normalize(),
             shadows_enabled: 1,
             ssao_enabled: 1,
@@ -109,7 +107,7 @@ impl ViewUniformData {
     pub fn create_camera_buffer(&self, vk_context: &VkContext) -> Buffer
     {
         Buffer::new(
-            vk_context.device(),
+            vk_context.arc_device(),
             Some(std::slice::from_ref(self)),
             std::mem::size_of_val(self) as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
@@ -140,7 +138,9 @@ struct GpuMesh {
     material: u32,
 }
 impl VulkanRenderer {
-    
+    pub fn load_model(&self, path: &str) -> Model {
+        crate::gltf_loader::load_gltf(self.vk_context.arc_device(), path)
+    }
     fn setup_swapchain_images(
         vk_context: &VkContext,
         swapchain: vk::SwapchainKHR,
@@ -157,7 +157,7 @@ impl VulkanRenderer {
                 .iter()
                 .map(|&image| {
                     Image::new_from_handle(
-                        vk_context.device(),
+                        vk_context.arc_device(),
                         image,
                         ImageDesc::new_2d(
                             surface_resolution.width,
@@ -169,7 +169,7 @@ impl VulkanRenderer {
                 .collect();
 
             let depth_image = Image::new_from_desc(
-                vk_context.device(),
+                vk_context.arc_device(),
                 ImageDesc::new_2d(
                     surface_resolution.width,
                     surface_resolution.height,
@@ -179,10 +179,10 @@ impl VulkanRenderer {
                 .aspect(vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL),
             );
 
-            vk_context.device().execute_and_submit(|device, cb| {
+            vk_context.arc_device().execute_and_submit(|cb| {
                 for present_image in &present_images {
                     super::image_pipeline_barrier(
-                        device,
+                        &vk_context.arc_device(),
                         cb,
                         present_image,
                         vk_sync::AccessType::Nothing,
@@ -192,7 +192,7 @@ impl VulkanRenderer {
                 }
 
                 super::image_pipeline_barrier(
-                    device,
+                    &vk_context.arc_device(),
                     cb,
                     &depth_image,
                     vk_sync::AccessType::Nothing,
@@ -211,13 +211,13 @@ impl VulkanRenderer {
             let swapchains = [self.swapchain];
             let image_indices = [present_index as u32];
             
-            self.vk_context.device().execute_and_submit(|device, cb| {
+            self.vk_context.device().execute_and_submit(move |cb| {
                 
                 super::image_pipeline_barrier(
                     self.device(),
                     cb,
                     &Image::new_from_handle(
-                        device,
+                        self.vk_context.arc_device(),
                         self.swapchain_loader.get_swapchain_images(self.swapchain).expect("Error getting swapchain images")[present_index],
                         ImageDesc::new_2d(
                             self.surface_resolution.width,
@@ -240,7 +240,6 @@ impl VulkanRenderer {
     }
 
     pub fn submit_commands(&self, frame_index: usize) {
-        //verbose!("Submitting commands on frame_index {}", frame_index);
         unsafe {
 
             let command_buffers = [self.sync_frames[frame_index].command_buffer];
@@ -260,6 +259,7 @@ impl VulkanRenderer {
                     self.sync_frames[frame_index].command_buffer_reuse_fence,
                 )
                 .expect("Queue submit failed.");
+
         }
     }
     fn create_command_pool(vk_context: &VkContext) -> vk::CommandPool {
@@ -446,23 +446,103 @@ impl VulkanRenderer {
 
         (Some(debug_utils_loader), Some(debug_utils_messenger))
     }
+    pub fn arc_device(self:&Self) -> Arc<Device> {
+        self.vk_context.arc_device()
+    }
+    fn ash_device(self:&Self) -> &ash::Device {
+        self.vk_context.ash_device()
+    }
+    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera ) -> f32{
+        self.update_view_to_camera(&camera);
+        let command_buffer = self.sync_frames[self.current_frame].command_buffer;
+        let wait_fence = self.sync_frames[self.current_frame].command_buffer_reuse_fence;
+        let present_index = self.begin_frame();
+        unsafe {
+            {
+                self.ash_device()
+                    .wait_for_fences(&[wait_fence], true, std::u64::MAX)
+                    .expect("Wait for fence failed.");
+                
+                self.ash_device()
+                    .reset_fences(&[wait_fence])
+                    .expect("Reset fences failed.");
+            }
 
+            self.ash_device()
+                .reset_command_buffer(
+                    command_buffer,
+                    ash::vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("Reset command buffer failed.");
+
+            let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo::builder()
+                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+                self.ash_device()
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Begin command buffer failed.");
+
+                self.camera_uniform_buffer[self.current_frame]
+                    .update_memory( std::slice::from_ref(&self.view_data));
+
+            graph.new_frame(self.current_frame);
+            graph.clear();
+
+            self.internal_renderer.instances[0].transform.add_mat4(&Mat4::from_rotation_x(0.01));
+            render_tools::build_render_graph(
+                graph,
+                self.arc_device(),
+                &self,
+                &self.view_data,
+                &camera,
+            );
+            
+            graph.prepare(&self);
+            let image = self.present_images[present_index].clone();
+            graph.render(
+                &command_buffer,
+                &self,
+                &image
+            );
+
+            self.ash_device()
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer failed.");
+
+            self.present_images[self.current_frame].current_layout = vk::ImageLayout::PRESENT_SRC_KHR; 
+            self.submit_commands(self.current_frame);
+            self.present_frame(present_index, self.current_frame);
+            self.current_frame = (self.current_frame + 1 ) % self.num_frames_in_flight as usize;
+            self.internal_renderer.need_environment_map_update = false;
+            graph.current_frame = self.current_frame;
+        }
+        let now = Instant::now();
+        let delta_time  = now.duration_since(self.last_frame_end).as_secs_f32();
+        self.last_frame_end = now;
+        delta_time
+    }
 }
 
 impl Renderer for VulkanRenderer {
+    fn update_view_to_camera(self: &mut Self, camera: &Camera) {
+        self.view_data.view = camera.get_view();
+        self.view_data.projection = camera.get_projection();
+        self.view_data.inverse_view = camera.get_view().inverse();
+        self.view_data.inverse_projection = camera.get_projection().inverse();
+        self.view_data.eye_pos = camera.get_position();
+    }
     fn initialize(self: &mut Self) {
-        self.internal_renderer.initialize(self.vk_context.device());
+        self.internal_renderer.initialize(self.vk_context.arc_device());
     }
     fn device(self:&Self) -> &Device {
         self.vk_context.device()
     }
+    
     fn add_model(self: &mut Self, model: crate::gltf_loader::Model, transform: glam::Mat4) {
-        info!("Adding model.");
         let device = self.vk_context.device();
         self.internal_renderer.add_model(device, model, transform);
     }
-    fn create(window: &Window) -> Self {
-        log::debug!("Creating application.");
+    fn create(window: &Window, camera: &Camera) -> Self {
         let entry = ash::Entry::linked();
         let instance = Self::create_instance(&entry);
         let (debug_utils, debug_utils_messenger) = Self::create_debug_utils(&entry,&instance);
@@ -492,13 +572,18 @@ impl Renderer for VulkanRenderer {
             surface_format,
             surface_resolution,
         );
-
         let command_pool = Self::create_command_pool(&vk_context);
-
+        
         let sync_frames = Self::create_synchronization_frames(&vk_context, command_pool, image_count);
         
         let internal_renderer = RendererInternal::new(&vk_context);
-
+        let view_data = ViewUniformData::new(&camera, surface_resolution);
+        let camera_uniform_buffer = (0..image_count)
+        .map(|_| { 
+            view_data.create_camera_buffer(&vk_context)
+        })
+        .collect::<Vec<_>>();
+    
         Self {
             vk_context,
             sync_frames,
@@ -514,7 +599,10 @@ impl Renderer for VulkanRenderer {
             internal_renderer,
             current_frame:0,
             num_frames_in_flight:image_count,
-            swapchain_recreate_needed:false
+            swapchain_recreate_needed:false,
+            camera_uniform_buffer,
+            view_data,
+            last_frame_end: Instant::now()
         }
     }
 
@@ -564,12 +652,8 @@ impl Drop for VulkanRenderer{
         unsafe {hardware_device.free_command_buffers(self.command_pool, &command_buffers)};
         unsafe {hardware_device.destroy_command_pool(self.command_pool, None)};
         unsafe{self.swapchain_loader.destroy_swapchain(self.swapchain, None)};
-
-        // unsafe { hardware_device.destroy_image_view(image_view, allocation_callbacks)}
-        // match &self.vk_context.device().debug_utils {
-        //     Some(debug_utils) => unsafe {debug_utils.destroy_debug_utils_messenger(self.debug_utils_messenger.unwrap(), None);}
-        //     None => (),
-        // }
+        self.depth_image.clean_vk_resources();
+        self.present_images.iter().for_each(|pi|pi.clean_vk_resources());
     }
 }
 impl RendererInternal {
@@ -581,7 +665,7 @@ impl RendererInternal {
         // TODO this should A: Not be so greedy B: Dynamically increase allocation size TO a limit - IE read how much memory we have when this is full, and allocate up to the size
 
         let gpu_materials_buffer = Buffer::new::<u8>(
-            vk_context.device(),
+            vk_context.arc_device(),
             None,
             (MAX_NUM_GPU_MATERIALS * std::mem::size_of::<GpuMaterial>()) as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -590,7 +674,7 @@ impl RendererInternal {
         );
 
         let gpu_meshes_buffer = Buffer::new::<u8>(
-            vk_context.device(),
+            vk_context.arc_device(),
             None,
             (MAX_NUM_GPU_MESHES * std::mem::size_of::<GpuMesh>()) as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -629,30 +713,30 @@ impl RendererInternal {
         }
     }
 
-    pub fn initialize(&mut self, device: &Device) {
+    pub fn initialize(&mut self, device: Arc<Device>) {
         let default_diffuse_map =
-            Texture::load(device, "assets/textures/def/white_texture.png");
+            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
         let default_normal_map =
-            Texture::load(device, "assets/textures/def/flat_normal_map.png");
+            Texture::load(device.clone(), "assets/textures/def/flat_normal_map.png");
         let default_occlusion_map =
-            Texture::load(device, "assets/textures/def/white_texture.png");
+            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
         let default_metallic_roughness_map = Texture::load(
-            device,
+            device.clone(),
             "assets/textures/def/metallic_roughness.png",
         );
 
-        self.default_diffuse_map_index = self.add_bindless_texture(device, &default_diffuse_map);
-        self.default_normal_map_index = self.add_bindless_texture(device, &default_normal_map);
+        self.default_diffuse_map_index = self.add_bindless_texture(&device, &default_diffuse_map);
+        self.default_normal_map_index = self.add_bindless_texture(&device, &default_normal_map);
         self.default_occlusion_map_index =
-            self.add_bindless_texture(device, &default_occlusion_map);
+            self.add_bindless_texture(&device, &default_occlusion_map);
         self.default_metallic_roughness_map_index =
-            self.add_bindless_texture(device, &default_metallic_roughness_map);
+            self.add_bindless_texture(&device, &default_metallic_roughness_map);
     }
-
+    
     pub fn add_model(&mut self, device: &Device, mut model: Model, transform: glam::Mat4) {
         for mesh in &mut model.meshes {
             let diffuse_bindless_index = match mesh.material.diffuse_map {
-                DEFAULT_TEXTURE_MAP => self.default_diffuse_map_index,
+                DEFAULT_TEXTURE => self.default_diffuse_map_index,
                 _ => self.add_bindless_texture(
                     device,
                     &model.textures[mesh.material.diffuse_map as usize],
@@ -660,7 +744,7 @@ impl RendererInternal {
             };
 
             let normal_bindless_index = match mesh.material.normal_map {
-                DEFAULT_TEXTURE_MAP => self.default_normal_map_index,
+                DEFAULT_TEXTURE => self.default_normal_map_index,
                 _ => self.add_bindless_texture(
                     device,
                     &model.textures[mesh.material.normal_map as usize],
@@ -668,7 +752,7 @@ impl RendererInternal {
             };
 
             let metallic_roughness_bindless_index = match mesh.material.metallic_roughness_map {
-                DEFAULT_TEXTURE_MAP => self.default_metallic_roughness_map_index,
+                DEFAULT_TEXTURE => self.default_metallic_roughness_map_index,
                 _ => self.add_bindless_texture(
                     device,
                     &model.textures[mesh.material.metallic_roughness_map as usize],
@@ -676,7 +760,7 @@ impl RendererInternal {
             };
 
             let occlusion_bindless_index = match mesh.material.occlusion_map {
-                DEFAULT_TEXTURE_MAP => self.default_occlusion_map_index,
+                DEFAULT_TEXTURE => self.default_occlusion_map_index,
                 _ => self.add_bindless_texture(
                     device,
                     &model.textures[mesh.material.occlusion_map as usize],
@@ -703,15 +787,14 @@ impl RendererInternal {
                 index_buffer: index_buffer_bindless_idx,
                 material: material_index,
             });
-            info!("vertex_buffer_bindless_idx: \t{} \nindex_buffer_bindless_idx: \t{}\nmaterial_index: \t{}\nmesh_index: \t{}", vertex_buffer_bindless_idx,index_buffer_bindless_idx, material_index, mesh_index);
 
             mesh.gpu_mesh = mesh_index;
         }
 
         self.gpu_meshes_buffer
-            .update_memory(device, self.gpu_meshes.as_slice());
+            .update_memory(self.gpu_meshes.as_slice());
         self.gpu_materials_buffer
-            .update_memory(device, self.gpu_materials.as_slice());
+            .update_memory(self.gpu_materials.as_slice());
 
         self.instances.push(ModelInstance { model, transform });
     }
@@ -853,6 +936,11 @@ impl RendererInternal {
         }
     }
 }
+impl Drop for RendererInternal {
+    fn drop(&mut self) {
+        self.gpu_materials_buffer.clean_vk_resources();
+    }
+}
 
 pub const MAX_BINDLESS_DESCRIPTOR_COUNT: usize = 512 * 510;
 
@@ -964,155 +1052,3 @@ pub fn create_bindless_descriptor_set(
     descriptor_set
 }
 
-
-
-#[derive(Clone, Copy)]
-struct QueueFamiliesIndices {
-    graphics_index: u32,
-    present_index: u32,
-}
-
-#[derive(Clone, Copy)]
-struct SyncObjects {
-    image_available_semaphore: vk::Semaphore,
-    render_finished_semaphore: vk::Semaphore,
-    fence: vk::Fence,
-}
-
-impl SyncObjects {
-    fn destroy(&self, device: &Device) {
-        unsafe {
-            device.device().destroy_semaphore(self.image_available_semaphore, None);
-            device.device().destroy_semaphore(self.render_finished_semaphore, None);
-            device.device().destroy_fence(self.fence, None);
-        }
-    }
-}
-struct GameTick {
-    current_tick: u64,
-    sum_tick: u64,
-    tick_index: usize,
-    tick_list: [u64; 100],
-}
-
-impl GameTick {
-    fn new() -> Self {
-        GameTick {
-            current_tick: 0,
-            sum_tick: 0,
-            tick_index: 0,
-            tick_list: [0; 100],
-        }
-    }
-    fn tick(self: &mut Self) {
-        self.current_tick += 1;
-    }
-    fn calc_average_tick(self: &mut Self, newtick: u64) -> f64 {
-        self.sum_tick -= self.tick_list[self.tick_index];
-        self.sum_tick += newtick;
-        self.tick_list[self.tick_index] = newtick;
-        self.tick_index += 1;
-        self.tick_index = self.tick_index % 99;
-
-        self.sum_tick as f64 / 100.
-    }
-}
-
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-struct UniformBufferObject {
-    model: Matrix4<f32>,
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
-}
-
-impl UniformBufferObject {
-    fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
-        vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            // .immutable_samplers() null since we're not creating a sampler descriptor
-            .build()
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Vertex {
-    pub pos: [f32; 3],
-    pub color: [f32; 3],
-    pub coords: [f32; 2],
-}
-
-impl Vertex {
-    fn get_binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(size_of::<Self>() as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
-    }
-
-    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
-        let position_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(offset_of!(Self, pos) as u32)
-            .build();
-        let color_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(offset_of!(Self, color) as u32)
-            .build();
-        let coords_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(2)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(offset_of!(Self, coords) as u32)
-            .build();
-        [position_desc, color_desc, coords_desc]
-    }
-}
-
-impl Display for Vertex {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "x: {}\ty: {}\tz: {}\ncx: {}\tcy: {}",
-            self.pos[0], self.pos[1], self.pos[2], self.coords[0], self.coords[1]
-        )
-    }
-}
-
-struct InFlightFrames {
-    sync_objects: Vec<SyncObjects>,
-    current_frame: usize,
-}
-
-impl InFlightFrames {
-    fn new(sync_objects: Vec<SyncObjects>) -> Self {
-        Self {
-            sync_objects,
-            current_frame: 0,
-        }
-    }
-
-    fn destroy(&self, device: &Device) {
-        self.sync_objects.iter().for_each(|o| o.destroy(&device));
-    }
-}
-
-impl Iterator for InFlightFrames {
-    type Item = SyncObjects;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let next = self.sync_objects[self.current_frame];
-
-        self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
-
-        Some(next)
-    }
-}

@@ -12,8 +12,8 @@ lynch = { path = "crates/lynch", version = "0.0.1-dev"}
 application = { path = "crates/application", version = "0.0.1-dev"}
 frost = { path = "crates/frost", version = "0.0.1-dev"}
 
-log = "0.4"
-env_logger = "0.6"
+log = "0.4.20"
+env_logger = "0.10.1"
 ash = "0.27"
 winit = "0.29.2"
 winapi = "0.3.6"
@@ -21,3 +21,5 @@ cgmath = "0.17.0"
 image = "0.21.0"
 tobj = "0.1.6"
 memoffset = "0.5.1"
+glam = "0.20.2"
+phf = { version = "0.11.2", features = ["macros"] }

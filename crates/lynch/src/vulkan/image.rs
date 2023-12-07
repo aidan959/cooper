@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ash::vk;
 use ash::vk::{AccessFlags, ImageLayout, PipelineStageFlags};
 
@@ -28,10 +30,10 @@ pub struct ImageDesc {
 }
 
 impl ImageDesc {
-    fn common_usage_flags() -> vk::ImageUsageFlags{
+    fn common_usage_flags() -> vk::ImageUsageFlags {
         vk::ImageUsageFlags::TRANSFER_DST
-        | vk::ImageUsageFlags::SAMPLED
-        | vk::ImageUsageFlags::COLOR_ATTACHMENT
+            | vk::ImageUsageFlags::SAMPLED
+            | vk::ImageUsageFlags::COLOR_ATTACHMENT
     }
     pub fn new_2d(width: u32, height: u32, format: vk::Format) -> Self {
         ImageDesc {
@@ -102,10 +104,36 @@ pub struct Image {
     pub current_layout: vk::ImageLayout,
     pub desc: ImageDesc,
     pub debug_name: String,
+    pub device: Arc<Device>,
 }
-
+/* //TODO implement appropriate dropping
+impl Drop for Image {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .ash_device
+                .destroy_image_view(self.image_view, None);
+            self.device.ash_device.destroy_image(self.image, None);
+            self.layer_views
+                .iter()
+                .for_each(|iv| self.device.ash_device.destroy_image_view(*iv, None));
+        }
+    }
+}*/
 impl Image {
-    pub fn new_from_desc(device: &Device, desc: ImageDesc) -> Image {
+    pub fn clean_vk_resources(&self) {
+        unsafe {
+            self.device.ash_device.device_wait_idle().unwrap();
+            self.device
+            .ash_device
+            .destroy_image_view(self.image_view, None);
+            self.layer_views
+                .iter()
+                .for_each(|iv| self.device.ash_device.destroy_image_view(*iv, None));
+            self.device.ash_device.destroy_image(self.image, None);
+        }
+    }
+    pub fn new_from_desc(device: Arc<Device>, desc: ImageDesc) -> Image {
         unsafe {
             let initial_layout = vk::ImageLayout::UNDEFINED;
             let image_create_info = vk::ImageCreateInfo {
@@ -168,7 +196,7 @@ impl Image {
             };
 
             let image_view = Image::create_image_view(
-                device,
+                &device,
                 image,
                 desc.format,
                 desc.aspect_flags,
@@ -180,12 +208,10 @@ impl Image {
 
             let mut layer_views = vec![];
 
-            if desc.array_layers > 1
- 
-            {
+            if desc.array_layers > 1 {
                 for layer in 0..desc.array_layers {
                     let view = Image::create_image_view(
-                        device,
+                        &device,
                         image,
                         desc.format,
                         desc.aspect_flags,
@@ -210,11 +236,12 @@ impl Image {
                 current_layout: initial_layout,
                 desc,
                 debug_name: "unnamed_image".to_string(),
+                device,
             }
         }
     }
 
-    pub fn new_from_handle(device: &Device, image: vk::Image, desc: ImageDesc) -> Image {
+    pub fn new_from_handle(device: Arc<Device>, image: vk::Image, desc: ImageDesc) -> Image {
         let view_type = if desc.image_type == ImageType::Tex2d && desc.array_layers == 1 {
             vk::ImageViewType::TYPE_2D
         } else if desc.image_type == ImageType::Tex2dArray && desc.array_layers > 1 {
@@ -226,7 +253,7 @@ impl Image {
         };
 
         let image_view = Image::create_image_view(
-            device,
+            &device,
             image,
             desc.format,
             desc.aspect_flags,
@@ -244,6 +271,7 @@ impl Image {
             current_layout: vk::ImageLayout::UNDEFINED,
             desc,
             debug_name: "unnamed_image".to_string(),
+            device,
         }
     }
 
@@ -258,7 +286,6 @@ impl Image {
         layer_count: u32,
         mip_levels: u32,
     ) -> vk::ImageView {
-        
         let image_aspect_flags = vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL;
         let components = match aspect_flags {
             vk::ImageAspectFlags::COLOR => vk::ComponentMapping {
@@ -267,10 +294,10 @@ impl Image {
                 b: vk::ComponentSwizzle::B,
                 a: vk::ComponentSwizzle::A,
             },
-            vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH => vk::ComponentMapping::default(),
-            n if n == image_aspect_flags => {
+            vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH => {
                 vk::ComponentMapping::default()
-            },
+            }
+            n if n == image_aspect_flags => vk::ComponentMapping::default(),
             _ => unimplemented!(),
         };
 
@@ -297,7 +324,8 @@ impl Image {
         }
     }
 
-    pub fn set_debug_name(&mut self, device: &Device, name: &str) {
+    pub fn set_debug_name(&mut self, name: &str) {
+        let device = &self.device;
         self.debug_name = String::from(name);
         device.set_debug_name(vk::Handle::as_raw(self.image), vk::ObjectType::IMAGE, name);
         device.set_debug_name(
@@ -392,12 +420,10 @@ impl Image {
                 PipelineStageFlags::FRAGMENT_SHADER,
             ),
             ImageLayout::PRESENT_SRC_KHR => (
-                // Note: random flags, no idea if correct
                 AccessFlags::COLOR_ATTACHMENT_READ,
                 PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
             ),
             ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL => (
-                // Note: random flags, no idea if correct
                 AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ,
                 PipelineStageFlags::EARLY_FRAGMENT_TESTS,
             ),

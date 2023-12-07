@@ -1,5 +1,8 @@
 use ash::util::*;
 use ash::vk;
+use shaderc::EnvVersion;
+use shaderc::ShaderKind;
+use shaderc::TargetEnv;
 
 use std::{collections::{BTreeMap, HashMap},fs,io::Cursor,path::Path};
 
@@ -23,6 +26,8 @@ pub struct Reflection {
     pub binding_mappings: HashMap<String, Binding>,
 }
 
+const MAIN_ENTRY_POINT : &'static str = "main";
+ 
 impl Reflection {
     pub fn new(shader_stages: &[&[u8]]) -> Reflection {
         let mut descriptor_sets_combined: DescriptorSetMap = BTreeMap::new();
@@ -116,55 +121,36 @@ impl Reflection {
     }
 }
 
+#[must_use]
 pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, shaderc::Error> {
-
     let binding = fs::read_to_string(path);
     let source = match &binding{
         Ok(source) => source,
-        Err(err) => panic!("Error reading shader: Cannot find path: {}. Os Error:({})", path, err),
+        Err(err) => panic!("Error reading shader: Cannot find path: {}.\nOs Error:({})", path, err),
     };
 
-
-    let shader_kind = if path.ends_with(".vert") {
-        shaderc::ShaderKind::Vertex
-    } else if path.ends_with(".frag") {
-        shaderc::ShaderKind::Fragment
-    } else if path.ends_with(".rgen") {
-        shaderc::ShaderKind::RayGeneration
-    } else if path.ends_with(".rmiss") {
-        shaderc::ShaderKind::Miss
-    } else if path.ends_with(".rchit") {
-        shaderc::ShaderKind::ClosestHit
-    } else if path.ends_with(".comp") {
-        shaderc::ShaderKind::Compute
-    } else {
-        panic!("Unsupported shader extension");
+    let shader_kind = match path.get(path.len().saturating_sub(5)..) {
+        Some(".vert") => ShaderKind::Vertex,
+        Some(".frag") => ShaderKind::Fragment,
+        Some(".comp") => ShaderKind::Compute,
+        _ => todo!("Unsupported shader extension.")
     };
 
     let mut compiler = shaderc::Compiler::new().unwrap();
     let mut options = shaderc::CompileOptions::new().unwrap();
-    options.add_macro_definition("EP", Some("main"));
+    options.add_macro_definition("EP", Some(MAIN_ENTRY_POINT));
     options.set_target_env(
-        shaderc::TargetEnv::Vulkan,
-        shaderc::EnvVersion::Vulkan1_2 as u32,
+        TargetEnv::Vulkan,
+        EnvVersion::Vulkan1_2 as u32,
     );
     options.set_generate_debug_info();
     options.set_include_callback(|include_request, _include_type, _source, _size| {
         let include_path = Path::new(path).parent().unwrap();
         let mut include_path = include_path.join(include_request);
-
-        // Look in the include folder if file not found
         if !Path::new(&include_path).exists() {
             include_path = Path::new("assets/shaders").join(include_request);
         }
 
-        // println!(
-        //     "include_request: {}, include_type: {:?}, source: {}, size: {}",
-        //     include_path.to_str().unwrap(),
-        //     _include_type,
-        //     _source,
-        //     _size
-        // );
 
         let include_source =
             &fs::read_to_string(include_path)
@@ -177,21 +163,20 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
     });
 
     let binary_result =
-        compiler.compile_into_spirv(source, shader_kind, path, "main", Some(&options))?;
+        compiler.compile_into_spirv(source, shader_kind, path, MAIN_ENTRY_POINT, Some(&options))?;
 
-    assert_eq!(Some(&0x07230203), binary_result.as_binary().first());
+    assert_eq!(Some(&119734787), binary_result.as_binary().first());
 
     let text_result = compiler
-        .compile_into_spirv_assembly(source, shader_kind, path, "main", Some(&options))
+        .compile_into_spirv_assembly(source, shader_kind, path, MAIN_ENTRY_POINT, Some(&options))
         .unwrap();
 
     assert!(text_result.as_text().starts_with("; SPIR-V\n"));
 
-    //println!("{}", text_result.as_text());
-
     Ok(binary_result)
 }
-
+/// TODO Owner MUST clean this up
+#[must_use]
 pub fn create_layouts_from_reflection(
     device: &ash::Device,
     reflection: &Reflection,
@@ -225,9 +210,6 @@ pub fn create_layouts_from_reflection(
                             rspirv_reflect::DescriptorType::STORAGE_BUFFER => {
                                 vk::DescriptorType::STORAGE_BUFFER
                             }
-                            rspirv_reflect::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
-                                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR
-                            }
                             _ => panic!("Unsupported descriptor type"),
                         };
 
@@ -255,14 +237,12 @@ pub fn create_layouts_from_reflection(
         })
         .collect();
 
-    // The bindless descriptor set is hardcoded to be 0
     if let Some(bindless_layout) = bindless_descriptor_set_layout {
         descriptor_sets_layouts[0] = bindless_layout;
     }
 
     let mut push_constant_ranges: Vec<vk::PushConstantRange> = vec![];
 
-    // Note: Only supports a single push constant shared between all shader stages
     if !reflection.push_constant_reflections.is_empty() {
         push_constant_ranges.push(
             vk::PushConstantRange::builder()
@@ -285,23 +265,23 @@ pub fn create_layouts_from_reflection(
     let pipeline_layout = unsafe {
         device
             .create_pipeline_layout(&pipeline_layout_create_info, None)
-            .expect("Error creating pipeline layout")
+            .expect("Error creating pipeline layout on device.")
     };
-
     (
         pipeline_layout,
         descriptor_sets_layouts,
         push_constant_ranges,
     )
 }
-
+// TODO the receiver who takes ownersgip of this must clean this up vulkan side
+#[must_use]
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {
-    let shader_code = read_spv(&mut spv_file).expect("Failed to read shader spv file");
+    let shader_code = read_spv(&mut spv_file).expect("Failed to read shader SPIR-V shader mod.");
     let shader_info = vk::ShaderModuleCreateInfo::builder().code(&shader_code);
 
     unsafe {
         device
             .create_shader_module(&shader_info, None)
-            .expect("Error creating shader module")
+            .expect("Error creating shader module on device.")
     }
 }

@@ -5,20 +5,21 @@ use std::sync::Arc;
 use ash::vk::{self};
 
 use crate::renderer::Renderer;
-use crate::{Texture, vulkan};
-use crate::vulkan::renderer::{VulkanRenderer, DESCRIPTOR_SET_INDEX_VIEW, DESCRIPTOR_SET_INDEX_BINDLESS, DESCRIPTOR_SET_INDEX_INPUT_TEXTURES};
-use crate::vulkan::{Buffer, Image, RenderPass, DescriptorSet, Pipeline, PipelineDesc, Device, PipelineDescBuilder, ImageDesc, PipelineType};
+use crate::vulkan::renderer::{
+    VulkanRenderer, DESCRIPTOR_SET_INDEX_BINDLESS, DESCRIPTOR_SET_INDEX_INPUT_TEXTURES,
+    DESCRIPTOR_SET_INDEX_VIEW,
+};
+use crate::vulkan::{
+    Buffer, DescriptorSet, Device, Image, ImageDesc, Pipeline, PipelineDesc, PipelineDescBuilder,
+    PipelineType, RenderPass,
+};
+use crate::{vulkan, Texture};
 
-
-/// Virtual resource handles.
-///
-/// Plain indexes into the graph's resource arrays.
 pub type TextureId = usize;
 pub type BufferId = usize;
 pub type PipelineId = usize;
 pub type TlasId = usize;
 
-/// Texture owned by the graph.
 pub struct GraphTexture {
     pub texture: Texture,
     pub prev_access: vk_sync::AccessType,
@@ -81,13 +82,13 @@ pub struct TextureCopy {
     pub dst: TextureId,
     pub copy_desc: vk::ImageCopy,
 }
-pub struct Graph {
+pub struct RenderGraph {
     pub passes: Vec<Vec<RenderPass>>,
     pub resources: GraphResources,
     pub descriptor_set_camera: Vec<DescriptorSet>,
     pub pipeline_descs: Vec<PipelineDesc>,
     pub current_frame: usize,
-    pub device: Arc<Device>
+    pub device: Arc<Device>,
 }
 // TODO REMOVE THIS CONSTANT
 pub const MAX_UNIFORMS_SIZE: usize = 2048;
@@ -99,21 +100,23 @@ pub struct UniformData {
     pub size: u64,
 }
 
-pub struct PassBuilder {
+pub struct RenderPassBuilder {
     pub name: String,
     pub pipeline_handle: PipelineId,
     pub reads: Vec<Resource>,
     pub writes: Vec<Attachment>,
-    pub render_func:
-        Option<Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>>,
+    pub render_func: Option<
+        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
+    >,
     pub depth_attachment: Option<DepthAttachment>,
     pub presentation_pass: bool,
     pub uniforms: HashMap<String, (String, UniformData)>,
     pub copy_command: Option<TextureCopy>,
     pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
+    pub device: Arc<Device>,
 }
 
-impl PassBuilder {
+impl RenderPassBuilder {
     pub fn read(mut self, resource_id: TextureId) -> Self {
         self.reads.push(Resource::Texture(TextureResource {
             texture: resource_id,
@@ -175,25 +178,21 @@ impl PassBuilder {
         self
     }
 
-
-    /// Allows for adding extra buffer barriers for resources that the other APIs don't cover.
-    pub fn extra_barriers(mut self, buffers: &[(BufferId, vk_sync::AccessType)]) -> Self {
-        self.extra_barriers = Some(buffers.to_vec());
-        self
-    }
-
-    /// Records custom rendering commands to the command buffer.
     pub fn record_render(
         mut self,
         render_func: impl Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)
             + 'static,
     ) -> Self {
-        self.render_func.replace(Box::new(render_func));
+        drop(self.render_func.replace(Box::new(render_func)));
         self
     }
 
-    /// Convenience function for dispatching compute shaders.
-    pub fn dispatch(mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) -> Self {
+    pub fn dispatch_compute(
+        mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    ) -> Self {
         self.render_func
             .replace(Box::new(move |device, command_buffer, _, _, _| unsafe {
                 device.device().cmd_dispatch(
@@ -206,8 +205,6 @@ impl PassBuilder {
         self
     }
 
-
-    /// Creates a copy commmand that executes after the `Pass::render_func` has finished.
     pub fn copy_image(mut self, src: TextureId, dst: TextureId, copy_desc: vk::ImageCopy) -> Self {
         self.copy_command.replace(TextureCopy {
             src,
@@ -217,33 +214,28 @@ impl PassBuilder {
         self
     }
 
-    /// Specify this pass to use the current frames `VulkanBase::present_images` as color attachment
     pub fn presentation_pass(mut self, is_presentation_pass: bool) -> Self {
         self.presentation_pass = is_presentation_pass;
         self
     }
-
-    /// Use image as depth attachment.
     pub fn depth_attachment(mut self, depth_attachment: TextureId) -> Self {
         self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
             texture: depth_attachment,
             view: ViewType::Full(),
-            load_op: vk::AttachmentLoadOp::CLEAR, // Todo
+            load_op: vk::AttachmentLoadOp::CLEAR,
         }));
         self
     }
 
-    /// Use a specific layer of an image as depth attachment.
     pub fn depth_attachment_layer(mut self, depth_attachment: TextureId, layer: u32) -> Self {
         self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
             texture: depth_attachment,
             view: ViewType::Layer(layer),
-            load_op: vk::AttachmentLoadOp::CLEAR, // Todo
+            load_op: vk::AttachmentLoadOp::CLEAR,
         }));
         self
     }
 
-    /// Use an external depth attachment that is not owned by the graph.
     pub fn external_depth_attachment(
         mut self,
         depth_attachment: Image,
@@ -253,10 +245,7 @@ impl PassBuilder {
         self
     }
 
-    /// Constant uniform data that is passed to the shader.
     pub fn uniforms<T: Copy + std::fmt::Debug>(mut self, name: &str, data: &T) -> Self {
-
-        // Note: Todo: this can be improved
         unsafe {
             let ptr = data as *const _ as *const MaybeUninit<u8>;
             let size = std::mem::size_of::<T>();
@@ -264,7 +253,6 @@ impl PassBuilder {
 
             assert!(data_u8.len() < MAX_UNIFORMS_SIZE);
 
-            // Pass name + uniform name
             let unique_name = self.name.clone() + "_" + name;
 
             if let Some(entry) = self.uniforms.get_mut(&unique_name) {
@@ -283,22 +271,17 @@ impl PassBuilder {
         self
     }
 
-    /// Creates a new pass and adds it to the graph.
-    ///
-    /// Also updates the color attachment formats of the pipeline since
-    /// they at this stage are known.
-    /// Note: allocates and create the constant uniform buffer if not cached.
-    pub fn build(self, device: &Device, graph: &mut Graph) {
-
+    pub fn build(self, graph: &mut RenderGraph) {
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
             self.presentation_pass,
             self.depth_attachment,
-            self.uniforms.clone(), // Note: is this clone OK?
+            self.uniforms.clone(),
             self.render_func,
             self.copy_command,
             self.extra_barriers,
+            self.device.clone(),
         );
 
         for read in &self.reads {
@@ -309,7 +292,6 @@ impl PassBuilder {
             pass.writes.push(*write);
         }
 
-        // Update attachment formats now that all writes are known
         graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
             .writes
             .iter()
@@ -351,7 +333,6 @@ impl PassBuilder {
                         graph.current_frame
                     )
                     .as_str(),
-                    device,
                     self.uniforms.values().next().unwrap().1.size,
                     vk::BufferUsageFlags::UNIFORM_BUFFER,
                     gpu_allocator::MemoryLocation::CpuToGpu,
@@ -384,43 +365,40 @@ impl GraphResources {
         &self.pipelines[id]
     }
 }
-impl Drop for Graph {
+impl Drop for RenderGraph {
     fn drop(&mut self) {
-        self.resources.buffers.iter().for_each(|b| {
-            unsafe {
-                self.device.ash_device.destroy_buffer(b.buffer.buffer, None);
-            }
+        self.descriptor_set_camera
+            .iter()
+            .for_each(|ds| ds.clean_vk_resources());
+        self.resources.buffers.iter().for_each(|b| unsafe {
+            self.device.ash_device.destroy_buffer(b.buffer.buffer, None);
         });
-        self.resources.pipelines.iter().for_each(|b| {
-            unsafe {
-                self.device.ash_device.destroy_pipeline_layout(b.pipeline_layout, None);
-            }
+        self.resources.pipelines.iter().for_each(|b| unsafe {
+            self.device
+                .ash_device
+                .destroy_pipeline_layout(b.pipeline_layout, None);
         });
         self.resources.textures.iter().for_each(|b| {
-            unsafe {
-                self.device.ash_device.destroy_image_view(b.texture.image.image_view, None);
-                self.device.ash_device.destroy_image(b.texture.image.image, None);
-
-            }
+            b.texture.clean_vk_resources();
         });
     }
 }
-impl Graph {
+impl RenderGraph {
     pub fn new(
         device: Arc<Device>,
         camera_uniform_buffer: &Vec<Buffer>,
         num_frames_in_flight: u32,
     ) -> Self {
-        Graph {
+        RenderGraph {
             passes: (0..num_frames_in_flight).map(|_| vec![]).collect(),
             resources: GraphResources::new(),
             descriptor_set_camera: (*camera_uniform_buffer)
                 .iter()
-                .map(|buffer| Self::create_camera_descriptor_set(&device, buffer))
+                .map(|buffer| Self::create_camera_descriptor_set(device.clone(), buffer))
                 .collect(),
             pipeline_descs: vec![],
             current_frame: 0,
-            device: device.clone()
+            device: device,
         }
     }
 
@@ -428,20 +406,19 @@ impl Graph {
         self.current_frame = current_frame;
     }
 
-    pub fn clear(&mut self, device: &Device) {
-
+    pub fn clear(&mut self) {
         for pass in &self.passes[self.current_frame] {
-            if let Some(descriptor_set) = &pass.uniforms_descriptor_set {
+            if let Some(descriptor_set) = &pass.uniform_descriptor_set {
                 unsafe {
-                    device
-                        .device()
+                    self.device
+                        .ash_device
                         .destroy_descriptor_pool(descriptor_set.pool, None)
                 };
             }
             if let Some(descriptor_set) = &pass.read_resources_descriptor_set {
                 unsafe {
-                    device
-                        .device()
+                    self.device
+                        .ash_device
                         .destroy_descriptor_pool(descriptor_set.pool, None)
                 };
             }
@@ -451,7 +428,7 @@ impl Graph {
     }
 
     pub fn create_camera_descriptor_set(
-        device: &Device,
+        device: Arc<Device>,
         camera_uniform_buffer: &Buffer,
     ) -> DescriptorSet {
         let descriptor_set_layout_binding = vk::DescriptorSetLayoutBinding::builder()
@@ -487,19 +464,15 @@ impl Graph {
         );
 
         let descriptor_set_camera =
-            DescriptorSet::new(device, descriptor_set_layout, binding_map);
+            DescriptorSet::new(device.clone(), descriptor_set_layout, binding_map);
 
-        descriptor_set_camera.write_uniform_buffer(
-            device,
-            "view".to_string(),
-            camera_uniform_buffer,
-        );
+        descriptor_set_camera.write_uniform_buffer("view".to_string(), camera_uniform_buffer);
 
         descriptor_set_camera
     }
 
-    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> PassBuilder {
-        PassBuilder {
+    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> RenderPassBuilder {
+        RenderPassBuilder {
             name,
             pipeline_handle,
             reads: vec![],
@@ -510,6 +483,7 @@ impl Graph {
             uniforms: HashMap::new(),
             copy_command: None,
             extra_barriers: None,
+            device: self.device.clone(),
         }
     }
 
@@ -517,9 +491,8 @@ impl Graph {
         &mut self,
         name: &str,
         desc_builder: PipelineDescBuilder,
-    ) -> PassBuilder {
+    ) -> RenderPassBuilder {
         let pipeline_handle = self.create_pipeline(desc_builder.build());
-
         self.add_pass(name.to_string(), pipeline_handle)
     }
 
@@ -530,10 +503,9 @@ impl Graph {
     pub fn create_texture(
         &mut self,
         debug_name: &str,
-        device: &Device,
+        device: Arc<Device>,
         image_desc: ImageDesc,
     ) -> TextureId {
-
         // Todo: Cannot rely on debug_name being unique
         // Todo: shall use a Hash to include extent and format of the texture
         self.resources
@@ -559,20 +531,25 @@ impl Graph {
     pub fn create_buffer(
         &mut self,
         debug_name: &str,
-        device: &Device,
         size: u64,
         usage: vk::BufferUsageFlags,
         memory_location: gpu_allocator::MemoryLocation,
     ) -> BufferId {
-
         self.resources
             .buffers
             .iter()
             .position(|iter| iter.buffer.debug_name == debug_name)
             .unwrap_or_else(|| {
-                let mut buffer = Buffer::new::<u8>(device, None, size, usage, memory_location,Some(String::from(debug_name)));
+                let mut buffer = Buffer::new::<u8>(
+                    self.device.clone(),
+                    None,
+                    size,
+                    usage,
+                    memory_location,
+                    Some(String::from(debug_name)),
+                );
 
-                buffer.set_debug_name(device, debug_name);
+                buffer.set_debug_name(debug_name);
 
                 self.resources.buffers.push(GraphBuffer {
                     buffer,
@@ -584,8 +561,6 @@ impl Graph {
     }
 
     /// Creates a pipeline and returns its handle.
-    ///
-    /// The pipeline creation is deferred until the `graph::prepare` function is called.
     pub fn create_pipeline(&mut self, pipeline_desc: PipelineDesc) -> PipelineId {
         if let Some(existing_pipeline_id) = self
             .pipeline_descs
@@ -600,7 +575,6 @@ impl Graph {
     }
 
     pub fn prepare(&mut self, renderer: &VulkanRenderer) {
-        
         let device = renderer.device();
         // Todo: shall be possible to create the pipelines using multiple threads
         for (i, desc) in self.pipeline_descs.iter().enumerate() {
@@ -614,30 +588,26 @@ impl Graph {
         }
         for pass in &mut self.passes[self.current_frame] {
             pass.try_create_read_resources_descriptor_set(
-                device,
                 &self.resources.pipelines,
                 &self.resources.textures,
                 &self.resources.buffers,
-                vk::AccelerationStructureKHR::null()
-
+                vk::AccelerationStructureKHR::null(),
             );
             pass.try_create_uniform_buffer_descriptor_set(
-                device,
                 &self.resources.pipelines,
                 &self.resources.buffers,
             );
 
-            pass.update_uniform_buffer_memory(device, &mut self.resources.buffers);
+            pass.update_uniform_buffer_memory(&mut self.resources.buffers);
         }
     }
 
     pub fn recompile_all_shaders(
         &mut self,
-        device: &Device,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) {
         for pipeline in &mut self.resources.pipelines {
-            pipeline.recreate_pipeline(device, bindless_descriptor_set_layout);
+            pipeline.recreate_pipeline(&self.device, bindless_descriptor_set_layout);
         }
     }
 
@@ -652,8 +622,6 @@ impl Graph {
             if desc.compute_path.map_or(false, |p| path.ends_with(p))
                 || desc.vertex_path.map_or(false, |p| path.ends_with(p))
                 || desc.fragment_path.map_or(false, |p| path.ends_with(p))
-                || desc.miss_path.map_or(false, |p| path.ends_with(p))
-                || desc.hit_path.map_or(false, |p| path.ends_with(p))
             {
                 pipeline.recreate_pipeline(device, bindless_descriptor_set_layout);
             }
@@ -664,22 +632,12 @@ impl Graph {
         &mut self,
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
-        present_image: &[Image], // Todo: pass single value
+        present_image: &Image,
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
-
             let pass_pipeline = &self.resources.pipelines[pass.pipeline_handle];
-
-            // Transition pass resources
-            // Todo: probably can combine reads and writes to one vector
             for read in &pass.reads {
-                // Todo: also add buffer barriers
-                // https://themaister.net/blog/2019/08/14/yet-another-blog-explaining-vulkan-synchronization/:
-                // "This is not very interesting, we’re just restricting memory availability and visibility to a specific buffer.
-                // No GPU I know of actually cares, I think it makes more sense to just use VkMemoryBarrier rather than
-                // bothering with buffer barriers.
-
                 match read {
                     Resource::Texture(read) => {
                         let next_access = vulkan::image_pipeline_barrier(
@@ -711,29 +669,29 @@ impl Graph {
                             .get_mut(read.buffer)
                             .unwrap()
                             .prev_access = next_access;
-                    
                     }
                 }
             }
 
-            if let Some(extra_barriers) = &pass.extra_barriers {
-                for (buffer_id, access_type) in extra_barriers {
-                    let next_access = vulkan::global_pipeline_barrier(
-                        device,
-                        *command_buffer,
-                        self.resources.buffers[*buffer_id].prev_access,
-                        *access_type,
-                    );
-
-                    // Update the buffer's previous access type with the next access type
-                    if let Some(buffer) = self.resources.buffers.get_mut(*buffer_id) {
-                        buffer.prev_access = next_access;
+            match &pass.extra_barriers {
+                Some(extra_barriers) => {
+                    for (buffer_id, access_type) in extra_barriers {
+                        let next_access = vulkan::global_pipeline_barrier(
+                            device,
+                            *command_buffer,
+                            self.resources.buffers[*buffer_id].prev_access,
+                            *access_type,
+                        );
+                        if let Some(buffer) = self.resources.buffers.get_mut(*buffer_id) {
+                            buffer.prev_access = next_access;
+                        }
                     }
                 }
+                None => {},
             }
 
             let mut writes_for_synch = pass.writes.clone();
-            // If the depth attachment is owned by the graph make sure it gets a barrier as well
+
             if pass.depth_attachment.is_some() {
                 if let DepthAttachment::GraphHandle(depth_attachment) =
                     pass.depth_attachment.as_ref().unwrap()
@@ -773,7 +731,7 @@ impl Graph {
                 vulkan::image_pipeline_barrier(
                     device,
                     *command_buffer,
-                    &present_image[0],
+                    present_image,
                     vk_sync::AccessType::Present,
                     vk_sync::AccessType::ColorAttachmentWrite,
                     false,
@@ -791,8 +749,6 @@ impl Graph {
                     )
                 })
                 .collect();
-
-            // Todo: very ugly just to get the extents...
             let extent = if !pass.writes.is_empty() {
                 vk::Extent2D {
                     width: self.resources.textures[pass.writes[0].texture]
@@ -828,29 +784,26 @@ impl Graph {
                 }
             };
 
-            assert_eq!(present_image.len(), 1);
             let present_image = [(
-                present_image[0].clone(),
+                present_image.clone(),
                 ViewType::Full(),
                 vk::AttachmentLoadOp::CLEAR,
             )];
 
             pass.prepare_render(
-                device,
                 command_buffer,
                 if !pass.presentation_pass {
                     write_attachments.as_slice()
                 } else {
                     &present_image
                 },
-                // Todo: ugly just to get the different types of depth attachments
                 if pass.depth_attachment.is_some() {
                     match pass.depth_attachment.as_ref().unwrap() {
                         DepthAttachment::GraphHandle(depth_attachment) => Some((
                             self.resources.textures[depth_attachment.texture]
                                 .texture
-                                .image.clone()
-                                ,
+                                .image
+                                .clone(),
                             depth_attachment.view,
                             depth_attachment.load_op,
                         )),
@@ -865,16 +818,12 @@ impl Graph {
                     extent
                 } else {
                     vk::Extent2D {
-                        width: present_image[0].0.width(),   // Todo
-                        height: present_image[0].0.height(), // Todo
+                        width: present_image[0].0.width(),
+                        height: present_image[0].0.height(),
                     }
                 },
                 &self.resources.pipelines,
             );
-
-            // Bind descriptor sets that are used by all passes.
-            // This includes bindless resources, view data, input textures
-            // and uniform buffers from each pass with constants.
             unsafe {
                 let bind_point = match pass_pipeline.pipeline_type {
                     PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,
@@ -910,7 +859,7 @@ impl Graph {
                     )
                 }
 
-                if let Some(uniforms_descriptor_set) = &pass.uniforms_descriptor_set {
+                if let Some(uniforms_descriptor_set) = &pass.uniform_descriptor_set {
                     device.device().cmd_bind_descriptor_sets(
                         *command_buffer,
                         bind_point,
@@ -934,12 +883,9 @@ impl Graph {
             }
 
             if let Some(copy_command) = &pass.copy_command {
-
                 let src = copy_command.src;
                 let dst = copy_command.dst;
 
-                // Image barriers
-                // (a bit verbose, but ok for now)
                 let next_access = vulkan::image_pipeline_barrier(
                     device,
                     *command_buffer,
@@ -963,7 +909,6 @@ impl Graph {
                 let src = &self.resources.textures[src].texture.image;
                 let dst = &self.resources.textures[dst].texture.image;
 
-                // Use aspect flags from images
                 let mut copy_desc = copy_command.copy_desc;
                 copy_desc.src_subresource.aspect_mask = src.desc.aspect_flags;
                 copy_desc.dst_subresource.aspect_mask = dst.desc.aspect_flags;
@@ -979,8 +924,6 @@ impl Graph {
                     )
                 };
             }
-
         }
-
     }
 }

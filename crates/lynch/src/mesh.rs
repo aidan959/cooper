@@ -1,4 +1,6 @@
 
+use std::sync::Arc;
+
 use ash::vk;
 use glam::{Vec2, Vec3, Vec4, Mat4};
 use memoffset::offset_of;
@@ -15,8 +17,6 @@ pub enum MaterialType {
     DiffuseLight = 3,
 }
 
-// Note: indexes into the Model specific texture array,
-// not bindless indexes.
 pub struct Material {
     pub diffuse_map: u32,
     pub normal_map: u32,
@@ -25,10 +25,8 @@ pub struct Material {
     pub base_color_factor: Vec4,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-
-    // Ray tracing properties
-    pub material_type: MaterialType, // 0 = lambertian, 1 = metal, 2 = dielectric, 3 = diffuse light
-    pub material_property: f32,      // metal = fuzz, dielectric = index of refraction
+    pub material_type: MaterialType, 
+    pub material_property: f32,
 }
 
 pub struct Mesh {
@@ -44,7 +42,7 @@ pub struct Model {
 }
 
 pub fn load_node(
-    device: &Device,
+    device: Arc<Device>,
     node: &gltf::Node,
     model: &mut Model,
     buffers: &[gltf::buffer::Data],
@@ -55,7 +53,7 @@ pub fn load_node(
         parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
 
     for child in node.children() {
-        load_node(device, &child, model, buffers, node_transform, path);
+        load_node(device.clone(), &child, model, buffers, node_transform, path);
     }
 
     if let Some(mesh) = node.mesh() {
@@ -129,7 +127,7 @@ pub fn load_node(
             let roughness_factor = pbr.roughness_factor();
 
             model.meshes.push(Mesh {
-                primitive: Primitive::new(device, indices, vertices),
+                primitive: Primitive::new(device.clone(), indices, vertices),
                 material: Material {
                     diffuse_map: diffuse_index,
                     normal_map: normal_index,
@@ -150,21 +148,21 @@ pub fn load_node(
                 .unwrap()
                 .primitive
                 .vertex_buffer
-                .set_debug_name(device, format!("vertex_buffer: {}", path).as_str());
+                .set_debug_name(format!("vertex_buffer: {}", path).as_str());
             model
                 .meshes
                 .last_mut()
                 .unwrap()
                 .primitive
                 .index_buffer
-                .set_debug_name(device, format!("index_buffer: {}", path).as_str());
+                .set_debug_name(format!("index_buffer: {}", path).as_str());
 
             model.transforms.push(node_transform);
         }
     }
 }
 
-pub fn load_gltf(device: &Device, path: &str) -> Model {
+pub fn load_gltf(device: Arc<Device>, path: &str) -> Model {
     let (gltf, buffers, mut images) = match gltf::import(path) {
         Ok(result) => result,
         Err(err) => panic!("Loading model {} failed with error: {}", path, err),
@@ -198,7 +196,7 @@ pub fn load_gltf(device: &Device, path: &str) -> Model {
         }
 
         let texture = Texture::create(
-            device,
+            device.clone(),
             Some(&image.pixels),
             ImageDesc::new_2d(image.width, image.height, vk::Format::R8G8B8A8_UNORM),
             path,
@@ -209,7 +207,7 @@ pub fn load_gltf(device: &Device, path: &str) -> Model {
 
     for scene in gltf.scenes() {
         for node in scene.nodes() {
-            load_node(device, &node, &mut model, &buffers, Mat4::IDENTITY, path);
+            load_node(device.clone(), &node, &mut model, &buffers, Mat4::IDENTITY, path);
         }
     }
 
@@ -233,9 +231,9 @@ pub struct Primitive {
 }
 
 impl Primitive {
-    pub fn new(device: &Device, indices: Vec<u32>, vertices: Vec<Vertex>) -> Primitive {
+    pub fn new(device: Arc<Device>, indices: Vec<u32>, vertices: Vec<Vertex>) -> Primitive {
         let index_buffer = Buffer::new(
-            device,
+            device.clone(),
             Some(indices.as_slice()),
             std::mem::size_of_val(&*indices) as u64,
             vk::BufferUsageFlags::INDEX_BUFFER

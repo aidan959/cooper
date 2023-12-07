@@ -1,4 +1,3 @@
-mod math;
 mod constants;
 mod camera;
 pub mod mesh;
@@ -6,7 +5,7 @@ mod texture;
 pub mod window;
 pub mod vulkan;
 pub mod renderer;
-pub mod graph;
+pub mod render_graph;
 pub mod gltf_loader;
 pub mod render_tools;
 pub use texture::Texture;

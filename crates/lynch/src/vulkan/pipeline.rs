@@ -14,8 +14,6 @@ pub struct PipelineDesc {
     pub vertex_path: Option<&'static str>,
     pub fragment_path: Option<&'static str>,
     pub compute_path: Option<&'static str>,
-    pub miss_path: Option<&'static str>,
-    pub hit_path: Option<&'static str>,
     pub vertex_input_binding_descriptions: Vec<vk::VertexInputBindingDescription>,
     pub vertex_input_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
     pub color_attachment_formats: Vec<vk::Format>,
@@ -41,16 +39,6 @@ pub enum PipelineType {
     Compute,
 }
 
-#[allow(dead_code)]
-pub struct RayTracingSbt {
-    raygen_sbt_buffer: Buffer,
-    miss_sbt_buffer: Buffer,
-    hit_sbt_buffer: Buffer,
-    pub raygen_sbt: vk::StridedDeviceAddressRegionKHR,
-    pub miss_sbt: vk::StridedDeviceAddressRegionKHR,
-    pub hit_sbt: vk::StridedDeviceAddressRegionKHR,
-    pub callable_sbt: vk::StridedDeviceAddressRegionKHR,
-}
 
 impl Default for PipelineDescBuilder {
     fn default() -> Self {
@@ -72,8 +60,6 @@ impl PartialEq for PipelineDesc {
         self.vertex_path == other.vertex_path
             && self.fragment_path == other.fragment_path
             && self.compute_path == other.compute_path
-            && self.miss_path == other.miss_path
-            && self.hit_path == other.hit_path
     }
 }
 
@@ -110,7 +96,6 @@ impl Pipeline {
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> bool {
         // Todo: DESTROY OLD PIPELINE_RESOURCES
-
         if Self::create_pipeline(self, device, bindless_descriptor_set_layout).is_ok() {
             info!("Successfully recreated pipeline.");
             return true;
@@ -286,7 +271,7 @@ impl Pipeline {
                     | vk::ColorComponentFlags::B
                     | vk::ColorComponentFlags::A,
             };
-            color_attachment_formats.len() // Note: Todo: the attachments will in the future need different blend attachment states
+            color_attachment_formats.len()
         ];
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
@@ -407,8 +392,6 @@ impl PipelineDescBuilder {
                 vertex_path: None,
                 fragment_path: None,
                 compute_path: None,
-                miss_path: None,
-                hit_path: None,
                 vertex_input_binding_descriptions: Vec::new(),
                 vertex_input_attribute_descriptions: Vec::new(),
                 color_attachment_formats: Vec::new(),
@@ -429,16 +412,6 @@ impl PipelineDescBuilder {
 
     pub fn compute_path(mut self, path: &'static str) -> Self {
         self.desc.compute_path = Some(path);
-        self
-    }
-    
-    pub fn miss_path(mut self, path: &'static str) -> Self {
-        self.desc.miss_path = Some(path);
-        self
-    }
-
-    pub fn hit_path(mut self, path: &'static str) -> Self {
-        self.desc.hit_path = Some(path);
         self
     }
 

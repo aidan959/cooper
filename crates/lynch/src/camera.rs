@@ -11,7 +11,6 @@ pub struct Camera {
     z_far: f32,
     speed: f32,
 }
-
 impl Camera {
     pub fn new(
         pos: Vec3,
@@ -41,11 +40,8 @@ impl Camera {
     }
 
     pub fn get_lookat_rotation(pos: Vec3, target: Vec3) -> Quat {
-        // Rotation calculation from
-        // https://github.com/h3r2tic/dolly/blob/main/src/drivers/look_at.rs
-
         (target - pos)
-            .try_normalize()
+            .try_normalize() // can return none
             .and_then(|forward| {
                 let right = forward.cross(Vec3::Y).try_normalize()?;
                 let up = right.cross(forward);
@@ -54,7 +50,7 @@ impl Camera {
             .unwrap_or_default()
     }
 
-    pub fn update(&mut self, input: &Input) -> bool {
+    pub fn update(&mut self, input: &Input, delta: f32) -> bool {
         let transform = self.camera_rig.final_transform;
 
         let mut movement = Vec3::new(0.0, 0.0, 0.0);
@@ -80,7 +76,7 @@ impl Camera {
                 .rotate_yaw_pitch(-0.3 * input.mouse_delta.x, -0.3 * input.mouse_delta.y);
             view_changed = true;
         }
-        self.camera_rig.update(1.0); 
+        self.camera_rig.update(delta); 
         movement != Vec3::new(0.0, 0.0, 0.0) || view_changed
     }
 

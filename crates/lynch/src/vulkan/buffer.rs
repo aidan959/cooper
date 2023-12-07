@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ash::vk;
 use gpu_allocator::vulkan::*;
 use log::info;
@@ -9,19 +11,18 @@ pub struct Buffer {
     pub memory_location: gpu_allocator::MemoryLocation,
     pub size: u64,
     pub debug_name: String,
+    device: Arc<Device>
 }
 
 impl Buffer {
     pub fn create_buffer(
-        device: &Device,
+        device: Arc<Device>,
         // TODO: infer
         size: u64,  
         usage_flags: vk::BufferUsageFlags,
         memory_location: gpu_allocator::MemoryLocation,
         debug_name : Option<String>
     ) -> Buffer {
-        
-
         unsafe {
             let buffer_info = vk::BufferCreateInfo::builder()
                 .size(size)
@@ -59,12 +60,13 @@ impl Buffer {
                 memory_location,
                 size,
                 debug_name: debug_name.unwrap_or_else(||{String::from("un_buffer")}),
+                device
             }
         }
     }
 
     pub fn new<T: Copy>(
-        device: &Device,
+        device: Arc<Device>,
         initial_data: Option<&[T]>,
         size: u64,
         usage_flags: vk::BufferUsageFlags,
@@ -72,7 +74,7 @@ impl Buffer {
         debug_name: Option<String>
     ) -> Buffer {
         let mut buffer = Buffer::create_buffer(
-            device,
+            device.clone(),
             size,
             usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
             location,
@@ -80,14 +82,14 @@ impl Buffer {
         );
 
         if let Some(initial_data) = initial_data {
-            buffer.update_memory(device, initial_data);
+            buffer.update_memory(initial_data);
         }
-        let debug_name = match debug_name.as_deref(){ Some(value)=>value, None=>{"un_buffer"}};
-        buffer.set_debug_name(device, &debug_name);
-
+        let debug_name = match debug_name.as_deref(){ Some(value)=>value, None=>{"unnamed_buffer"}};
+        buffer.set_debug_name( &debug_name);
         buffer
     }
-    pub fn update_memory<T: Copy>(&mut self, device: &Device, data: &[T]) {
+    /// WARN THIS IS EXPENSIVE DO NOT USE EVERY FRAME
+    pub fn update_memory<T: Copy>(&mut self,  data: &[T]) {
         unsafe {
             let src = data.as_ptr() as *const u8;
             let src_bytes = data.len() * std::mem::size_of::<T>();
@@ -98,9 +100,8 @@ impl Buffer {
                 std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
             } else {
                 info!("Creating staging buffer {}", format!("staging_buffer_{:?}", src));
-                // WARN THIS IS EXPENSIVE DO NOT USE EVERY FRAME
                 let staging_buffer = Buffer::create_buffer(
-                    device,
+                    self.device.clone(),
                     self.size,
                     vk::BufferUsageFlags::TRANSFER_SRC,
                     gpu_allocator::MemoryLocation::CpuToGpu,
@@ -110,14 +111,14 @@ impl Buffer {
                 let dst_bytes = staging_buffer.allocation.size() as usize;
                 std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
 
-                device.execute_and_submit(|device, cb| {
+                self.device.execute_and_submit(|cb| {
                     let regions = vk::BufferCopy::builder()
                         .size(self.size)
                         .dst_offset(0)
                         .src_offset(0)
                         .build();
 
-                    device.ash_device.cmd_copy_buffer(
+                    self.device.ash_device.cmd_copy_buffer(
                         cb,
                         staging_buffer.buffer,
                         self.buffer,
@@ -125,17 +126,17 @@ impl Buffer {
                     );
                 });
 
-                device
+                self.device
                     .gpu_allocator
                     .lock()
                     .unwrap()
                     .free(staging_buffer.allocation)
                     .unwrap();
-                device.ash_device.destroy_buffer(staging_buffer.buffer, None);
+                self.device.ash_device.destroy_buffer(staging_buffer.buffer, None);
             }
         }
     }
-    pub fn copy_to_buffer(&self, device: &Device, cb: vk::CommandBuffer, dst: &Buffer) {
+    pub fn copy_to_buffer(&self, cb: vk::CommandBuffer, dst: &Buffer) {
         let buffer_copy_regions = vk::BufferCopy::builder()
             .size(self.size)
             .src_offset(0)
@@ -143,13 +144,13 @@ impl Buffer {
             .build();
 
         unsafe {
-            device
+            self.device
                 .ash_device
                 .cmd_copy_buffer(cb, self.buffer, dst.buffer, &[buffer_copy_regions]);
         }
     }
 
-    pub fn copy_to_image(&self, device: &Device, mut cb: vk::CommandBuffer, image: &Image) {
+    pub fn copy_to_image(&self, cb: vk::CommandBuffer, image: &Image) {
         let buffer_copy_regions = vk::BufferImageCopy::builder()
             .image_subresource(
                 vk::ImageSubresourceLayers::builder()
@@ -164,7 +165,7 @@ impl Buffer {
             });
 
         unsafe {
-            device.ash_device.cmd_copy_buffer_to_image(
+            self.device.ash_device.cmd_copy_buffer_to_image(
                 cb,
                 self.buffer,
                 image.image,
@@ -182,12 +183,17 @@ impl Buffer {
         unsafe { device.ash_device.get_buffer_device_address(&info) }
     }
 
-    pub fn set_debug_name(&mut self, device: &Device, name: &str) {
+    pub fn set_debug_name(&mut self, name: &str) {
         self.debug_name = String::from(name);
-        device.set_debug_name(
+        self.device.set_debug_name(
             vk::Handle::as_raw(self.buffer),
             vk::ObjectType::BUFFER,
             name,
         );
+    }
+    pub fn clean_vk_resources(&self) {
+        unsafe {
+            self.device.ash_device.destroy_buffer(self.buffer, None)
+        }
     }
 }

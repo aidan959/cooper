@@ -1,11 +1,9 @@
-use ash::extensions::khr;
 use ash::extensions::khr::Surface;
 use ash::extensions::khr::Swapchain;
 use ash::vk;
 use ash::vk::Buffer;
 use gpu_allocator::vulkan::*;
 use gpu_allocator::AllocatorDebugSettings;
-use winapi::um::cfgmgr32::BUSNUMBER_DES;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -44,9 +42,11 @@ impl Device {
                 instance
                     .enumerate_physical_devices()
                     .expect("ahhh! No graphics card! Ahh! How!?");
-
-            // Note: assume single physical device
-            let physical_device = physical_devices.into_iter().find(|device|{Self::is_device_suitable(instance, surface_loader, surface, *device)}).expect("no suitable device found");
+            let physical_device = physical_devices.into_iter().find(
+                |device|
+                {
+                    Self::is_device_suitable(instance, surface_loader, surface, *device)
+                }).expect("no suitable device found");
 
             let queue_family_properties =
                 instance.get_physical_device_queue_family_properties(physical_device);
@@ -58,8 +58,7 @@ impl Device {
             surface_loader
                 .get_physical_device_surface_support(physical_device, queue_family_index, surface).unwrap();
 
-            //println!("Supported extensions:");
-            let supported_extension_names: Vec<_> = instance
+            /*let supported_extension_names: Vec<_> = instance
                 .enumerate_device_extension_properties(physical_device)
                 .unwrap()
                 .iter()
@@ -68,10 +67,9 @@ impl Device {
                         .to_string_lossy()
                         .as_ref()
                         .to_owned();
-                    //println!("{:?}", name);
                     name
                 })
-                .collect();
+                .collect();*/
 
             let device_extension_names_raw = vec![
                 Swapchain::name().as_ptr(),
@@ -93,14 +91,11 @@ impl Device {
             let mut dynamic_rendering_features =
                 vk::PhysicalDeviceDynamicRenderingFeatures::default();
 
-            let mut features2_builder = vk::PhysicalDeviceFeatures2::builder()
+            let mut features2 = vk::PhysicalDeviceFeatures2::builder()
                 .push_next(&mut descriptor_indexing_features)
                 .push_next(&mut buffer_device_address_features)
                 .push_next(&mut scalar_block_layout_features)
-                .push_next(&mut dynamic_rendering_features);
-
-
-            let mut features2 = features2_builder.build();
+                .push_next(&mut dynamic_rendering_features).build();
 
             instance.get_physical_device_features2(physical_device, &mut features2);
 
@@ -126,10 +121,7 @@ impl Device {
             let (cmd_pool, setup_cmd_buf) =
                 Device::create_setup_command_buffer(&device, queue_family_index);
 
-            // println!("{:#?}", rt_pipeline_properties);
-            // println!("{:#?}", as_features);
-
-            let mut gpu_allocator = Allocator::new(&AllocatorCreateDesc {
+            let gpu_allocator = Allocator::new(&AllocatorCreateDesc {
                 instance: instance.clone(),
                 device: device.clone(),
                 physical_device,
@@ -144,7 +136,7 @@ impl Device {
             })
             .expect("Failed to create GPU allocator");
 
-            let properties = instance.get_physical_device_properties(physical_device);
+            let _properties = instance.get_physical_device_properties(physical_device);
             
             Device {
                 ash_device: device,
@@ -262,7 +254,7 @@ impl Device {
         (pool, command_buffers[0])
     }
 
-    pub fn execute_and_submit<F: FnOnce(&Device, vk::CommandBuffer)>(&self, recording_function: F) {
+    pub fn execute_and_submit<F: FnOnce(vk::CommandBuffer)>(&self, recording_function: F) {
         let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
         unsafe {
@@ -271,7 +263,7 @@ impl Device {
                 .expect("Begin command buffer failed.")
         };
 
-        recording_function(self, self.setup_cmd_buf);
+        recording_function(self.setup_cmd_buf);
 
         unsafe {
             self.ash_device

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ash::vk;
 
 use crate::vulkan::Buffer;
@@ -5,13 +7,21 @@ use crate::vulkan::Device;
 use crate::vulkan::{Image, ImageDesc};
 
 pub struct Texture {
+    pub device: Arc<Device>,
     pub image: Image,
     pub sampler: vk::Sampler,
     pub descriptor_info: vk::DescriptorImageInfo,
 }
 
 impl Texture {
-    pub fn load(device: &Device, path: &str) -> Texture {
+    pub fn clean_vk_resources(&self) {
+        self.image.clean_vk_resources();
+
+        unsafe {
+            self.device.ash_device.destroy_sampler(self.sampler,None);
+        }
+    }
+    pub fn load(device: Arc<Device>, path: &str) -> Texture {
         let image = match image::open(path) {
             Ok(image) => image,
             Err(_err) => panic!("Unable to load \"{}\"", path),
@@ -28,24 +38,24 @@ impl Texture {
             path,
         );
 
-        texture.image.set_debug_name(device, path);
+        texture.image.set_debug_name(path);
 
         texture
     }
 
     pub fn create(
-        device: &Device,
+        device: Arc<Device>,
         pixels: Option<&[u8]>,
         image_desc: ImageDesc,
         debug_name: &str,
     ) -> Texture {
-        let mut image = Image::new_from_desc(device, image_desc);
-
-        image.set_debug_name(device, debug_name);
+        let mut image = Image::new_from_desc(device.clone(), image_desc);
+        
+        image.set_debug_name(debug_name);
         let mut buffer_to_destroy:Vec<Buffer> = vec![];
-        device.execute_and_submit(|device, cb| {
+        device.execute_and_submit(|cb| {
             crate::vulkan::image_pipeline_barrier(
-                device,
+                &device,
                 cb,
                 &image,
                 vk_sync::AccessType::General,
@@ -55,7 +65,7 @@ impl Texture {
 
             if let Some(pixels) = pixels {
                 let staging_buffer = Buffer::new(
-                    device,
+                    device.clone(),
                     Some(pixels),
                     std::mem::size_of_val(pixels) as u64,
                     vk::BufferUsageFlags::TRANSFER_SRC,
@@ -63,20 +73,20 @@ impl Texture {
                     Some(String::from("staging_buffer"))
                 );
                 
-                staging_buffer.copy_to_image(device, cb, &image);
+                staging_buffer.copy_to_image(cb, &image);
                 buffer_to_destroy.push(staging_buffer);
             }
 
             if Image::is_depth_image_fmt(image.desc.format) {
                 image.transition_layout(
-                    device,
+                    &device,
                     cb,
                     vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 );
             }
             else {
                 crate::vulkan::image_pipeline_barrier(
-                    device,
+                    &device,
                     cb,
                     &image,
                     vk_sync::AccessType::TransferWrite,
@@ -118,6 +128,7 @@ impl Texture {
             unsafe{device.ash_device.destroy_buffer(buffer_to_destroy.buffer, None) }
         }
         Texture {
+            device,
             image,
             sampler,
             descriptor_info,

@@ -1,11 +1,10 @@
 use ash::vk;
 use glam::{Mat4, Vec3};
 
-use crate::{vulkan::{Device, renderer::VulkanRenderer, PipelineDesc}, graph::{Graph, TextureId}};
+use crate::{vulkan::{renderer::VulkanRenderer, PipelineDesc}, render_graph::{RenderGraph, TextureId}};
 
 pub fn setup_atmosphere_pass(
-    device: &Device,
-    graph: &mut Graph,
+    graph: &mut RenderGraph,
     base: &VulkanRenderer,
     atmosphere_output: TextureId,
     environment_map: TextureId,
@@ -64,5 +63,5 @@ pub fn setup_atmosphere_pass(
                 }
             },
         )
-        .build(device, graph);
+        .build(graph);
 }

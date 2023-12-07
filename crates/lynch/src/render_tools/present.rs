@@ -1,9 +1,8 @@
-use crate::{vulkan::{Device, PipelineDesc}, graph::{Graph, TextureId}};
+use crate::{vulkan::{Device, PipelineDesc}, render_graph::{RenderGraph, TextureId}};
 
 
 pub fn setup_present_pass(
-    device: &Device,
-    graph: &mut Graph,
+    graph: &mut RenderGraph,
     color_output: TextureId,
 ) {
 
@@ -27,5 +26,5 @@ pub fn setup_present_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(device, graph);
+        .build(graph);
 }

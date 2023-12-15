@@ -273,7 +273,7 @@ pub fn create_layouts_from_reflection(
         push_constant_ranges,
     )
 }
-
+// TODO the receiver who takes ownersgip of this must clean this up vulkan side
 #[must_use]
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {
     let shader_code = read_spv(&mut spv_file).expect("Failed to read shader SPIR-V shader mod.");

@@ -8,15 +8,12 @@ use std::{
     ffi::{CStr, CString},
 };
 
-
-
 #[cfg(debug_assertions)]
 pub const ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
-pub const ENABLE_VALIDATION_LAYERS: bool = false;
+pub const ENABLE_VALIDATION_LAYERS: bool = true;
 
 pub const REQUIRED_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
-
 
 pub unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -25,6 +22,7 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
     if !ENABLE_VALIDATION_LAYERS {
+        
         return vk::FALSE
     }
     let callback_data = *p_callback_data;
@@ -78,10 +76,8 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     vk::FALSE
 }
 
-
-
 /// Get the pointers to the validation layers names.
-/// Also return the corresponding `CString` to avoid dangling pointers. <- nasty bug ;()
+/// Also return the corresponding `CString` to avoid dangling pointers.
 pub fn  get_lay_names_pointers()-> (Vec<CString>,Vec<*const i8>){
     let layer_names = REQUIRED_LAYERS
         .iter()
@@ -95,11 +91,7 @@ pub fn  get_lay_names_pointers()-> (Vec<CString>,Vec<*const i8>){
     (layer_names, layer_names_ptrs)
 }
 
-/// Check if we have necessary validation support.
-/// !Validation layers need to be disabled when running "release"
-/// 
-/// ! Panics
-/// Panic if at any of the layers are not supported.
+/// Checks for necessary validaiton support
 pub fn check_validation_layer_support(entry: &Entry) {
     for required in REQUIRED_LAYERS.iter() {
         let found = entry

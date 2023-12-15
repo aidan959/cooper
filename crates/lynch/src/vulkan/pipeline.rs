@@ -1,13 +1,13 @@
 use ash::vk;
 use log::info;
+use vulkan::shader::{create_layouts_from_reflection, create_shader_module};
 use std::ffi::CStr;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
-use vulkan::shader::{create_layouts_from_reflection, create_shader_module};
 
 use crate::*;
 
-use super::Device;
+use super::{Buffer, Device};
 
 #[derive(Clone)]
 pub struct PipelineDesc {
@@ -28,7 +28,7 @@ pub struct Pipeline {
     pub handle: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub reflection: vulkan::shader::ShaderReflect,
+    pub reflection: vulkan::shader::Reflection,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
 }
@@ -38,6 +38,7 @@ pub enum PipelineType {
     Graphics,
     Compute,
 }
+
 
 impl Default for PipelineDescBuilder {
     fn default() -> Self {
@@ -68,6 +69,7 @@ impl Pipeline {
         pipeline_desc: PipelineDesc,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> Pipeline {
+
         let pipeline_type = match &pipeline_desc.compute_path {
             Some(_) => PipelineType::Compute,
             None => PipelineType::Graphics,
@@ -77,7 +79,7 @@ impl Pipeline {
             handle: vk::Pipeline::null(),
             pipeline_layout: vk::PipelineLayout::null(),
             descriptor_set_layouts: vec![],
-            reflection: vulkan::shader::ShaderReflect::default(),
+            reflection: vulkan::shader::Reflection::default(),
             pipeline_desc,
             pipeline_type,
         };
@@ -156,7 +158,7 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::ShaderReflect,
+            vulkan::shader::Reflection,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
@@ -168,10 +170,13 @@ impl Pipeline {
         let vertex_spv_file = vertex_spv_file.as_binary_u8();
         let fragment_spv_file = fragment_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::ShaderReflect::new(&[vertex_spv_file, fragment_spv_file]);
+        let reflection = vulkan::shader::Reflection::new(&[vertex_spv_file, fragment_spv_file]);
 
-        let (pipeline_layout, descriptor_set_layouts, _) =
-            create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);
+        let (pipeline_layout, descriptor_set_layouts, _) = create_layouts_from_reflection(
+            device,
+            &reflection,
+            bindless_descriptor_set_layout,
+        );
 
         let vertex_spv_file = Cursor::new(vertex_spv_file);
         let fragment_spv_file = Cursor::new(fragment_spv_file);
@@ -316,7 +321,7 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::ShaderReflect,
+            vulkan::shader::Reflection,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
@@ -325,10 +330,13 @@ impl Pipeline {
         let compute_spv_file = vulkan::shader::compile_glsl_shader(compute_shader_path)?;
         let compute_spv_file = compute_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::ShaderReflect::new(&[compute_spv_file]);
+        let reflection = vulkan::shader::Reflection::new(&[compute_spv_file]);
 
-        let (pipeline_layout, descriptor_set_layouts, _) =
-            create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);
+        let (pipeline_layout, descriptor_set_layouts, _) = create_layouts_from_reflection(
+            device,
+            &reflection,
+            bindless_descriptor_set_layout,
+        );
 
         let compute_spv_file = Cursor::new(compute_spv_file);
 
@@ -368,6 +376,7 @@ impl Pipeline {
 
         compute_pipelines[0]
     }
+
 }
 
 impl PipelineDesc {

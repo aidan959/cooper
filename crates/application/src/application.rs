@@ -1,286 +1,195 @@
-
-enum GameEvent {
-    InputEvent,
-    UpdateEvent,
-    RenderEvent
-}
-
-pub struct EventHandler {
-    input_subscribers: Vec<Box<dyn Fn(&GameEvent) -> ()>>,
-    update_subscribers: Vec<Box<dyn Fn(&GameEvent) -> ()>>, 
-    render_subscribers: Vec<Box<dyn Fn() -> ()>>,
-}
-
-
-impl EventHandler {
-    fn new() -> Self {
-        EventHandler {
-            input_subscribers: Vec::new(),
-            update_subscribers: Vec::new(),
-            render_subscribers: Vec::new(),
-            // ...
-        }
-    }
-
-    fn subscribe_input_event(&mut self, callback: Box<dyn Fn(&GameEvent) -> ()>) {
-        self.input_subscribers.push(callback);
-    }
-
-    fn subscribe_update_event(&mut self, callback: Box<dyn Fn(&GameEvent) -> ()>) {
-        self.update_subscribers.push(callback);
-    }
-
-    fn subscribe_render_event(&mut self, callback: Box<dyn Fn() -> ()>) {
-        self.render_subscribers.push(callback);
-    }
-
-    fn dispatch_input_event(&self, event: &GameEvent) {
-        &self.input_subscribers
-            .iter()
-            .for_each(|subscriber: &Box<dyn Fn(&GameEvent)>| { subscriber(&event)});
-    }
-
-    fn dispatch_update_event(&self, event: &GameEvent) {
-        &self.update_subscribers
-            .iter()
-            .for_each(|subscriber: &Box<dyn Fn(&GameEvent)>| { subscriber(&event)});
-    }
-
-    fn dispatch_render_event(&self, _event: &GameEvent) {
-        &self.render_subscribers
-            .iter()
-            .for_each(|subscriber: &Box<dyn Fn()>| { subscriber()});
-    }
-}
-use lynch::{window::window::Window, renderer::Renderer};
-use lynch::{Camera};
-
-use lynch::vulkan::renderer::VulkanRenderer;
-use ash::vk;
+use frost::Input;
+use lynch::render_graph::RenderGraph;
+use lynch::{window::window::Window, renderer::Renderer, vulkan::renderer::VulkanRenderer, Camera};
 use glam::{Vec3, Mat4};
 use winit::
     event::{Event, WindowEvent}
 ;
 use winit::event_loop::EventLoop;
-const WIDTH : f64= 1280.;
-const HEIGHT : f64 = 720.;
-pub struct CooperApplication {
+use log::{debug, info};
+use std::sync::mpsc::{self, Sender};
+use std::time::{Instant, Duration};
+
+use crate::{EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_UPDATE_RATE, DEFAULT_MAX_FPS};
+use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
+
+pub struct CooperApplication
+{
     window: Window,
     pub renderer: VulkanRenderer,
-    event_handler: EventHandler,
-    graph: Graph,
-    view_data: lynch::ViewUniformData,
-    camera_uniform_buffer: Vec<Buffer>,
+    graph: RenderGraph,
     pub camera: Camera,
-    event_loop: EventLoop<()>
+    event_loop: EventLoop<()>,
+    engine_settings: EngineSettings
 }
-impl CooperApplication {
-    pub fn create() -> CooperApplication {
+const WIDTH : f64= 1280.;
+const HEIGHT : f64 = 720.;
+pub enum GameEvent {
+    Input,
+    MoveEvent(usize, Mat4),
+    Spawn(String),
+    NextFrame
+}
+
+impl CooperApplication
+{
+    pub fn create() -> Self {
         let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
-        
-        let renderer = VulkanRenderer::create(&window);
-
-
+        let fov_degrees = 90.0;
         let camera = Camera::new(
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(6.0, 6.0, 6.0),
-            60.0,
+            Vec3::default(),
+            Vec3::default(),
+            fov_degrees,
             WIDTH / HEIGHT,
             0.01,
             1000.0,
             0.20,
         );
-        let view_data = lynch::ViewUniformData::new(&camera, WIDTH, HEIGHT);
-
-        let camera_uniform_buffer = (0..renderer.image_count)
-            .map(|_| { 
-                view_data.create_camera_buffer(&renderer.vk_context)
-            })
-            .collect::<Vec<_>>();
-
-        let graph = lynch::graph::Graph::new(renderer.vk_context.arc_device(), &camera_uniform_buffer, renderer.image_count);
-        let event_handler = EventHandler::new();
+        let renderer = VulkanRenderer::create(&window, &camera);
+        let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count);
+        let engine_settings = EngineSettingsBuilder::new()
+                                .fps_cap(Some(DEFAULT_MAX_FPS))
+                                .update_rate_hz(DEFAULT_UPDATE_RATE)
+                                .build();
         CooperApplication {
             window,
             renderer,
-            event_handler,
             graph,
-            view_data,
-            camera_uniform_buffer,
             camera,
-            event_loop
+            event_loop,
+            engine_settings
         }
     }
-    pub fn run(mut self: Self) -> (){
-        //let mut cursor_position = None;
-        let _frame_count = 0;
+    
+    pub fn run<E, F, G, H>(mut self: Self, mut start: E, mut update: F, mut fixed_update: G, mut finally: H)
+    where
+        E: FnMut( &Sender<GameEvent>),
+        F: FnMut( &Sender<GameEvent>, f32),
+        G: FnMut( &Sender<GameEvent>, f32),
+        H: FnMut( &Sender<GameEvent>),
+    {
+        let mut frame_count = 0;
+        let mut last_fps_time = Instant::now();
+        let fps_update_interval = Duration::new(1, 0); // 1 second
         self.create_scene();
         let mut input : Input = Input::default(); 
         let _events : Vec<WindowEvent> = Vec::new();
-        let mut spawned = false;
-        self.graph.recompile_all_shaders(self.renderer.device(), Some(self.renderer.internal_renderer.bindless_descriptor_set_layout));
-        self.event_loop.run( move
+        let (event_trasmitter,event_receiver) = mpsc::channel();
+        start(&event_trasmitter.clone());
+        let update_transmitter = event_trasmitter.clone();
+        let fixed_update_transmitter = event_trasmitter.clone();
+        let finally_transmitter = event_trasmitter.clone();
+
+        //let cube_hash_map : HashMap<str, usize>  = HashMap::default();  
+        let mut last_fixed_update = Instant::now();
+        let mut lag = 0.0;
+
+        self.event_loop.run( 
             |event, _elwt|{
                 match event{
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
+                            let delta = self.renderer.render(&mut self.graph, &self.camera);
+                            let current_time = Instant::now();
+                            let elapsed = current_time.duration_since(last_fixed_update);
+                            last_fixed_update = current_time;
+                            lag += elapsed.as_secs_f32();
+                            // user update call
+                            update( &update_transmitter, delta);
+                            // submit input data to camera
+                            self.camera.update(&input,delta);
                             
-                            let present_index = self.renderer.begin_frame();
-                            self.camera.update(&input);
+                            // call fixed_update fixed_update_rate times per second
+                            while lag >= self.engine_settings.fixed_update_rate.as_secs_f32() {
+                                // user fixed update call
+                                fixed_update(&fixed_update_transmitter, self.engine_settings.fixed_update_rate.as_secs_f32());
+                                lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
+                            }
 
-                            self.view_data.view = self.camera.get_view();
-                            self.view_data.projection = self.camera.get_projection();
-                            self.view_data.inverse_view = self.camera.get_view().inverse();
-                            self.view_data.inverse_projection = self.camera.get_projection().inverse();
-                            self.view_data.eye_pos = self.camera.get_position();
-                            
-                            CooperApplication::record_commands(
-                                &self.renderer,
-                                self.renderer.sync_frames[self.renderer.current_frame].command_buffer,
-                                self.renderer.sync_frames[self.renderer.current_frame].command_buffer_reuse_fence,
-                                |command_buffer| {
-                                    self.camera_uniform_buffer[self.renderer.current_frame]
-                                        .update_memory(&self.renderer.device(), std::slice::from_ref(&self.view_data));
-                
-                                    self.graph.new_frame(self.renderer.current_frame);
-                                    self.graph.clear(self.renderer.device());
-                
-            
-                                    lynch::render_tools::build_render_graph(
-                                        &mut self.graph,
-                                        &self.renderer.device(),
-                                        &self.renderer,
-                                        &self.view_data,
-                                        &self.camera,
-                                    );
+                            input.reset_mouse();
+                            // last user definable call
+                            finally(&finally_transmitter);
+                            loop{
+                                let event = event_receiver.recv();
+                                match event {
+                                    Ok(event) => {
+                                        match event {
+                                            GameEvent::Input=>{
+                                                // TODO DO SOMETHING
+                                            },
+                                            GameEvent::MoveEvent(instance, matrix)=>{
+                                                // TODO DO SOMETHING
+                                                self.renderer.internal_renderer.instances[instance].transform = matrix;
+                                            },
+                                            GameEvent::Spawn(_path) =>{
+                                                // TODO handle spawn event
+                                            }
+                                            GameEvent::NextFrame=>{
+                                                // MARK FRAME COMPLETE
+                                                break
+                                            },
+                                        }
+                                    },
+                                    Err(_err) => {},
+                                }
+                            }
 
-                                    self.graph.prepare(&self.renderer);
-                                    let image = self.renderer.present_images[present_index].clone();
-                                    self.graph.render(
-                                        &command_buffer,
-                                        &self.renderer,
-                                        &[image]
-                                    );
-            
-                                    
-                                },
-                            );
-                            self.renderer.submit_commands(self.graph.current_frame);
-                            self.renderer.present_images[present_index].current_layout = vk::ImageLayout::PRESENT_SRC_KHR; 
-                            self.renderer.present_frame(present_index, self.graph.current_frame);
-                            self.renderer.current_frame = (self.renderer.current_frame + 1 ) % self.renderer.num_frames_in_flight as usize;
-                            self.renderer.internal_renderer.need_environment_map_update = false;
-                            self.graph.current_frame = self.renderer.current_frame;
-
+                            frame_count += 1;
+                            // print frame per second (every second!)
+                            if last_fps_time.elapsed() >= fps_update_interval {
+                                println!("FPS: {}", frame_count);
+                                frame_count = 0;
+                                last_fps_time = Instant::now();
+                            }
+                            // apply fps limit //TODO explore why this is limiting the fps to HALF the rate (? how)
+                            if self.engine_settings.fps_settings.limit {
+                                let elapsed = last_fixed_update.elapsed();
+                                if elapsed < self.engine_settings.fps_settings.frame_time {
+                                    std::thread::sleep(self.engine_settings.fps_settings.frame_time - elapsed);
+                                }
+                            }  
                         },
                         WindowEvent::CloseRequested => {
-                            self.graph.clear(self.renderer.device());
-                                
+                            self.graph.clear();
                             _elwt.exit();
                         },
                         WindowEvent::Resized(resize_value) => {
                             self.renderer.resize(resize_value);
-                            //resize_dimensions = Some([width as u32, height as u32]);
-                        }
+                        },
                         WindowEvent::MouseInput {..} | WindowEvent::CursorMoved {..}| WindowEvent::KeyboardInput {..}| WindowEvent::MouseWheel {..} => {
                             input.update(&event);
-                        }
-                        _ => {
-                            
+                        },
+                        _ => { 
                         }
                     },
-                    Event::LoopExiting => self.renderer.wait_gpu_idle(),
-
-                                    
-                    _ => {self.window.window.request_redraw();}
-                    
+                    Event::LoopExiting => 
+                        info!("Main program loop exiting."),
+                    Event::AboutToWait => {
+                        self.window.window.request_redraw();
+                    },
+                    _ => {}
                 }                
             }
         ).unwrap()
     }
-    fn record_commands<F: FnOnce(ash::vk::CommandBuffer)>(
-        renderer: &VulkanRenderer,
-        command_buffer:  ash::vk::CommandBuffer,
-        wait_fence:  ash::vk::Fence,
-        render_commands: F,
-    ) {
-        let device = renderer.device();
-        unsafe {
-            {
-                device
-                    .device()
-                    .wait_for_fences(&[wait_fence], true, std::u64::MAX)
-                    .expect("Wait for fence failed.");
-                
-                device
-                    .device()
-                    .reset_fences(&[wait_fence])
-                    .expect("Reset fences failed.");
-            }
 
-            device
-                .device()
-                .reset_command_buffer(
-                    command_buffer,
-                    ash::vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                )
-                .expect("Reset command buffer failed.");
-
-            let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo::builder()
-                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-            device
-                .device()
-                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-                .expect("Begin command buffer failed.");
-
-            render_commands(command_buffer);
-
-            device
-                .device()
-                .end_command_buffer(command_buffer)
-                .expect("End commandbuffer failed.");
-        }
-    }
     fn create_scene(&mut self) {
         self.renderer.initialize();
-
         self.build_scene();
     }
     fn build_scene(&mut self ) {
-        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/cube.gltf");
-        sphere.meshes[0].material.material_type =
-            mesh_loader::MaterialType::Dielectric;
-        let translation_matrix = Mat4::from_scale_rotation_translation(
-                glam::Vec3::new(1., 1., 1.),
-                glam::Quat::IDENTITY ,
-                glam::Vec3::new(6., 6., 6.));
+        
+        let sphere = self.renderer.load_model("models/cube.gltf");
+        let translation = Mat4::default();
         self.renderer.add_model(
             sphere,
-            translation_matrix
+            translation
         );
-        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
-        sphere.meshes[0].material.material_type =
-            mesh_loader::MaterialType::Dielectric;
-        let translation_matrix = Mat4::from_scale_rotation_translation(
-                glam::Vec3::new(1., 1., 1.),
-                glam::Quat::IDENTITY ,
-                glam::Vec3::new(7., 6.5, 6.));
+        let sphere = self.renderer.load_model("models/sphere.gltf");
+        let translation = Mat4::default();
         self.renderer.add_model(
             sphere,
-            translation_matrix
+            translation
         );
-        let mut sphere = lynch::mesh_loader::load_gltf(self.renderer.device(), "models/sphere.gltf");
-        sphere.meshes[0].material.material_type =
-            mesh_loader::MaterialType::Dielectric;
-        let translation_matrix = Mat4::from_scale_rotation_translation(
-                glam::Vec3::new(1., 10., 1.),
-                glam::Quat::IDENTITY ,
-                glam::Vec3::new(6.5, 15., 6.));
-        self.renderer.add_model(
-            sphere,
-            translation_matrix
-        );
-
     }
 }

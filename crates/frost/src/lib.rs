@@ -19,3 +19,19 @@ pub struct EntityLocation {
     archetype_index: EntityId,
     index_in_archetype: EntityId,
 }
+
+
+impl EntityLocation {
+    fn null() -> Self {
+        Self {
+            archetype_index: 0,
+            index_in_archetype: 0,
+        }
+    }
+    fn new(archetype_index: EntityId, index_in_archetype: EntityId) -> Self {
+        Self {
+            archetype_index,
+            index_in_archetype,
+        }
+    }
+}

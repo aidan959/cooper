@@ -35,3 +35,18 @@ impl EntityLocation {
         }
     }
 }
+
+impl EntityMeta {
+    fn null() -> Self {
+        EntityMeta {
+            generation: 0,
+            location: EntityLocation::null(),
+        }
+    }
+    fn archetype_index(self) -> EntityId {
+        self.location.archetype_index
+    }
+    fn index_in_archetype(self) -> EntityId {
+        self.location.index_in_archetype
+    }
+}

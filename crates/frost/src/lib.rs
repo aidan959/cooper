@@ -65,3 +65,49 @@ impl EntityMeta {
         self.location.index_in_archetype
     }
 }
+
+pub trait ComponentPack: 'static + Send + Sync {
+    fn new_archetype(&self) -> Archetype;
+    fn spawn(self, world: &mut World, entity_index: EntityId) -> EntityLocation;
+}
+
+impl<A: 'static + Send + Sync> ComponentPack for (A,) {
+    fn new_archetype(&self) -> Archetype {
+        let mut components = vec![ComponentStore::new::<A>()];
+        components.sort_unstable_by(|a, b| a.type_id.cmp(&b.type_id));
+        Archetype {
+            components,
+            entities: Vec::new(),
+        }
+    }
+    fn spawn(self, world: &mut World, entity_index: EntityId) -> EntityLocation {
+        let mut types = [(0, TypeId::of::<A>())];
+        types.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+        debug_assert!(
+            types.windows(2).all(|x| x[0].1 != x[1].1),
+            "`ComponentPack`s cannot contain duplicate components."
+        );
+        let mut order = [0; 1];
+        (0..order.len()).for_each(|i| {
+            order[types[i].0] = i;
+        });
+        let types = [types[0].1];
+        let bundle_id = calculate_pack_id(&types);
+        let archetype_index = if let Some(archetype) = world.pack_id_to_archetype.get(&bundle_id) {
+            *archetype
+        } else {
+            let index = world.archetypes.len();
+            world.pack_id_to_archetype.insert(bundle_id, index);
+            world.archetypes.push(self.new_archetype());
+            index
+        };
+        world.archetypes[archetype_index]
+            .entities
+            .push(entity_index);
+        world.archetypes[archetype_index].push(order[0], self.0);
+        EntityLocation {
+            archetype_index: archetype_index as EntityId,
+            index_in_archetype: (world.archetypes[archetype_index].len() - 1) as EntityId,
+        }
+    }
+}

@@ -7,7 +7,43 @@ pub use input::Input;
 pub(crate) type EntityId = u32;
 pub(crate) type Generation = EntityId;
 pub(crate) type PackId = u64;
+pub struct World {
+    pub(crate) entities: Vec<EntityMeta>,
+    available_entities: Vec<EntityId>,
+    pack_id_to_archetype: HashMap<PackId, usize>,
+    archetypes: Vec<Archetype>,
+}
 
+impl World {
+    pub fn new() -> Self {
+        Self {
+            archetypes: Vec::new(),
+            entities: Vec::new(),
+            pack_id_to_archetype: HashMap::new(),
+            available_entities: Vec::new(),
+        }
+    }
+    pub fn new_entity(&mut self, components: impl ComponentPack) -> Result<Entity, WorldFull> {
+        let (index, generation) = if let Some(index) = self.available_entities.pop() {
+            let (generation, _) = self.entities[index as usize].generation.overflowing_add(1);
+            (index, generation)
+        } else {
+            self.entities.push(EntityMeta::null());
+
+            match self.entities.len() >= EntityId::MAX as usize {
+                true => return Err(WorldFull::new()),
+                false => (),
+            }
+            ((self.entities.len() - 1) as EntityId, 0)
+        };
+
+        self.entities[index as usize] = EntityMeta {
+            location: components.spawn(self, index),
+            generation: generation,
+        };
+        Ok(Entity { index, generation })
+    }
+}
 #[derive(Clone, Copy)]
 pub(crate) struct EntityMeta {
     pub(crate) generation: Generation,

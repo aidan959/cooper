@@ -43,6 +43,14 @@ impl World {
         };
         Ok(Entity { index, generation })
     }
+    #[inline]
+    pub fn retrieve_single<T: 'static>(&self) -> Result<Single<T>, RetrieveError> {
+        <&T>::retrieve(self)
+    }
+    #[inline]
+    pub fn retrieve_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, RetrieveError> {
+        <&mut T>::retrieve(self)
+    }
 }
 #[derive(Clone, Copy)]
 pub(crate) struct EntityMeta {

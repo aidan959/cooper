@@ -20,6 +20,21 @@ pub struct EntityLocation {
     index_in_archetype: EntityId,
 }
 
+pub trait Component: Sync + Send + 'static {}
+impl<T: Sync + Send + 'static> Component for T {}
+
+trait ComponentVec: Sync + Send {
+    fn to_any(&self) -> &dyn Any;
+    fn to_any_mut(&mut self) -> &mut dyn Any;
+    fn len(&mut self) -> usize;
+    fn swap_remove(&mut self, index: EntityId);
+    fn migrate(&mut self, entity_index: EntityId, other_archetype: &mut dyn ComponentVec);
+    fn new_same_type(&self) -> Box<dyn ComponentVec + Send + Sync>;
+}
+pub struct Archetype {
+    pub(crate) entities: Vec<EntityId>,
+    pub(crate) components: Vec<Component>,
+}
 
 impl EntityLocation {
     fn null() -> Self {

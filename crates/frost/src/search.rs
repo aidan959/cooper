@@ -40,3 +40,14 @@ pub trait Retrieve<'world> {
     type Item: for<'a> RetrieveItem<'a>;
     fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError>;
 }
+
+pub trait SearchParameter {
+    type SearchParameterRetrieve: for<'a> SearchParameterRetrieve<'a>;
+    fn matches(archetype: &Archetype) -> bool;
+}
+
+
+pub struct Has<T> {
+    pub value: bool,
+    phantom: std::marker::PhantomData<T>,
+}

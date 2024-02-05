@@ -20,3 +20,30 @@ impl std::fmt::Display for WorldFull {
         )
     }
 }
+
+
+#[derive(Debug)]
+pub struct EntityNotFound{missing_id: EntityId}
+impl EntityNotFound {
+    pub fn new_with_value(id: EntityId) -> Self{
+        let mut err = Self::new();
+        err.missing_id = id;
+        err
+    }
+}
+impl FrostError for EntityNotFound {
+    fn new() -> Self {
+        Self{missing_id: 0}
+    }
+}
+impl std::fmt::Display for EntityNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "The entity {} longer exists so the operation cannot be performed",
+            self.missing_id
+        )
+    }
+}
+
+impl std::error::Error for EntityNotFound {}

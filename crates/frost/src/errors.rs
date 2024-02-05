@@ -78,3 +78,25 @@ pub enum RetrieveError {
     ComponentAlreadyBorrowed(ComponentAlreadyBorrowed),
     ComponentDoesNotExist(ComponentDoesNotExist),
 }
+[derive(Debug)]
+pub struct ComponentAlreadyBorrowed(&'static str);
+
+impl ComponentAlreadyBorrowed {
+    pub fn new<T>() -> Self {
+        Self(std::any::type_name::<T>())
+    }
+}
+impl Default for ComponentAlreadyBorrowed{
+    fn default() -> Self {
+        Self("Component")
+    }
+}
+
+impl std::fmt::Display for ComponentAlreadyBorrowed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] is already borrowed from the archetype", self.0)
+    }
+}
+
+impl std::error::Error for ComponentAlreadyBorrowed {}
+

@@ -47,3 +47,34 @@ impl std::fmt::Display for EntityNotFound {
 }
 
 impl std::error::Error for EntityNotFound {}
+
+#[derive(Debug)]
+pub struct ComponentNotInEntity(EntityId, &'static str);
+
+impl ComponentNotInEntity {
+    pub fn new_with_value<T>(entity_id: EntityId) -> Self {
+        Self(entity_id, std::any::type_name::<T>())
+    }
+}
+impl std::fmt::Display for ComponentNotInEntity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Entity {:?} does not have a related [{}] component",
+            self.0, self.1
+        )
+    }
+}
+
+impl std::error::Error for ComponentNotInEntity {}
+#[derive(Debug)]
+pub enum ComponentError {
+    ComponentNotInEntity(ComponentNotInEntity),
+    EntityNotFound(EntityNotFound ),
+}
+
+#[derive(Debug)]
+pub enum RetrieveError {
+    ComponentAlreadyBorrowed(ComponentAlreadyBorrowed),
+    ComponentDoesNotExist(ComponentDoesNotExist),
+}

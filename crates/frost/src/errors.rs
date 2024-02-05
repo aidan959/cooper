@@ -99,4 +99,23 @@ impl std::fmt::Display for ComponentAlreadyBorrowed {
 }
 
 impl std::error::Error for ComponentAlreadyBorrowed {}
+#[derive(Debug)]
+pub struct ComponentDoesNotExist(&'static str);
 
+impl ComponentDoesNotExist {
+    pub fn new<T>() -> Self {
+        Self(std::any::type_name::<T>())
+    }
+}
+impl Default for ComponentDoesNotExist {
+    fn default() -> Self {
+        Self("Component")
+    }
+}
+impl std::fmt::Display for ComponentDoesNotExist {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] does not exist", self.0)
+    }
+}
+
+impl std::error::Error for ComponentDoesNotExist {}

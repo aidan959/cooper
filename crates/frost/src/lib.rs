@@ -155,3 +155,23 @@ impl<A: 'static + Send + Sync> ComponentPack for (A,) {
         }
     }
 }
+
+pub(crate) struct ComponentStore {
+    pub(crate) type_id: TypeId,
+    data: Box<dyn ComponentVec + Send + Sync>,
+}
+
+impl ComponentStore {
+    pub fn new<T: 'static + Send + Sync>() -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            data: Box::new(RwLock::new(Vec::<T>::new())),
+        }
+    }
+    pub fn new_same_type(&self) -> Self {
+        Self {
+            type_id: self.type_id,
+            data: self.data.new_same_type(),
+        }
+    }
+}

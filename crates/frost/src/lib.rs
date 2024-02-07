@@ -175,3 +175,42 @@ impl ComponentStore {
         }
     }
 }
+
+
+impl<T: Component> ComponentVec for RwLock<Vec<T>> {
+    fn to_any(&self) -> &dyn Any {
+        self
+    }
+    fn to_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn len(&mut self) -> usize {
+        self.get_mut().unwrap().len()
+    }
+
+    fn swap_remove(&mut self, index: EntityId) {
+        self.get_mut().unwrap().swap_remove(index as usize);
+    }
+
+    fn migrate(&mut self, entity_index: EntityId, other_component_vec: &mut dyn ComponentVec) {
+        let data: T = self.get_mut().unwrap().swap_remove(entity_index as usize);
+        Result::unwrap(
+            {
+                let this = other_component_vec
+                    .to_any_mut()
+                    .downcast_mut::<RwLock<Vec<T>>>();
+                match this {
+                    Some(val) => val,
+                    None => panic!("called `unwrap on non existing empty value"),
+                }
+            }
+            .get_mut(),
+        )
+        .push(data);
+    }
+
+    fn new_same_type(&self) -> Box<dyn ComponentVec + Send + Sync> {
+        Box::new(RwLock::new(Vec::<T>::new()))
+    }
+}

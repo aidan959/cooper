@@ -21,35 +21,15 @@ impl<T: 'static> SysParam for &mut T {
 }
 
 
-pub struct SearchRetrieve<T> {
-    phantom: std::marker::PhantomData<T>,
+pub trait Retrieve<'world> {
+    type Item: for<'a> RetrieveItem<'a>;
+    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError>;
 }
 
-impl<'world, T: SearchParameters> Retrieve<'world> for SearchRetrieve<T> {
-    type Item = Option<Search<'world, T>>;
-    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError> {
-        Ok(Some(Search {
-            data: T::retrieve(world, 0)?
-        }))
-    }
-}
-macro_rules! Search_impl {
-    ($count: expr, $(($name: ident, $index: tt)),*) => {
-        impl<'a, 'b: 'a, $($name: ComponentSearchTrait<'a, 'b>),*> Search<'a, 'b> for ($($name,)*) {
-            type ITERATOR = SearchIterator<($($name::ITERATOR,)*)>;
-
-            fn iterator(&'b mut self) -> Self::ITERATOR {
-               SearchIterator(($(self.$index.iterator(),)*))
-            }
-        }
-    };
+pub struct Search<'world, T: SearchParameters> {
+    pub(crate) data: <T as SearchParameterRetrieve<'world>>::RetrieveItem,
 }
 
-impl<'a, 'b: 'a, A: ComponentSearchTrait<'a, 'b>> Search<'a, 'b> for (A,) {
-    type ITERATOR = A::ITERATOR;
-    fn iterator(&'b mut self) -> Self::ITERATOR {
-        self.0.iterator()
-    }
 }
 
 impl<'a, 'b: 'a, A: ComponentSearchTrait<'a, 'b>, B: ComponentSearchTrait<'a, 'b>> Search<'a, 'b>

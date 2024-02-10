@@ -4,13 +4,35 @@ use std::iter::Zip;
 use std::slice::{Iter, IterMut};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-
-
-pub trait Search<'a, 'b: 'a> {
-    type ITERATOR: Iterator;
-    fn iterator(&'b mut self) -> Self::ITERATOR;
+pub trait SysParam {
+    type Retrieve: for<'a> Retrieve<'a>;
 }
 
+impl<'a, T: SearchParameters> SysParam for Search<'a, T> {
+    type Retrieve = SearchRetrieve<T>;
+}
+
+impl<T: 'static> SysParam for &T {
+    type Retrieve = Self;
+}
+
+impl<T: 'static> SysParam for &mut T {
+    type Retrieve = Self;
+}
+
+
+pub struct SearchRetrieve<T> {
+    phantom: std::marker::PhantomData<T>,
+}
+
+impl<'world, T: SearchParameters> Retrieve<'world> for SearchRetrieve<T> {
+    type Item = Option<Search<'world, T>>;
+    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError> {
+        Ok(Some(Search {
+            data: T::retrieve(world, 0)?
+        }))
+    }
+}
 macro_rules! Search_impl {
     ($count: expr, $(($name: ident, $index: tt)),*) => {
         impl<'a, 'b: 'a, $($name: ComponentSearchTrait<'a, 'b>),*> Search<'a, 'b> for ($($name,)*) {

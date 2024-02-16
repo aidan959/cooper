@@ -302,6 +302,25 @@ where
     }
 }
 
+macro_rules! search_iter {
+    ($zip_type: ident, $($name: ident),*) => {
+        #[allow(non_snake_case)]
+        impl<'a, 'world, $($name: SearchParameter),*> SearchIter<'a> for Search<'world, ($($name,)*)>
+        where
+            $(SearchParameterItem<'world, $name>: SearchIter<'a>),*
+             {
+            type Iter = ChainedIterator<$zip_type<$(SearchParameterIter<'a, 'world, $name>,)*>>;
+            fn iter(&'a mut self) -> Self::Iter {
+                ChainedIterator::new(
+                    self.data
+                    .iter_mut()
+                    .map(|($(ref mut $name,)*)| $zip_type::new($($name.iter(),)*))
+                    .collect()
+                )
+            }
+        }
+    }
+}
 
 pub trait SearchParameters: for<'a> SearchParameterRetrieve<'a> {}
 
@@ -329,17 +348,18 @@ macro_rules! search_params {
     };
 }
 
+macro_rules! search_paramsr{
+    ($x: ident) => {
+        search_params!{$x}
+    };
 
-search_params!{A}A, B, C
-search_params!{A}A, B, C, D
-search_params!{A}A, B, C, D, E
-search_params!{A}A, B, C, D, E, F
-search_params!{A}A, B, C, D, E, F, G
-search_params!{A}A, B, C, D, E, F, G, H
-search_params!{A}A, B, C, D, E, F, G, H, I
-search_params!{A}A, B, C, D, E, F, G, H, I, J
-search_params!{A}A, B, C, D, E, F, G, H, I, J, K
-search_params!{A}A, B, C, D, E, F, G, H, I, J, K, L
-search_params!{A}A, B, C, D, E, F, G, H, I, J, K, L, M
-search_params!{A}A, B, C, D, E, F, G, H, I, J, K, L, M, N
+    ($x: ident, $($y: ident),*) => {
+        search_params!{$x, $($y),*}
+        search_paramsr!{$($y),*}
+    };
+}
+
+search_paramsr!{A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
+
+search_iter! {Zip3Items, A, B, C}
 

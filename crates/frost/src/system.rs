@@ -2,6 +2,30 @@ use crate::SysParam;
 
 use super::{Retrieve, RetrieveError, RetrieveItem, World};
 
+/**
+Example System usage  
+```
+use frost::*;
+struct A (i32);
+struct B (String);
+struct C (A,B);
+struct D (C);
+let world = World::new();
+
+fn my_system(
+    mut query0: Search<(&A, &B)>,
+    mut query1: Search<(&C, &D)>,
+) {
+    for (a, b) in query0.iter() {
+        println!("A: {}, B: {}", a.0, b.0);
+    }
+    for (c, d) in query1.iter() {
+        println!("C: ({}, {}), D: ({}, {})", c.0.0, c.1.0, d.0.0.0, d.0.1.0);
+    }
+}
+my_system.run(&world, 123.0).unwrap();
+```
+*/
 pub trait System<P> {
     fn run(&mut self, world: &World, delta_time: f32) -> Result<(), RetrieveError>;
     fn run_fixed(&mut self, world: &World, fixed_update: f32) -> Result<(), RetrieveError>;
@@ -28,7 +52,6 @@ impl<P, S> IntoSystem<P> for S where S: System<P> + Sync + Send + 'static + Copy
     }
 }
 
-
 macro_rules! system_def {
     ($($name: ident),*) => {
         impl<FUNC, $($name: SysParam),*> System<($($name,)*)> for FUNC
@@ -46,3 +69,20 @@ macro_rules! system_def {
         }
     };
 }
+
+macro_rules! system_defr {
+    ($x: ident) => {
+        system_def!{$x}
+    };
+
+    ($x: ident, $($y: ident),*) => {
+        system_def!{$x, $($y),*}
+        system_defr!{$($y),*}
+    };
+}
+
+
+system_defr!{
+    A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z
+}
+

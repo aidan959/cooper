@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use super::{device::Device, Image};
 use ash::vk;
 use gpu_allocator::vulkan::*;
 use log::info;
-use super::{device::{Device,}, Image};
 pub struct Buffer {
     pub buffer: vk::Buffer,
     pub allocation: Allocation,
@@ -11,17 +11,17 @@ pub struct Buffer {
     pub memory_location: gpu_allocator::MemoryLocation,
     pub size: u64,
     pub debug_name: String,
-    device: Arc<Device>
+    device: Arc<Device>,
 }
 
 impl Buffer {
     pub fn create_buffer(
         device: Arc<Device>,
         // TODO: infer
-        size: u64,  
+        size: u64,
         usage_flags: vk::BufferUsageFlags,
         memory_location: gpu_allocator::MemoryLocation,
-        debug_name : Option<String>
+        debug_name: Option<String>,
     ) -> Buffer {
         unsafe {
             let buffer_info = vk::BufferCreateInfo::builder()
@@ -59,8 +59,8 @@ impl Buffer {
                 memory_req: buffer_memory_req,
                 memory_location,
                 size,
-                debug_name: debug_name.unwrap_or_else(||{String::from("un_buffer")}),
-                device
+                debug_name: debug_name.unwrap_or_else(|| String::from("un_buffer")),
+                device,
             }
         }
     }
@@ -71,25 +71,28 @@ impl Buffer {
         size: u64,
         usage_flags: vk::BufferUsageFlags,
         location: gpu_allocator::MemoryLocation,
-        debug_name: Option<String>
+        debug_name: Option<String>,
     ) -> Buffer {
         let mut buffer = Buffer::create_buffer(
             device.clone(),
             size,
             usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
             location,
-            debug_name.clone()
+            debug_name.clone(),
         );
 
         if let Some(initial_data) = initial_data {
             buffer.update_memory(initial_data);
         }
-        let debug_name = match debug_name.as_deref(){ Some(value)=>value, None=>{"unnamed_buffer"}};
-        buffer.set_debug_name( &debug_name);
+        let debug_name = match debug_name.as_deref() {
+            Some(value) => value,
+            None => "unnamed_buffer",
+        };
+        buffer.set_debug_name(&debug_name);
         buffer
     }
     /// WARN THIS IS EXPENSIVE DO NOT USE EVERY FRAME
-    pub fn update_memory<T: Copy>(&mut self,  data: &[T]) {
+    pub fn update_memory<T: Copy>(&mut self, data: &[T]) {
         unsafe {
             let src = data.as_ptr() as *const u8;
             let src_bytes = data.len() * std::mem::size_of::<T>();
@@ -99,13 +102,16 @@ impl Buffer {
                 let dst_bytes = self.allocation.size() as usize;
                 std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
             } else {
-                info!("Creating staging buffer {}", format!("staging_buffer_{:?}", src));
+                info!(
+                    "Creating staging buffer {}",
+                    format!("staging_buffer_{:?}", src)
+                );
                 let staging_buffer = Buffer::create_buffer(
                     self.device.clone(),
                     self.size,
                     vk::BufferUsageFlags::TRANSFER_SRC,
                     gpu_allocator::MemoryLocation::CpuToGpu,
-                    Some(String::from(format!("staging_buffer_{:?}", src)))
+                    Some(String::from(format!("staging_buffer_{:?}", src))),
                 );
                 let dst = staging_buffer.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                 let dst_bytes = staging_buffer.allocation.size() as usize;
@@ -132,7 +138,9 @@ impl Buffer {
                     .unwrap()
                     .free(staging_buffer.allocation)
                     .unwrap();
-                self.device.ash_device.destroy_buffer(staging_buffer.buffer, None);
+                self.device
+                    .ash_device
+                    .destroy_buffer(staging_buffer.buffer, None);
             }
         }
     }
@@ -144,9 +152,12 @@ impl Buffer {
             .build();
 
         unsafe {
-            self.device
-                .ash_device
-                .cmd_copy_buffer(cb, self.buffer, dst.buffer, &[buffer_copy_regions]);
+            self.device.ash_device.cmd_copy_buffer(
+                cb,
+                self.buffer,
+                dst.buffer,
+                &[buffer_copy_regions],
+            );
         }
     }
 
@@ -192,8 +203,6 @@ impl Buffer {
         );
     }
     pub fn clean_vk_resources(&self) {
-        unsafe {
-            self.device.ash_device.destroy_buffer(self.buffer, None)
-        }
+        unsafe { self.device.ash_device.destroy_buffer(self.buffer, None) }
     }
 }

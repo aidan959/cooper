@@ -1,4 +1,7 @@
-use crate::{vulkan::PipelineDesc, render_graph::{RenderGraph, TextureId}};
+use crate::{
+    render_graph::{RenderGraph, TextureId},
+    vulkan::PipelineDesc,
+};
 
 pub fn setup_ssao_pass(
     graph: &mut RenderGraph,
@@ -29,5 +32,4 @@ pub fn setup_ssao_pass(
             },
         )
         .build(graph);
-
 }

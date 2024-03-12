@@ -2,14 +2,15 @@ use glam::{Vec3, Quat, Mat3};
 
 use crate::Transform;
 
-struct OBB {
+pub struct OBB {
     pub center: Vec3,
     pub half_extents: Vec3,
     pub orientation: Quat,
 }
-struct CollisionPoint{
-    point: Vec3,
-    normal: Vec3,
+pub struct CollisionPoint{
+    pub point: Vec3,
+    pub normal: Vec3,
+    pub pen_depth: f32,
 }
 fn cross_product_axes(axes1: &[Vec3; 3], axes2: &[Vec3; 3]) -> Vec<Vec3> {
     let mut cross_axes = Vec::new();
@@ -104,6 +105,7 @@ impl OBB {
         let mut collision_point = CollisionPoint{
             point: Vec3::ZERO,
             normal: Vec3::ZERO,
+            pen_depth: 0.0,
         };
         
         let axes :Vec<Vec3> = self.get_collision_axes(obb2);
@@ -122,6 +124,7 @@ impl OBB {
                 min_pen_depth = pen_dept;
                 collision_point.normal = norm;
             }
+            collision_point.pen_depth = min_pen_depth;
         }
 
         let collision_point1 = self.get_support_point(collision_point.normal * -1.);
@@ -189,7 +192,16 @@ impl OBB {
         support_point
     }
 }
+impl Default for OBB {
+    fn default() -> Self {
+        Self {
+            center: Vec3::ZERO,
+            half_extents: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+        }
+    }
 
+}
 #[cfg(test)]
 mod test {
     use glam::{Vec3, Quat};

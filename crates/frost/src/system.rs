@@ -1,62 +1,58 @@
 use crate::SystemParameter;
 
-use super::{Fetch, FetchError, FetchItem, World};
+use super::{Get, GetError, GetItem, World};
 
-/// A function that can be run as system by pulling in queries from the world.
-/// # Example
-/// ```
-/// # use kudo::*;
-/// # struct A {}
-/// # struct B {}
-/// # struct C {}
-/// # struct D {}
-/// # let world = World::new();
-/// fn my_system(
-///     mut query0: Query<(&A, &B)>,
-///     mut query1: Query<(&C, &D)>,
-/// ) {
-///     for (a, b) in query0.iter() {
-///         /* Do stuff */
-///     }
-///     for (c, d) in query1.iter() {
-///         /* Do other stuff */
-///     }
-/// }
-///
-/// my_system.run(&world).unwrap();
-/// ```
+/**
+Example System usage  
+```
+use frost::*;
+struct A (i32);
+struct B (String);
+struct C (A,B);
+struct D (C);
+let world = World::new();
+
+fn my_system(
+    mut query0: Search<(&A, &B)>,
+    mut query1: Search<(&C, &D)>,
+) {
+    for (a, b) in query0.iter() {
+        println!("A: {}, B: {}", a.0, b.0);
+    }
+    for (c, d) in query1.iter() {
+        println!("C: ({}, {}), D: ({}, {})", c.0.0, c.1.0, d.0.0.0, d.0.1.0);
+    }
+}
+my_system.run(&world, 123.0).unwrap();
+```
+*/
 pub trait System<P> {
-    fn run(self, world: &World, delta_time: f32) -> Result<(), FetchError>;
-    fn run_fixed(self, world: &World, fixed_update: f32) -> Result<(), FetchError>;
+    fn run(self, world: &World, delta_time: f32) -> Result<(), GetError>;
+    fn run_fixed(self, world: &World, fixed_update: f32) -> Result<(), GetError>;
 
 }
 
 pub trait IntoSystem<P> {
-    fn system(self) -> Box<dyn FnMut(&World, f32) -> Result<(), FetchError> + Send + Sync>;
+    fn system(self) -> Box<dyn FnMut(&World, f32) -> Result<(), GetError> + Send + Sync>;
 }
 
 pub trait OuterSystem {
     type Input;
-    fn run<'world_borrow>(self, world: &'world_borrow World, delta_time: f32) -> Result<(), FetchError>;
-    fn run_fixed<'world_borrow>(self, world: &'world_borrow World, fixed_update: f32) -> Result<(), FetchError>;
+    fn run<'world_borrow>(self, world: &'world_borrow World, delta_time: f32) -> Result<(), GetError>;
+    fn run_fixed<'world_borrow>(self, world: &'world_borrow World, fixed_update: f32) -> Result<(), GetError>;
 
 }
 
-// A SystemParameter specifies how its data is fetched and represented with an associated
-// type that implements 'Fetch'.
-// 'Fetch' has an Item that can be borrow to access its 'InnerItem'.
-// This allows the Fetch item to contain data that must be dropped *after*
-// the system executes.
 type InnerItem<'a, 'b, A> =
-    <<<A as SystemParameter>::Fetch as Fetch<'a>>::Item as FetchItem<'b>>::InnerItem;
+    <<<A as SystemParameter>::Get as Get<'a>>::Item as GetItem<'b>>::InnerItem;
 
 impl<P, S: System<P> + Sync + Send + 'static + Copy> IntoSystem<P> for S {
-    fn system(self,) -> Box<dyn FnMut(&World, f32) -> Result<(), FetchError> + Send + Sync> {
+    fn system(self,) -> Box<dyn FnMut(&World, f32) -> Result<(), GetError> + Send + Sync> {
         Box::new(move |world, delta_time| self.run(world, delta_time))
     }
 }
 
-macro_rules! system_impl {
+macro_rules! system_def {
     ($($name: ident),*) => {
         impl<FUNC, $($name: SystemParameter),*> System<($($name,)*)> for FUNC
         where
@@ -64,15 +60,15 @@ macro_rules! system_impl {
         {
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn run<'world_borrow>(mut self, world: &'world_borrow World, delta_time: f32) -> Result<(), FetchError> {
-                $(let mut $name = $name::Fetch::fetch(world)?;)*
+            fn run<'world_borrow>(mut self, world: &'world_borrow World, delta_time: f32) -> Result<(), GetError> {
+                $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* delta_time);
                 Ok(())
             }
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn run_fixed<'world_borrow>(mut self, world: &'world_borrow World, fixed_update: f32) -> Result<(), FetchError> {
-                $(let mut $name = $name::Fetch::fetch(world)?;)*
+            fn run_fixed<'world_borrow>(mut self, world: &'world_borrow World, fixed_update: f32) -> Result<(), GetError> {
+                $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* fixed_update);
                 Ok(())
             }
@@ -80,17 +76,19 @@ macro_rules! system_impl {
     };
 }
 
-system_impl! {}
-system_impl! {A}
-system_impl! {A, B}
-system_impl! {A, B, C}
-system_impl! {A, B, C, D}
-system_impl! {A, B, C, D, E}
-system_impl! {A, B, C, D, E, F}
-system_impl! {A, B, C, D, E, F, G}
-system_impl! {A, B, C, D, E, F, G, H}
-system_impl! {A, B, C, D, E, F, G, H, I}
-system_impl! {A, B, C, D, E, F, G, H, I, J}
+macro_rules! system_defr {
+    ($x: ident) => {
+        system_def!{$x}
+    };
+
+    ($x: ident, $($y: ident),*) => {
+        system_def!{$x, $($y),*}
+        system_defr!{$($y),*}
+
+    };
+}
+system_defr!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
+
 
 
 

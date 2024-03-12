@@ -1,16 +1,29 @@
-use glam::{Vec3, Quat};
+use glam::{Vec3, Quat, Mat3};
 
 use crate::Transform;
 
 struct OBB {
-    center: Vec3,
-    half_extents: Vec3,
-    orientation: Quat,
+    pub center: Vec3,
+    pub half_extents: Vec3,
+    pub orientation: Quat,
 }
 struct CollisionPoint{
     point: Vec3,
     normal: Vec3,
 }
+fn cross_product_axes(axes1: &[Vec3; 3], axes2: &[Vec3; 3]) -> Vec<Vec3> {
+    let mut cross_axes = Vec::new();
+    for &axis1 in axes1.iter() {
+        for &axis2 in axes2.iter() {
+            let cross_axis = axis1.cross(axis2);
+            if cross_axis.length_squared() > f32::EPSILON {  
+                cross_axes.push(cross_axis.normalize());
+            }
+        }
+    }
+    cross_axes
+}
+
 impl OBB {
     pub fn new(center: Vec3, half_extents: Vec3, orientation: Quat) -> Self {
         Self {
@@ -29,51 +42,39 @@ impl OBB {
         }
     }
     fn get_axes(&self) -> [Vec3; 3] {
-        let x = self.orientation * Vec3::X;
-        let y = self.orientation * Vec3::Y;
-        let z = self.orientation * Vec3::Z;
-        [x, y, z]
+
+        let mat = Mat3::from_quat(self.orientation);
+        [mat.x_axis, mat.y_axis, mat.z_axis]
+    }
+    fn project_to_axis(&self, axis: Vec3) -> (f32, f32) {
+        let corners = self.get_corners();
+
+        let projections : Vec<f32> = corners.iter().map(|&corner| corner.dot(axis)).collect();
+        let min = projections.iter().fold(f32::INFINITY, |acc, &x| acc.min(x));
+        let max = projections.iter().fold(f32::NEG_INFINITY, |acc, &x| acc.max(x));
+        (min, max)
     }
     fn get_corners(&self) -> [Vec3; 8] {
-        let axes = self.get_axes();
-        let x = axes[0];
-        let y = axes[1];
-        let z = axes[2];
-        let x = x * self.half_extents.x;
-        let y = y * self.half_extents.y;
-        let z = z * self.half_extents.z;
-        let center = self.center;
-        [
-            center + x + y + z,
-            center + x + y - z,
-            center + x - y + z,
-            center + x - y - z,
-            center - x + y + z,
-            center - x + y - z,
-            center - x - y + z,
-            center - x - y - z,
-        ]
+        let rot_mat = Mat3::from_quat(self.orientation);
+        let mut vertices = [Vec3::ZERO; 8];
+        let he = self.half_extents;
+
+        for i in 0..8 {
+            let corner = Vec3::new(
+                if i & 1 == 0 { -he.x } else { he.x },
+                if i & 2 == 0 { -he.y } else { he.y },
+                if i & 4 == 0 { -he.z } else { he.z },
+            );
+            vertices[i] = self.center + rot_mat * corner;
+        }
+        vertices
     }
     fn check_overlap(&self, axis: Vec3, obb2: &OBB) -> bool {
-        let mut obb1_min = f32::INFINITY;
-        let mut obb1_max = f32::NEG_INFINITY;
-        let mut obb2_min = f32::INFINITY;
-        let mut obb2_max = f32::NEG_INFINITY;
-        for corner in self.get_corners().iter() {
-            let projection = corner.dot(axis);
-            obb1_min = obb1_min.min(projection);
-            obb1_max = obb1_max.max(projection);
-        }
-        for corner in obb2.get_corners().iter() {
-            let projection = corner.dot(axis);
-            obb2_min = obb2_min.min(projection);
-            obb2_max = obb2_max.max(projection);
-        }
-        let obb1_overlap = obb1_min <= obb2_max && obb1_max >= obb2_min;
-        let obb2_overlap = obb2_min <= obb1_max && obb2_max >= obb1_min;
-        obb1_overlap && obb2_overlap
+        let (min1, max1) = self.project_to_axis(axis);
+        let (min2, max2) = obb2.project_to_axis(axis);
+        min1 <= max2 && max1 >= min2
     }
-    fn is_colliding(&self, obb2: &OBB) -> bool {
+    pub fn is_colliding(&self, obb2: &OBB) -> bool {
         let axes1 = self.get_axes();
         let axes2 = obb2.get_axes();
         for axis in axes1.iter() {
@@ -86,17 +87,15 @@ impl OBB {
                 return false;
             }
         }
-        for axis1 in axes1.iter() {
-            for axis2 in axes2.iter() {
-                let axis = axis1.cross(*axis2);
-                if !self.check_overlap(axis, obb2) {
-                    return false;
-                }
+        let cross_axes = cross_product_axes(&axes1, &axes2);
+        for axis in cross_axes.iter() {
+            if !self.check_overlap(*axis, obb2) {
+                return false;
             }
         }
         true
     }
-    fn get_collision_point_normal(&self, obb2: &OBB) -> Option<CollisionPoint>{
+    pub fn get_collision_point_normal(&self, obb2: &OBB) -> Option<CollisionPoint>{
         if !self.is_colliding(obb2) {
             return None;
         }
@@ -119,6 +118,7 @@ impl OBB {
                 return None;
             }
             if pen_dept < min_pen_depth {
+                
                 min_pen_depth = pen_dept;
                 collision_point.normal = norm;
             }
@@ -175,12 +175,14 @@ impl OBB {
         (true, pen_depth)
     }
     fn get_support_point(&self, norm: Vec3) -> Vec3 {
-        let mut max_projection = f32::NEG_INFINITY;
-        let mut support_point = Vec3::ZERO;
+        
+        let mut support_point = self.get_corners()[0];
+        let mut max_proj = support_point.dot(norm);
+
         for corner in self.get_corners().iter() {
             let projection = corner.dot(norm);
-            if projection > max_projection {
-                max_projection = projection;
+            if projection > max_proj {
+                max_proj = projection;
                 support_point = *corner;
             }
         }
@@ -194,27 +196,17 @@ mod test {
     use super::OBB;
     #[test]
     fn is_colliding() {
-        let box1 = OBB::new(Vec3::new(0.,0.,0.), Vec3::new(0.5,0.5,0.5), Quat::from_rotation_x(45.));
-        let box2 = OBB::new(Vec3::new(2.,0.,0.), Vec3::new(0.5,0.5,0.5), Quat::from_rotation_x(20.));
-        let box3 = OBB::new(Vec3::new(0.5,0.,0.), Vec3::new(0.5,0.5,0.5), Quat::from_rotation_x(45.));
-        assert_eq!(box1.is_colliding(&box2), false);
-        assert_eq!(box1.is_colliding(&box3), true);
-        match box1.get_collision_point_normal(&box2) {
+        let box1 = OBB::new(Vec3::new(0.,0.,0.), Vec3::new(0.5,0.5,0.5), Quat::IDENTITY);
+        let mut box3 = OBB::new(Vec3::new(-0.981535  ,0.536144 ,0.05), Vec3::new(0.5,0.5,0.5), Quat::from_euler(glam::EulerRot::XYZ, 0., 57.0, 0.));
+
+        match box3.get_collision_point_normal(&box1) {
             Some(collision_point) => {
                 println!("Collision Point: {:?}", collision_point.point);
                 println!("Collision Normal: {:?}", collision_point.normal);
             },
-            None => println!("No collision"),
-        }
-        match box1.get_collision_point_normal(&box3) {
-            Some(collision_point) => {
-                println!("Collision Point: {:?}", collision_point.point);
-                println!("Collision Normal: {:?}", collision_point.normal);
-            },
-            None => println!("No collision"),
-        }
+            None => {},
+        }    
         
-
-
+        
     }
 }

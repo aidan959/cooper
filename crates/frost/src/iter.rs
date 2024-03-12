@@ -100,9 +100,6 @@ impl<I: Iterator> Iterator for ChainedIterator<I> {
         for i in self.iterators.iter() {
             let (i_min, i_max) = i.size_hint();
             min += i_min;
-            // This function is designed under the assumption that all
-            // iterators passed in implement size_hint, which works fine
-            // for kudo's purposes.
             max += i_max.unwrap();
         }
         (min, Some(max))

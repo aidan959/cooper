@@ -27,9 +27,10 @@ use std::{
         HashMap
     }};
 
-use crate::{Fetch, FetchError, SearchFetch, SearchParameters, Single, SingleMut};
+use crate::{Get, GetError, SearchGet, SearchParameters, Single, SingleMut};
 pub use input::Input; 
 pub(crate) type EntityId = u32;
+pub(crate) type Generation = u32;
 
 pub use iter::*;
 pub use search::*;
@@ -105,7 +106,6 @@ impl Archetype {
         }
     }
 
-    /// Removes component from entity to another.
     fn migrate_component(
         &mut self,
         component_index: usize,
@@ -119,8 +119,6 @@ impl Archetype {
         );
     }
 
-    /// This takes a mutable reference so that the inner RwLock does not need to be locked
-    /// by instead using get_mut.
     fn len(&mut self) -> usize {
         self.entities.len()
     }
@@ -147,7 +145,7 @@ impl EntityLocation {
 }
 #[derive(Clone, Copy)]
 pub(crate) struct EntityMeta {
-    pub(crate) generation: EntityId,
+    pub(crate) generation: Generation,
     pub(crate) location: EntityLocation,
 }
 impl EntityMeta {
@@ -235,7 +233,6 @@ pub struct World {
 
 }
 
-
 impl World {
     pub fn new() -> Self {
         Self {
@@ -267,27 +264,34 @@ impl World {
         Ok(Entity{index, generation})
     }
     // gets a single immutable reference
-    pub fn get_single<T: 'static>(&self) -> Result<Single<T>, FetchError> {
-        <&T>::fetch(self)
+    pub fn get_single<T: 'static>(&self) -> Result<Single<T>, GetError> {
+        <&T>::get(self)
     }
     // gets a single mutable reference
-    pub fn get_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, FetchError> {
-        <&mut T>::fetch(self)
+    pub fn get_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, GetError> {
+        <&mut T>::get(self)
     }
 
-    /// Get a search from the world.
-    /// # Example
-    /// ```
-    /// # use frost::*;
-    /// # let mut world = World::new();
-    /// let search = world.search<(&bool, &String)>();
-    /// ```
+    /**
+    Search from the world.
+    # EX
+    ```
+    use frost::*;
+    let mut world = World::new();
+    let search = world.search<(&bool, &String)>();
+    ```
+    */
     pub fn search<'world_borrow, T: SearchParameters>(
         &'world_borrow self,
-    ) -> Result<Search<T>, FetchError> {
-        Ok(SearchFetch::<T>::fetch(self)?.take().unwrap())
+    ) -> Result<Search<T>, GetError> {
+        let get = SearchGet::<T>::get(self);
+
+        match get {
+            Ok(mut search_get) => Ok(search_get.take().unwrap()),
+            Err(e) => Err(e)
+        }
     }
-    pub fn add_component_to_entity<T: 'static + Send + Sync>(
+    pub fn add_component<T: 'static + Send + Sync>(
         &mut self,
         entity: Entity,
         t: T, 
@@ -378,7 +382,7 @@ impl World {
     }
 
 }
-macro_rules! component_bundle_impl {
+macro_rules! component_pack_impl {
     ($count: expr, $(($name: ident, $index: tt)),*) => {
         impl< $($name: 'static + Send + Sync),*> ComponentPack for ($($name,)*) {
             fn new_archetype(&self) -> Archetype {
@@ -426,12 +430,12 @@ macro_rules! component_bundle_impl {
     }
 }
 
-component_bundle_impl! {1, (A, 0)}
-component_bundle_impl! {2, (A, 0), (B, 1)}
-component_bundle_impl! {3, (A, 0), (B, 1), (C, 2)}
-component_bundle_impl! {4, (A, 0), (B, 1), (C, 2), (D, 3)}
-component_bundle_impl! {5, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4)}
-component_bundle_impl! {6, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4), (F, 5)}
+component_pack_impl! {1, (A, 0)}
+component_pack_impl! {2, (A, 0), (B, 1)}
+component_pack_impl! {3, (A, 0), (B, 1), (C, 2)}
+component_pack_impl! {4, (A, 0), (B, 1), (C, 2), (D, 3)}
+component_pack_impl! {5, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4)}
+component_pack_impl! {6, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4), (F, 5)}
 
 
 #[cfg(test)]

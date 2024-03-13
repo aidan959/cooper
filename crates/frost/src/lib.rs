@@ -253,11 +253,11 @@ impl World {
         };
         Ok(Entity { index, generation })
     }
-    // gets a single immutable reference
+    #[inline]
     pub fn get_single<T: 'static>(&self) -> Result<Single<T>, GetError> {
         <&T>::get(self)
     }
-    // gets a single mutable reference
+    #[inline]
     pub fn get_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, GetError> {
         <&mut T>::get(self)
     }
@@ -379,7 +379,7 @@ impl World {
         Ok(())
     }
 }
-macro_rules! component_pack_impl {
+macro_rules! component_pack {
     ($count: expr, $(($name: ident, $index: tt)),*) => {
         impl< $($name: 'static + Send + Sync),*> ComponentPack for ($($name,)*) {
             fn new_archetype(&self) -> Archetype {
@@ -393,7 +393,7 @@ macro_rules! component_pack_impl {
                 types.sort_unstable_by(|a, b| a.1.cmp(&b.1));
                 debug_assert!(
                     types.windows(2).all(|x| x[0].1 != x[1].1),
-                    "`ComponentPack`s can't contain duplicate components."
+                    "`ComponentPack`s cannot contain duplicate components."
                 );
 
                 let mut order = [0; $count];
@@ -427,12 +427,12 @@ macro_rules! component_pack_impl {
     }
 }
 
-component_pack_impl! {1, (A, 0)}
-component_pack_impl! {2, (A, 0), (B, 1)}
-component_pack_impl! {3, (A, 0), (B, 1), (C, 2)}
-component_pack_impl! {4, (A, 0), (B, 1), (C, 2), (D, 3)}
-component_pack_impl! {5, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4)}
-component_pack_impl! {6, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4), (F, 5)}
+component_pack! {1, (A, 0)}
+component_pack! {2, (A, 0), (B, 1)}
+component_pack! {3, (A, 0), (B, 1), (C, 2)}
+component_pack! {4, (A, 0), (B, 1), (C, 2), (D, 3)}
+component_pack! {5, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4)}
+component_pack! {6, (A, 0), (B, 1), (C, 2), (D, 3), (E, 4), (F, 5)}
 
 #[cfg(test)]
 pub mod tests {
@@ -469,6 +469,8 @@ pub mod tests {
                     inverse_inertia_tensor: Mat3::IDENTITY,
                     gravity: false,
                     restitution: 0.0,
+                    is_static: true
+
                 },
                 obb::OBB::new(
                     Vec3::new(0.0, 0.0, 0.0),
@@ -494,6 +496,7 @@ pub mod tests {
                     inverse_inertia_tensor: Mat3::IDENTITY,
                     gravity: false,
                     restitution: 0.0,
+                    is_static: true
                 },
                 obb::OBB::new(
                     Vec3::new(10.0, 0.0, 0.0),
@@ -516,41 +519,7 @@ pub mod tests {
             println!("{} {:?} {:?}", name.0, rb.transform.position, rb.velocity);
         }
     }
-    fn physics_system(mut search: Search<(&mut RigidBody, &mut obb::OBB)>, fixed_update: f32) {
-        let bodies_and_boxes = search.iter().collect::<Vec<_>>();
-
-        let mut collision_details = Vec::new();
-        for i in 0..bodies_and_boxes.len() {
-            for j in (i + 1)..bodies_and_boxes.len() {
-                let (_, obb1) = &bodies_and_boxes[i];
-                let (_, obb2) = &bodies_and_boxes[j];
-
-                if let Some(collision_point) = obb1.get_collision_point_normal(obb2) {
-                    collision_details.push((i, j, collision_point));
-                }
-            }
-        }
-        let mut bodies_and_boxes: Vec<RefCell<(&mut RigidBody, &mut obb::OBB)>> = search
-            .iter()
-            .map(|(rb, obb)| RefCell::new((rb, obb)))
-            .collect::<Vec<RefCell<(&mut RigidBody, &mut obb::OBB)>>>();
-        for collision in collision_details {
-            let rb1 = &mut bodies_and_boxes[collision.0].borrow_mut().0;
-            let rb2 = &mut bodies_and_boxes[collision.1].borrow_mut().0;
-            handle_collision(rb1, rb2, &collision.2);
-        }
-
-        // Update positions after handling all collisions
-        bodies_and_boxes.iter_mut().for_each(|b_b| {
-            let (rb, obb) = b_b.borrow_mut().get_mut();
-
-            rb.acceleration += Vec3::new(0., -9.81, 0.);
-            integrate_velocity(&mut rb.velocity, rb.acceleration, fixed_update);
-            integrate_position(&mut rb.transform, rb.velocity, fixed_update);
-            obb.center = rb.transform.position;
-            obb.orientation = rb.transform.rotation;
-        });
-    }
+    
 
 
     

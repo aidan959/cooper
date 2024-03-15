@@ -39,7 +39,7 @@ fn main() {
                 )
             )).unwrap();
             let mut rb= RigidBody::new(
-                1.0,
+                10.0,
                 Transform {
                     position: Vec3::new(0.0, 10.0, 0.0),
                     rotation: Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, 0.0),
@@ -58,7 +58,7 @@ fn main() {
                 )
             )).unwrap();
             let mut rb= RigidBody::new(
-                1.0,
+                5.0,
                 Transform {
                     position: Vec3::new(0.0, 25.0, 0.0),
                     rotation: Quat::IDENTITY,
@@ -75,33 +75,6 @@ fn main() {
                     Quat::IDENTITY,
                 )
             )).unwrap();
-            // event_stream.send(GameEvent::MoveEvent(2, Mat4::from_translation(Vec3::new(10.,0.,0.)))).unwrap();
-            // world.new_entity((
-            //     GfxLocation(2),
-            //     RigidBody {
-            //         inverse_mass: 0.0,
-            //         transform: Transform {
-            //             position: Vec3::new(0.0, -20.0, 0.0),
-            //             rotation: Quat::IDENTITY,
-            //             scale: Vec3::new(10.0, 1.0, 10.0),
-            //         },
-            //         acceleration: Vec3::new(0.0, 0.0, 0.0),
-            //         velocity: Vec3::new(0.0, 0.0, 0.0),
-            //         angular_velocity: Vec3::new(0.0, 0.0, 0.0),
-            //         inverse_inertia_tensor: Mat3::IDENTITY,
-            //         gravity: false,
-            //         restitution: 1.0,
-            //         is_static: true
-            //     },
-            //     obb::DynamicOBB::new(
-            //         Vec3::new(0.0, -20.0, 0.0),
-            //         Vec3::new(5., 0.5, 5.),
-            //         Quat::IDENTITY,
-            //     )
-            // )).unwrap();
-
-
-
         },
         |renderer_event_stream, delta| {
 
@@ -125,12 +98,4 @@ fn main() {
             event_stream.send(GameEvent::NextFrame).unwrap();
         },
     );
-}
-
-fn look_at(position: Vec3, target: Vec3) -> Quat {
-    let forward = (target - position).normalize();
-    let rotation_axis = Vec3::new(0.0, 1.0, 0.0).cross(forward).normalize();
-    let rotation_angle = f32::acos(Vec3::new(0.0, 1.0, 0.0).dot(forward));
-
-    Quat::from_axis_angle(rotation_axis, rotation_angle)
 }

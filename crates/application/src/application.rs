@@ -37,8 +37,8 @@ impl CooperApplication
         let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         let fov_degrees = 90.0;
         let camera = Camera::new(
-            Vec3::new(-5.0, 0.0, -5.0),
-            Vec3::new(0.0,-10.0,0.0),
+            Vec3::new(-10.0, -20.0, 0.0),
+            Vec3::new(0.0,-20.0,0.0),
             fov_degrees,
             WIDTH / HEIGHT,
             0.01,
@@ -104,9 +104,12 @@ impl CooperApplication
                             // call fixed_update fixed_update_rate times per second
                             while lag >= self.engine_settings.fixed_update_rate.as_secs_f32()  {
                                 // user fixed update call
-                                fixed_update(&fixed_update_transmitter, self.engine_settings.fixed_update_rate.as_secs_f32(), &mut world);
-                                lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
                                 count += 1; // Increment the count for each execution
+
+                                fixed_update(&fixed_update_transmitter, self.engine_settings.fixed_update_rate.as_secs_f32(), &mut world);
+
+                                
+                                lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
 
                                 if interval_start.elapsed() >= Duration::new(1, 0) { // Check if one second has passed
                                     println!("Function executed {} times in the last second. ({})", count, self.engine_settings.fixed_update_rate.as_secs_f32());

@@ -221,10 +221,11 @@ impl OBB for DynamicOBB {
         }
         collision_point.pen_depth = min_pen_depth;
 
-        let collision_point1 = self.get_support_point(collision_point.normal * -1.);
+        let collision_point1 = self.get_support_point(-collision_point.normal);
         let collision_point2 = obb2.get_support_point(collision_point.normal);
 
         collision_point.point = (collision_point1 + collision_point2) * 0.5;
+
         Some(collision_point)
     }
 }
@@ -249,9 +250,9 @@ mod test {
             Quat::IDENTITY,
         );
         let mut box3 = OBB::new(
-            Vec3::new(-0.981535, 0.536144, 0.05),
+            Vec3::new(0., 0.49, 0.0),
             Vec3::new(0.5, 0.5, 0.5),
-            Quat::from_euler(glam::EulerRot::XYZ, 0., 57.0, 0.),
+            Quat::from_euler(glam::EulerRot::XYZ, 0., 0.0, 0.),
         );
 
         match box3.get_collision_point_normal(&box1) {

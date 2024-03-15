@@ -1,35 +1,12 @@
 use std::{cell::RefCell, default};
 
-use glam::{Quat, Vec3,Mat3};
+use glam::{vec3, Mat3, Quat, Vec3};
 
 use self::obb::{DynamicOBB, OBB};
 
 use super::{*,obb::CollisionPoint};
 
-#[inline]
-pub fn integrate_velocity(velocity: &mut Vec3, acceleration: Vec3, fixed_time: f32) {
-    *velocity += acceleration * fixed_time;
-}
-#[inline]
-pub fn integrate_position(transform: &mut Transform, velocity: Vec3, fixed_time: f32) {
-    transform.position += velocity * fixed_time;
-}
-pub fn integrate_angular_velocity(angular_velocity: &mut Vec3, torque: Vec3, fixed_time: f32) {
-    *angular_velocity += torque * fixed_time;
-}
-pub fn integrate_rotation(transform: &mut Transform, angular_velocity: Vec3, fixed_time: f32) {
-    let rotation = Quat::from_euler( glam::EulerRot::XYZ ,angular_velocity.x, angular_velocity.y, angular_velocity.z);
-    transform.rotation = rotation * transform.rotation * fixed_time;
-}
-pub fn integrate_rigid_body(rigid_body: &mut RigidBody, fixed_time: f32) {
-    if rigid_body.gravity {
-        rigid_body.acceleration += Vec3::new(0., -0.981, 0.) * fixed_time;
-    }
-    integrate_angular_velocity(&mut rigid_body.angular_velocity, Vec3::new(1., 0., 0.), fixed_time);
-    integrate_velocity(&mut rigid_body.velocity, rigid_body.acceleration, fixed_time);
-    integrate_position(&mut rigid_body.transform, rigid_body.velocity, fixed_time);
-    rigid_body.clear_accumulators();
-}
+
 
 pub fn calculate_velocity_change(velocity: Vec3, acceleration: Vec3, fixed_time: f32) -> Vec3 {
     velocity + acceleration * fixed_time
@@ -93,15 +70,8 @@ pub fn handle_collision(rigid_body: &mut RigidBody, rigid_body2: &mut RigidBody,
 
     let impulse = collision_point.normal * j; 
     
-    if !rigid_body.is_static {
-        rigid_body.velocity += impulse * rigid_body.inverse_mass;
-        rigid_body.angular_velocity += rigid_body.inverse_inertia_tensor * r1_cross_n.cross(impulse);
-    }
-    if !rigid_body2.is_static {
-        rigid_body2.velocity -= impulse * rigid_body2.inverse_mass;
-        rigid_body2.angular_velocity -= rigid_body2.inverse_inertia_tensor * r2_cross_n.cross(impulse);
-    }
-
+    rigid_body.apply_force(impulse, collision_point.point);
+    rigid_body2.apply_force(-impulse, collision_point.point);
 }
 
 
@@ -112,25 +82,19 @@ pub fn handle_collision_static(rigid_body: &mut RigidBody, static_rigid_body: &m
 
     if total_inverse_mass > 0.0 {
         let correction = collision_point.normal * (pen_depth * correction_ratio / total_inverse_mass);
-
-            rigid_body.transform.position -= correction  *10. * rigid_body.inverse_mass / total_inverse_mass ;
+        rigid_body.transform.position += correction  * rigid_body.inverse_mass / total_inverse_mass ;
         
     }
 
     let relative_p1 = collision_point.point - rigid_body.transform.position;
     let relative_velocity = calculate_relative_velocity(&rigid_body, &static_rigid_body, relative_p1, Vec3::ZERO);
-    let e = (rigid_body.restitution + static_rigid_body.restitution) / 2.0;
+    let e = (rigid_body.restitution) / 2.0;
     let r1_cross_n = relative_p1.cross(collision_point.normal);
     let inv_mass_sum = rigid_body.inverse_mass + r1_cross_n.dot(rigid_body.inverse_inertia_tensor * r1_cross_n);
     let j = (-(1.0 + e) * relative_velocity.dot(collision_point.normal)) / inv_mass_sum;
     let impulse = collision_point.normal * j;
-
-    rigid_body.velocity += impulse * rigid_body.inverse_mass;
-    rigid_body.angular_velocity += rigid_body.inverse_inertia_tensor * r1_cross_n.cross(impulse);
-    
+    rigid_body.apply_force(-impulse, collision_point.point);
 }
-
-
 
 pub struct RigidBody{
     pub inverse_mass: f32,
@@ -139,7 +103,10 @@ pub struct RigidBody{
     pub velocity: Vec3,
     pub angular_velocity:Vec3,
     pub inverse_inertia_tensor: Mat3,
+    pub force_accumulator: Vec3,
+    pub torque_accumulator: Vec3,
     pub gravity: bool,
+    pub angular_drag: f32,
     pub restitution: f32,
     pub is_static: bool
 }
@@ -147,16 +114,53 @@ pub struct RigidBody{
 
 impl RigidBody {
     fn apply_force(&mut self, force: Vec3, point: Vec3) {
-        // Implementation
+        debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot have forces");
+
+        self.force_accumulator += force;
+        if point != self.transform.position {
+            let lever_arm = point - self.transform.position;
+            self.apply_torque(lever_arm.cross(force));
+        }
+        
+    }
+    fn apply_angular_drag(&mut self, fixed_update: f32) {
+        debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot have angular drag");
+        self.angular_velocity *= 1.0 - self.angular_drag * fixed_update;
     }
 
     fn apply_torque(&mut self, torque: Vec3) {
-        // Implementation
+        debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot have torques");
+        self.torque_accumulator += torque;
     }
 
     fn clear_accumulators(&mut self) {
-        // Implementation
+        debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot have accumulators");
+        self.torque_accumulator = Vec3::ZERO;
+        self.force_accumulator = Vec3::ZERO;
     }
+
+    pub fn integrate(&mut self, fixed_time: f32) {
+        debug_assert_ne!(fixed_time, 0.0, "Fixed time step cannot be zero");
+        debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot be integrated");
+        let accel = self.force_accumulator * self.inverse_mass;
+
+        self.velocity += accel * fixed_time;
+        self.transform.position += self.velocity * fixed_time;
+
+        let angular_velocity = self.inverse_inertia_tensor * self.torque_accumulator;
+        self.angular_velocity += angular_velocity * fixed_time;
+        
+        let rotation = Quat::from_euler( glam::EulerRot::XYZ ,self.angular_velocity.x, self.angular_velocity.y, self.angular_velocity.z);
+        self.transform.rotation = (rotation * self.transform.rotation).normalize();
+        self.clear_accumulators();
+    
+    }
+
+    pub fn apply_gravity(&mut self) {
+        if self.gravity {
+            self.apply_force((GRAVITY * 0.1) * (1.0/self.inverse_mass), self.transform.position);
+        }
+    }   
 }
 
 pub struct Transform{
@@ -174,6 +178,9 @@ impl Default for RigidBody {
             velocity : Default::default(),
             angular_velocity : Default::default(),
             inverse_inertia_tensor : Default::default(),
+            force_accumulator : Default::default(),
+            torque_accumulator : Default::default(),
+            angular_drag: 0.01,
             gravity : Default::default(),
             restitution  : 0.5,
             is_static : false
@@ -220,9 +227,11 @@ pub fn physics_system(mut search: Search<(&mut RigidBody, &mut obb::DynamicOBB)>
 
     bodies_and_boxes.iter_mut().for_each(|b_b| {
         let (rb, obb) = b_b.borrow_mut().get_mut();
-
+        
         if !rb.is_static {
-            integrate_rigid_body(rb, fixed_update);
+            rb.apply_gravity();
+            rb.apply_angular_drag(fixed_update);
+            rb.integrate(fixed_update);
         }
         obb.center = rb.transform.position;
         obb.orientation = rb.transform.rotation;
@@ -275,12 +284,16 @@ impl RigidBody {
             velocity: Default::default(),
             angular_velocity: Default::default(),
             inverse_inertia_tensor: Mat3::get_inverse_cube_inertia_tensor(scale * 0.5, mass),
+            force_accumulator : Default::default(),
+            torque_accumulator : Default::default(),
+            angular_drag: 0.01,
             gravity: true,
             restitution: 0.5,
             is_static: false,
         }
     }
     pub fn new_static( transform: Transform, ) -> Self{
+        let scale = transform.scale;
         Self {
             inverse_mass: 0.0,
             transform: transform,
@@ -288,6 +301,9 @@ impl RigidBody {
             velocity: Default::default(),
             angular_velocity: Default::default(),
             inverse_inertia_tensor: Mat3::IDENTITY,
+            force_accumulator : Default::default(),
+            torque_accumulator : Default::default(),
+            angular_drag: 0.01,
             gravity: false,
             restitution: 0.0,
             is_static: true,

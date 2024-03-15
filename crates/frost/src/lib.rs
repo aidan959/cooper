@@ -467,6 +467,8 @@ pub mod tests {
                     velocity: Vec3::new(0.0, 0.0, 0.0),
                     angular_velocity: Vec3::new(0.0, 0.0, 0.0),
                     inverse_inertia_tensor: Mat3::IDENTITY,
+                    force_accumulator: Default::default(),
+                    torque_accumulator: Default::default(),
                     gravity: false,
                     restitution: 0.0,
                     is_static: true
@@ -494,6 +496,8 @@ pub mod tests {
                     velocity: Vec3::new(-2.0, 0.0, 0.0),
                     angular_velocity: Vec3::new(0.0, 0.0, 0.0),
                     inverse_inertia_tensor: Mat3::IDENTITY,
+                    force_accumulator: Default::default(),
+                    torque_accumulator: Default::default(),
                     gravity: false,
                     restitution: 0.0,
                     is_static: true

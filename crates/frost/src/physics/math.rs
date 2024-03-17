@@ -2,7 +2,7 @@ use std::{cell::RefCell, default};
 
 use glam::{vec3, Mat3, Quat, Vec3};
 
-use self::obb::{DynamicOBB, OBB};
+use self::obb::{DynamicOBB};
 
 use super::{*,obb::CollisionPoint};
 
@@ -153,6 +153,7 @@ impl RigidBody {
         let rotation = Quat::from_euler( glam::EulerRot::XYZ ,self.angular_velocity.x, self.angular_velocity.y, self.angular_velocity.z);
         self.transform.rotation = (rotation * self.transform.rotation).normalize();
         self.clear_accumulators();
+
     
     }
 
@@ -198,7 +199,7 @@ impl Default for Transform {
 }
 
 
-pub fn physics_system(mut search: Search<(&mut RigidBody, &mut obb::DynamicOBB)>, fixed_update: f32) {
+pub fn physics_system<'a>(mut search: Search<(&mut RigidBody, &'a mut obb::DynamicOBB)>, fixed_update: f32) where 'a: 'static {
     let bodies_and_boxes = search.iter().collect::<Vec<_>>();
 
     let mut collision_details = Vec::new();
@@ -236,6 +237,8 @@ pub fn physics_system(mut search: Search<(&mut RigidBody, &mut obb::DynamicOBB)>
         obb.center = rb.transform.position;
         obb.orientation = rb.transform.rotation;
         obb.half_extents = rb.transform.scale * 0.5;
+        obb.update_faces();
+
     });
 }
 

@@ -440,6 +440,8 @@ pub mod tests {
 
     use glam::{Mat3, Quat, Vec3};
 
+    use crate::physics::math::physics_system;
+
     use super::*;
 
     #[test]
@@ -471,10 +473,11 @@ pub mod tests {
                     torque_accumulator: Default::default(),
                     gravity: false,
                     restitution: 0.0,
-                    is_static: true
+                    is_static: true,
+                    angular_drag: 0.01,
 
                 },
-                obb::OBB::new(
+                obb::DynamicOBB::new(
                     Vec3::new(0.0, 0.0, 0.0),
                     Vec3::new(1.0, 1.0, 1.0),
                     Quat::IDENTITY,
@@ -500,9 +503,10 @@ pub mod tests {
                     torque_accumulator: Default::default(),
                     gravity: false,
                     restitution: 0.0,
-                    is_static: true
+                    is_static: true,
+                    angular_drag: 0.01,
                 },
-                obb::OBB::new(
+                obb::DynamicOBB::new(
                     Vec3::new(10.0, 0.0, 0.0),
                     Vec3::new(1.0, 1.0, 1.0),
                     Quat::IDENTITY,

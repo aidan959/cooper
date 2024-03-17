@@ -140,3 +140,9 @@ impl From<usize> for WrappedPrimitiveId {
         WrappedPrimitiveId(value as u32)
     }
 }
+
+impl Into<usize> for WrappedPrimitiveId {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}

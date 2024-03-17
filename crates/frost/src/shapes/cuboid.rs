@@ -3,7 +3,7 @@ use std::{default, ops::Mul};
 use glam::Vec3;
 
 use super::{
-    poly_item::PolygonPrimitive,
+    poly_item::PolygonPrimitiveOld,
     poly_primitives::{PrimitiveId, WrappedPrimitiveId},
 };
 use crate::math::*;
@@ -27,7 +27,7 @@ impl Cuboid {
         }
     }
 
-    pub fn support_face(&self, dir: Vec3) -> PolygonPrimitive {
+    pub fn support_face(&self, dir: Vec3) -> PolygonPrimitiveOld {
         let i_max = dir.max_element_index();
         let sign = (1.0 as f32).copysign(dir[i_max]);
         let he = self.half_extents;
@@ -86,7 +86,7 @@ impl Cuboid {
         });
         let face_id: WrappedPrimitiveId = (i_max + sign_i * 3 + 10).into();
 
-        PolygonPrimitive {
+        PolygonPrimitiveOld {
             vertices,
             vertex_ids,
             edge_ids,

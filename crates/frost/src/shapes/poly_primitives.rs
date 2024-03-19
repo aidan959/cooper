@@ -37,6 +37,8 @@ impl PrimitiveId {
             _ => Err(IsNotFaceErr)
         }
     }
+
+    
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]

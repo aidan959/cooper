@@ -20,6 +20,9 @@ impl PolygonPrimitive{
             face_id: Default::default(),
         }
     }
+    pub fn normal(&self) -> Vec3{
+        Vec3::new(0.0, 0.0, 0.0)
+    }
 }
 impl default::Default for PolygonPrimitive {
     fn default() -> Self {
@@ -31,6 +34,8 @@ impl default::Default for PolygonPrimitive {
         }
     }
 }
+
+
 
 
 pub struct PolygonPrimitiveOld{

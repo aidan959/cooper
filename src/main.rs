@@ -18,7 +18,7 @@ fn main() {
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>, world| {
 
-            (0..2).into_iter().for_each(|_| {
+            (0..4).into_iter().for_each(|_| {
                 event_stream
                     .send(GameEvent::Spawn("models/cube.gltf".to_string()))
                     .unwrap();
@@ -39,15 +39,13 @@ fn main() {
                 )
             )).unwrap();
             let mut rb= RigidBody::new(
-                10.0,
+                100.0,
                 Transform {
                     position: Vec3::new(0.0, 10.0, 0.0),
                     rotation: Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, 0.0),
                     scale: Vec3::new(2.5, 2.5, 2.5)
                 },);
-            rb.velocity = Vec3::new(0.0, -1.0, 0.0);
-            
-
+            rb.velocity = Vec3::new(0.0, 5.0, 0.0);
             world.new_entity((
                 GfxLocation(1),
                 rb ,
@@ -57,21 +55,64 @@ fn main() {
                     Quat::IDENTITY,
                 )
             )).unwrap();
+
+            // number 2
             let mut rb= RigidBody::new(
-                5.0,
+                20.0,
                 Transform {
                     position: Vec3::new(0.0, 25.0, 0.0),
                     rotation: Quat::IDENTITY,
                     scale: Vec3::new(1.25, 1.25, 1.25)
                 },);
             rb.velocity = Vec3::new(0.0, -1.0, 0.0);
-
+            rb.gravity = false;
+            rb.is_static = true;
             world.new_entity((
                 GfxLocation(2),
                 rb ,
                 obb::DynamicOBB::new(
                     Vec3::new(0.0, 25.0, 0.0),
                     Vec3::new(0.75, 0.75, 0.75),
+                    Quat::IDENTITY,
+                )
+            )).unwrap();
+
+            let mut rb= RigidBody::new(
+                5.0,
+                Transform {
+                    position: Vec3::new(0.0, 0.0, 0.0),
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::new(1., 1., 1.)
+                },);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(2.0, 0.0, 0.0);
+            rb.restitution = 1.0;
+            world.new_entity((
+                GfxLocation(3),
+                rb ,
+                obb::DynamicOBB::new(
+                    Vec3::new(0.0, 0.0, 0.0),
+                    Vec3::new(0.5, 0.5, 0.5),
+                    Quat::IDENTITY,
+                )
+            )).unwrap();
+
+            let mut rb= RigidBody::new(
+                25.0,
+                Transform {
+                    position: Vec3::new(10.0, 0.0, 0.0),
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::new(1., 1., 1.)
+                },);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
+            rb.restitution = 1.0;
+            world.new_entity((
+                GfxLocation(4),
+                rb ,
+                obb::DynamicOBB::new(
+                    Vec3::new(10.0, 0.0, 0.0),
+                    Vec3::new(0.5, 0.5, 0.5),
                     Quat::IDENTITY,
                 )
             )).unwrap();

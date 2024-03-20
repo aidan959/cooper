@@ -24,6 +24,7 @@ fn main() {
                     .unwrap();
             });
             event_stream.send(GameEvent::MoveEvent(0, Mat4::from_translation(Vec3::ZERO))).unwrap();
+            // platform
             world.new_entity((
                 GfxLocation(0),
                 RigidBody::new_static(
@@ -38,25 +39,28 @@ fn main() {
                     Quat::IDENTITY,
                 )
             )).unwrap();
+            // medium cube
             let mut rb= RigidBody::new(
                 100.0,
                 Transform {
                     position: Vec3::new(0.0, 10.0, 0.0),
-                    rotation: Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, 0.0),
+                    rotation: Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 60.0),
                     scale: Vec3::new(2.5, 2.5, 2.5)
                 },);
-            rb.velocity = Vec3::new(0.0, 5.0, 0.0);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
+            rb.restitution = 0.1;
             world.new_entity((
                 GfxLocation(1),
                 rb ,
                 obb::DynamicOBB::new(
                     Vec3::new(0.0, 10.0, 0.0),
                     Vec3::new(1.25, 1.25, 1.25),
-                    Quat::IDENTITY,
+                    Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 45.0),
                 )
             )).unwrap();
 
-            // number 2
+            // small cube
             let mut rb= RigidBody::new(
                 20.0,
                 Transform {
@@ -64,9 +68,8 @@ fn main() {
                     rotation: Quat::IDENTITY,
                     scale: Vec3::new(1.25, 1.25, 1.25)
                 },);
-            rb.velocity = Vec3::new(0.0, -1.0, 0.0);
+            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
             rb.gravity = false;
-            rb.is_static = true;
             world.new_entity((
                 GfxLocation(2),
                 rb ,
@@ -76,11 +79,11 @@ fn main() {
                     Quat::IDENTITY,
                 )
             )).unwrap();
-
+            // moving collider
             let mut rb= RigidBody::new(
                 5.0,
                 Transform {
-                    position: Vec3::new(0.0, 0.0, 0.0),
+                    position: Vec3::new(-10.0, 0.0, 0.0),
                     rotation: Quat::IDENTITY,
                     scale: Vec3::new(1., 1., 1.)
                 },);
@@ -97,10 +100,11 @@ fn main() {
                 )
             )).unwrap();
 
+            // starts stationary
             let mut rb= RigidBody::new(
                 25.0,
                 Transform {
-                    position: Vec3::new(10.0, 0.0, 0.0),
+                    position: Vec3::new(10.0, 0.9, 0.0),
                     rotation: Quat::IDENTITY,
                     scale: Vec3::new(1., 1., 1.)
                 },);

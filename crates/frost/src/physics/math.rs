@@ -41,19 +41,16 @@ pub fn handle_collision(
     }
     let pen_depth = collision_point.pen_depth;
     let correction_ratio = 0.5; // Split the correction between the two bodies if both are dynamic
+    let correction_threshold = 0.01; // Adjust based on your simulation's scale
     let total_inverse_mass = rigid_body.inverse_mass + rigid_body2.inverse_mass;
-
-    if total_inverse_mass > 0.0 {
-        let correction =
-            collision_point.normal * (pen_depth * correction_ratio / total_inverse_mass);
-
+    if total_inverse_mass > 0.0 && pen_depth > correction_threshold {
+        let correction = collision_point.normal * (pen_depth * correction_ratio / total_inverse_mass);
+    
         if !rigid_body.is_static {
-            rigid_body.transform.position -=
-                correction * rigid_body.inverse_mass / total_inverse_mass;
+            rigid_body.transform.position -= correction * rigid_body.inverse_mass / total_inverse_mass;
         }
         if !rigid_body2.is_static {
-            rigid_body2.transform.position +=
-                correction * rigid_body2.inverse_mass / total_inverse_mass;
+            rigid_body2.transform.position += correction * rigid_body2.inverse_mass / total_inverse_mass;
         }
     }
 
@@ -85,10 +82,6 @@ pub fn handle_collision(
     let impulse = collision_point.normal * j;
     rigid_body.apply_force(impulse, collision_point.point);
     rigid_body2.apply_force(-impulse, collision_point.point);
-    if !rigid_body.gravity && !rigid_body2.gravity {
-        println!("RB 1 Accumulator: {:?}", rigid_body.force_accumulator);
-        println!("RB 2 Accumulator: {:?}", rigid_body2.force_accumulator);
-    }
 }
 
 pub fn handle_collision_static(
@@ -140,12 +133,13 @@ impl RigidBody {
             self.is_static, true,
             "Static rigid bodies cannot have forces"
         );
-
+        println!("force: {:?}", force);
         self.force_accumulator += force;
         if point != self.transform.position {
             let lever_arm = point - self.transform.position;
             self.apply_torque(lever_arm.cross(force));
         }
+
     }
     fn apply_angular_drag(&mut self, fixed_update: f32) {
         debug_assert_ne!(self.is_static, true, "Static rigid bodies cannot have angular drag");
@@ -182,9 +176,8 @@ impl RigidBody {
 
         // Update linear velocity and position
         let accel = self.force_accumulator * self.inverse_mass;
-        self.velocity += accel * fixed_time;
-        self.transform.position += self.velocity * fixed_time;
-
+        self.velocity += accel;
+        self.transform.position += self.velocity * fixed_time ;
         // Update angular velocity and rotation
         let angular_accel = self.inverse_inertia_tensor * self.torque_accumulator;
         self.angular_velocity += angular_accel * fixed_time;
@@ -272,11 +265,11 @@ pub fn physics_system<'a>(
         .iter()
         .map(|(rb, obb)| RefCell::new((rb, obb)))
         .collect::<Vec<RefCell<(&mut RigidBody, &mut DynamicOBB)>>>();
-    for collision in collision_details {
+    collision_details.into_iter().for_each(|collision| {
         let rb1 = &mut bodies_and_boxes[collision.0].borrow_mut().0;
         let rb2 = &mut bodies_and_boxes[collision.1].borrow_mut().0;
         handle_collision(rb1, rb2, &collision.2);
-    }
+    });
 
     bodies_and_boxes.iter_mut().for_each(|b_b| {
         let (rb, obb) = b_b.borrow_mut().get_mut();
@@ -345,7 +338,6 @@ impl RigidBody {
         }
     }
     pub fn new_static(transform: Transform) -> Self {
-        let scale = transform.scale;
         Self {
             inverse_mass: 0.0,
             transform: transform,

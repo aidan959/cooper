@@ -10,4 +10,4 @@ pub use math::{
 
 pub mod math;
 
-pub const GRAVITY: Vec3 = const_vec3!([0.0, -9.8, 0.0]);
+pub const GRAVITY: Vec3 = const_vec3!([0.0, -0.98, 0.0]);

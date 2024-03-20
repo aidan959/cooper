@@ -110,6 +110,7 @@ impl CooperApplication
 
                                 
                                 lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
+                                break;
                                 if interval_start.elapsed() >= Duration::new(1, 0) { // Check if one second has passed
                                     println!("Function executed {} times in the last second. ({})", count, self.engine_settings.fixed_update_rate.as_secs_f32());
                                     count = 0; // Reset the count for the next second

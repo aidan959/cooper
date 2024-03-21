@@ -37,8 +37,8 @@ impl CooperApplication
         let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         let fov_degrees = 90.0;
         let camera = Camera::new(
-            Vec3::new(-10.0, -20.0, 0.0),
-            Vec3::new(0.0,-20.0,0.0),
+            Vec3::new(10.0, 0.0, 10.0),
+            Vec3::new(10.0, 0.9, 0.0),
             fov_degrees,
             WIDTH / HEIGHT,
             0.01,
@@ -60,7 +60,7 @@ impl CooperApplication
             engine_settings
         }
     }
-    
+
     pub fn run<E, F, G, H>(mut self: Self, mut start: E, mut update: F, mut fixed_update: G, mut finally: H)
     where
         E: FnMut( &Sender<GameEvent>, &mut World),
@@ -110,7 +110,6 @@ impl CooperApplication
 
                                 
                                 lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
-                                break;
                                 if interval_start.elapsed() >= Duration::new(1, 0) { // Check if one second has passed
                                     println!("Function executed {} times in the last second. ({})", count, self.engine_settings.fixed_update_rate.as_secs_f32());
                                     count = 0; // Reset the count for the next second

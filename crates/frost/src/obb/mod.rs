@@ -232,6 +232,9 @@ impl DynamicOBB {
             faces: faces,
         }
     }
+    pub fn from_transform(transform: Transform) -> Self {
+        Self::new(transform.position, transform.scale/2.0, transform.rotation)
+    }
     #[inline]
     fn center(&self) -> Vec3 {
         self.center
@@ -516,14 +519,14 @@ impl DynamicOBB {
         collision_point.pen_depth = min_pen_depth;
         collision_point.primitive_a = colliding_face_obb1.face_id;
         collision_point.primitive_b = colliding_face_obb2.face_id;
-        println!(
-            "Colliding Face OBB1: {}",
-            get_face_name(colliding_face_obb1.face_id.unpack())
-        );
-        println!(
-            "Colliding Face OBB2: {}",
-            get_face_name(colliding_face_obb2.face_id.unpack())
-        );
+        // println!(
+        //     "Colliding Face OBB1: {}",
+        //     get_face_name(colliding_face_obb1.face_id.unpack())
+        // );
+        // println!(
+        //     "Colliding Face OBB2: {}",
+        //     get_face_name(colliding_face_obb2.face_id.unpack())
+        // );
         //let collision_point1 = sel;
         //let collision_point2 = obb2.get_support_point(collision_point.normal);
 

@@ -133,7 +133,7 @@ impl RigidBody {
             self.is_static, true,
             "Static rigid bodies cannot have forces"
         );
-        println!("force: {:?}", force);
+        //println!("force: {:?}", force);
         self.force_accumulator += force;
         if point != self.transform.position {
             let lever_arm = point - self.transform.position;
@@ -204,7 +204,7 @@ impl RigidBody {
         }
     }
 }
-
+#[derive(Clone, Copy, Debug)]
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Quat,

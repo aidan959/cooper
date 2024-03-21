@@ -8,28 +8,50 @@ const CENTRE: Vec3 = const_vec3!([0., 0., 0.]);
 struct GfxLocation(usize);
 fn main() {  
     env_logger::init();
-    let mut amount: Mat4 = Mat4::default();
-
-    let mut counter: f32 = 0.;
-    let mut fixed_counter: f32 = 0.;
-    let mut fixed_amount: Mat4 = Mat4::default();
 
     CooperApplication::create().run(
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>, world| {
 
-            (0..4).into_iter().for_each(|_| {
+            (0..13).into_iter().for_each(|_| {
                 event_stream
                     .send(GameEvent::Spawn("models/cube.gltf".to_string()))
                     .unwrap();
             });
             event_stream.send(GameEvent::MoveEvent(0, Mat4::from_translation(Vec3::ZERO))).unwrap();
             // platform
+            let platform_transform = Transform {
+                position: Vec3::new(0.0, -20.0, 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(5.0, 1.0, 5.0)
+            };
             world.new_entity((
                 GfxLocation(0),
+                RigidBody::new_static(platform_transform.clone()),
+                obb::DynamicOBB::from_transform(platform_transform)
+            )).unwrap();
+            // medium cube
+            let medium_cube_transform = Transform {
+                position: Vec3::new(0.0, 10.0, 0.0),
+                rotation: Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 0.0),
+                scale: Vec3::new(2.5, 2.5, 2.5)
+            };
+            let mut rb= RigidBody::new(
+                100.0,
+                medium_cube_transform,);
+            rb.gravity = true;
+            rb.restitution = 0.1;
+            world.new_entity((
+                GfxLocation(1),
+                rb ,
+                obb::DynamicOBB::from_transform(medium_cube_transform)
+            )).unwrap();
+            // platform
+            world.new_entity((
+                GfxLocation(5),
                 RigidBody::new_static(
                     Transform {
-                        position: Vec3::new(0.0, -20.0, 0.0),
+                        position: Vec3::new(10.0, -20.0, 0.0),
                         rotation: Quat::IDENTITY,
                         scale: Vec3::new(5.0, 1.0, 5.0)
                     },),
@@ -43,18 +65,51 @@ fn main() {
             let mut rb= RigidBody::new(
                 100.0,
                 Transform {
-                    position: Vec3::new(0.0, 10.0, 0.0),
+                    position: Vec3::new(10.0, 10.0, 0.0),
                     rotation: Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 60.0),
                     scale: Vec3::new(2.5, 2.5, 2.5)
                 },);
-            rb.gravity = false;
-            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
+            rb.gravity = true;
             rb.restitution = 0.1;
             world.new_entity((
-                GfxLocation(1),
+                GfxLocation(7),
                 rb ,
                 obb::DynamicOBB::new(
-                    Vec3::new(0.0, 10.0, 0.0),
+                    Vec3::new(10.0, 10.0, 0.0),
+                    Vec3::new(1.25, 1.25, 1.25),
+                    Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 60.0),
+                )
+            )).unwrap();
+            // platform
+            world.new_entity((
+                GfxLocation(6),
+                RigidBody::new_static(
+                    Transform {
+                        position: Vec3::new(-10.0, -20.0, 0.0),
+                        rotation: Quat::IDENTITY,
+                        scale: Vec3::new(5.0, 1.0, 5.0)
+                    },),
+                obb::DynamicOBB::new(
+                    Vec3::new(-10.0, -20.0, 0.0),
+                    Vec3::new(2.5, 0.5, 2.5),
+                    Quat::IDENTITY,
+                )
+            )).unwrap();
+            // medium cube
+            let mut rb= RigidBody::new(
+                100.0,
+                Transform {
+                    position: Vec3::new(-10.0, 10.0, 0.0),
+                    rotation: Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 60.0),
+                    scale: Vec3::new(2.5, 2.5, 2.5)
+                },);
+            rb.gravity = true;
+            rb.restitution = 0.1;
+            world.new_entity((
+                GfxLocation(8),
+                rb ,
+                obb::DynamicOBB::new(
+                    Vec3::new(-10.0, 10.0, 0.0),
                     Vec3::new(1.25, 1.25, 1.25),
                     Quat::from_euler(glam::EulerRot::XYZ,0.0, 0.0, 45.0),
                 )
@@ -79,47 +134,115 @@ fn main() {
                     Quat::IDENTITY,
                 )
             )).unwrap();
-            // moving collider
+            {// moving collider
+            let moving_transform = Transform {
+                position: Vec3::new(-50.0, 0.0, 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1., 1., 1.)
+            };
             let mut rb= RigidBody::new(
                 5.0,
-                Transform {
-                    position: Vec3::new(-10.0, 0.0, 0.0),
-                    rotation: Quat::IDENTITY,
-                    scale: Vec3::new(1., 1., 1.)
-                },);
+                moving_transform,);
             rb.gravity = false;
             rb.velocity = Vec3::new(2.0, 0.0, 0.0);
             rb.restitution = 1.0;
             world.new_entity((
                 GfxLocation(3),
                 rb ,
-                obb::DynamicOBB::new(
-                    Vec3::new(0.0, 0.0, 0.0),
-                    Vec3::new(0.5, 0.5, 0.5),
-                    Quat::IDENTITY,
-                )
+                obb::DynamicOBB::from_transform(moving_transform)
             )).unwrap();
 
             // starts stationary
+            let stationary_cube_transform = Transform {
+                position: Vec3::new(-20.0, 0.0, 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1.0, 1.0, 1.0)
+            };
             let mut rb= RigidBody::new(
                 25.0,
-                Transform {
-                    position: Vec3::new(10.0, 0.9, 0.0),
-                    rotation: Quat::IDENTITY,
-                    scale: Vec3::new(1., 1., 1.)
-                },);
+                stationary_cube_transform,);
             rb.gravity = false;
             rb.velocity = Vec3::new(0.0, 0.0, 0.0);
             rb.restitution = 1.0;
             world.new_entity((
                 GfxLocation(4),
                 rb ,
-                obb::DynamicOBB::new(
-                    Vec3::new(10.0, 0.0, 0.0),
-                    Vec3::new(0.5, 0.5, 0.5),
-                    Quat::IDENTITY,
-                )
+                obb::DynamicOBB::from_transform(stationary_cube_transform)
             )).unwrap();
+            }
+
+            // moving collider
+            let moving_transform = Transform {
+                position: Vec3::new(-50.0, -5.9, 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1., 1., 1.)
+            };
+            let mut rb= RigidBody::new(
+                5.0,
+                moving_transform,);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(2.0, 0.0, 0.0);
+            rb.restitution = 1.0;
+            world.new_entity((
+                GfxLocation(9),
+                rb ,
+                obb::DynamicOBB::from_transform(moving_transform)
+            )).unwrap();
+
+            // starts stationary
+            let stationary_cube_transform = Transform {
+                position: Vec3::new(-20.0, -5., 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1.0, 1.0, 1.0)
+            };
+            let mut rb= RigidBody::new(
+                100.0,
+                stationary_cube_transform,);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
+            rb.restitution = 1.0;
+            world.new_entity((
+                GfxLocation(10),
+                rb ,
+                obb::DynamicOBB::from_transform(stationary_cube_transform)
+            )).unwrap();
+            // moving collider
+            let moving_transform = Transform {
+                position: Vec3::new(-50.0, -10.5, 0.4),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1., 1., 1.)
+            };
+            let mut rb= RigidBody::new(
+                5.0,
+                moving_transform,);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(2.0, 0.0, 0.0);
+            rb.restitution = 0.9;
+
+            world.new_entity((
+                GfxLocation(11),
+                rb ,
+                obb::DynamicOBB::from_transform(moving_transform)
+            )).unwrap();
+
+            // starts stationary
+            let stationary_cube_transform = Transform {
+                position: Vec3::new(-20.0, -10.0, 0.0),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(1.0, 1.0, 1.0)
+            };
+            let mut rb= RigidBody::new(
+                25.0,
+                stationary_cube_transform,);
+            rb.gravity = false;
+            rb.velocity = Vec3::new(0.0, 0.0, 0.0);
+            rb.restitution = 0.9;
+            world.new_entity((
+                GfxLocation(12),
+                rb ,
+                obb::DynamicOBB::from_transform(stationary_cube_transform)
+            )).unwrap();
+        
         },
         |renderer_event_stream, delta| {
 

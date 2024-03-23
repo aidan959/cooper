@@ -18,7 +18,7 @@ use crate::{vulkan, Texture};
 pub type TextureId = usize;
 pub type BufferId = usize;
 pub type PipelineId = usize;
-pub type TlasId = usize;
+
 
 pub struct GraphTexture {
     pub texture: Texture,

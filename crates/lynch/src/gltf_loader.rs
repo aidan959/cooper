@@ -199,7 +199,7 @@ pub fn load_gltf(device: Arc<Device>, path: &str) -> Model {
         }
 
         if image.format != gltf::image::Format::R8G8B8A8 {
-            panic!("Unsupported image format!");
+        //    panic!("Unsupported image format!");
         }
 
         let texture = Texture::create(

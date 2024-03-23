@@ -153,7 +153,7 @@ impl RigidBody {
         }
     }
 
-    fn apply_torque(&mut self, torque: Vec3) {
+    pub fn apply_torque(&mut self, torque: Vec3) {
         debug_assert_ne!(
             self.is_static, true,
             "Static rigid bodies cannot have torques"

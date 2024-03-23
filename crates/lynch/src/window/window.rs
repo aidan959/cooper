@@ -1,8 +1,5 @@
 use winit::{
-    dpi::PhysicalSize,
-    event::Event,
-    event_loop::EventLoop,
-    window::{Window as WinitWindow, WindowBuilder},
+    dpi::PhysicalSize, event::Event, event_loop::{EventLoop, EventLoopBuilder}, platform::windows::EventLoopBuilderExtWindows, window::{Window as WinitWindow, WindowBuilder}
 };
 // use super::windows::process_event_windows;
 type EventCallback = fn(Event<()>) -> ();
@@ -31,7 +28,10 @@ impl Window {
         )
     }
     fn create_event_loop() -> EventLoop<()> {
-        let event_loop = EventLoop::new().unwrap();
+        let event_loop = EventLoopBuilder::new()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
         event_loop
     }

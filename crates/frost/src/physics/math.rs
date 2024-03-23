@@ -1,6 +1,6 @@
-use std::{cell::RefCell, default};
+use std::cell::RefCell;
 
-use glam::{vec3, Mat3, Quat, Vec3};
+use glam::{Mat3, Quat, Vec3};
 
 use self::obb::DynamicOBB;
 

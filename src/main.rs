@@ -1,10 +1,9 @@
-use std::{f32::INFINITY, sync::mpsc::Sender};
+use std::sync::mpsc::Sender;
 
 use application::application::{CooperApplication, GameEvent};
-use frost::{obb, physics::math::physics_system, RigidBody, System,SearchIter,Search, ChainedIterator, Transform, World};
-use glam::{const_vec3, Mat3, Mat4, Quat, Vec3};
+use frost::{obb, physics::math::physics_system, RigidBody, System,SearchIter,Transform};
+use glam::{Mat4, Quat, Vec3};
 
-const CENTRE: Vec3 = const_vec3!([0., 0., 0.]);
 struct GfxLocation(usize);
 fn main() {  
     env_logger::init();

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use glam::{const_vec3, Mat3, Quat, Vec3};
 
 use crate::{
-    shapes::{self, PolygonPrimitive, PrimitiveId, WrappedPrimitiveId},
+    shapes::{PolygonPrimitive, PrimitiveId, WrappedPrimitiveId},
     Transform,
 };
 

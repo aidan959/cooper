@@ -2,9 +2,9 @@ pub mod bounding_box;
 pub mod entity;
 pub mod obb;
 pub mod shapes;
+pub mod math;
 
 mod mass;
-mod math;
 
 mod component_utils;
 mod input;
@@ -19,11 +19,11 @@ mod system;
 use std::{
     any::{Any, TypeId},
     borrow::BorrowMut,
-    collections::{hash_map::DefaultHasher, HashMap},
-    sync::{Mutex, RwLock},
+    collections::HashMap,
+    sync:: RwLock,
 };
 
-use crate::{Get, GetError, SearchGet, SearchParameters, Single, SingleMut};
+pub use crate::{Get, GetError, SearchGet, SearchParameters, Single, SingleMut};
 pub use input::Input;
 pub(crate) type EntityId = u32;
 pub(crate) type Generation = u32;

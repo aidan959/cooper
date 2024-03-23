@@ -1,6 +1,6 @@
 use glam::{Quat, Vec3,Mat3, const_vec3};
 
-use super::{*,obb::CollisionPoint};
+use super::*;
 pub use math::{
     Transform,
     handle_collision,

@@ -100,7 +100,36 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_albedo,
         gbuffer_pbr,
     );
-    setup_present_pass(graph, gbuffer_normal);
+    setup_present_pass(graph, gbuffer_albedo);
+}
+pub fn build_render_graph_atmosphere(
+    graph: &mut RenderGraph,
+    device: Arc<Device>,
+    base: &VulkanRenderer,
+    camera: &Camera,
+) {
+    let width = base.surface_resolution.width;
+    let height = base.surface_resolution.height;
+
+    let (gbuffer_position, gbuffer_normal, gbuffer_albedo, gbuffer_pbr) =
+        create_gbuffer_textures(graph, device.clone(), width, height);
+
+
+    let image_desc = ImageDesc::new_2d(width, height, vk::Format::R32G32B32A32_SFLOAT);
+
+    setup_gbuffer_pass(
+        graph,
+        base,
+        gbuffer_position,
+        gbuffer_normal,
+        gbuffer_albedo,
+        gbuffer_pbr,
+    );
+    let (environment_map, irradiance_map, specular_map, brdf_lut) =
+        setup_cubemap_pass(device.clone(), graph, &base);
+
+    setup_atmosphere_pass(graph, base, gbuffer_albedo, environment_map, camera, true);
+    setup_present_pass(graph, gbuffer_albedo);
 }
 pub fn build_render_graph(
     graph: &mut RenderGraph,
@@ -218,9 +247,11 @@ pub fn build_render_graph_opt(
         ([glam::Mat4::default(); 4], [0.0; 4])
     };
 
-    let deferred_output = {
+    let deferred_output = if enable_deferred_pass  {
         let image_desc = ImageDesc::new_2d(width, height, vk::Format::R32G32B32A32_SFLOAT);
         Some(graph.create_texture("deferred_output", device.clone(), image_desc))
+    } else {
+        None
     };
 
     let ssao_output = if enable_ssao_pass {

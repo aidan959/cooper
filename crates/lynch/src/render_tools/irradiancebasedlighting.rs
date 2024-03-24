@@ -61,7 +61,7 @@ pub fn setup_cubemap_pass(
     if !renderer.internal_renderer.need_environment_map_update {
         return (environment_map, irradiance_map, specular_map, brdf_lut);
     }
-
+    print!("Updating environment map\n");
     for mip in 0..num_mips {
         let size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 

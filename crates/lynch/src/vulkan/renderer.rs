@@ -491,14 +491,33 @@ impl VulkanRenderer {
             self.internal_renderer.instances[0]
                 .transform
                 .add_mat4(&Mat4::from_rotation_x(0.01));
-            render_tools::build_render_graph(
+            // render_tools::build_render_graph(
+            //     graph,
+            //     self.arc_device(),
+            //     &self,
+            //     &self.view_data,
+            //     &camera,
+            // );
+            render_tools::build_render_graph_gbuffer_only(
+                graph,
+                self.arc_device(),
+                &self,
+            );
+
+            render_tools::build_render_graph_opt(
                 graph,
                 self.arc_device(),
                 &self,
                 &self.view_data,
                 &camera,
+                true,
+                false,
+                false,
+                false,
+                true,
+                true,
+                true
             );
-
             graph.prepare(&self);
             let image = self.present_images[present_index].clone();
             graph.render(&command_buffer, &self, &image);

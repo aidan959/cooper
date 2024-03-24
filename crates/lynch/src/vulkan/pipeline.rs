@@ -28,7 +28,7 @@ pub struct Pipeline {
     pub handle: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub reflection: vulkan::shader::Reflection,
+    pub reflection: vulkan::shader::ShaderReflect,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
 }
@@ -77,7 +77,7 @@ impl Pipeline {
             handle: vk::Pipeline::null(),
             pipeline_layout: vk::PipelineLayout::null(),
             descriptor_set_layouts: vec![],
-            reflection: vulkan::shader::Reflection::default(),
+            reflection: vulkan::shader::ShaderReflect::default(),
             pipeline_desc,
             pipeline_type,
         };
@@ -156,7 +156,7 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::Reflection,
+            vulkan::shader::ShaderReflect,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
@@ -168,7 +168,7 @@ impl Pipeline {
         let vertex_spv_file = vertex_spv_file.as_binary_u8();
         let fragment_spv_file = fragment_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::Reflection::new(&[vertex_spv_file, fragment_spv_file]);
+        let reflection = vulkan::shader::ShaderReflect::new(&[vertex_spv_file, fragment_spv_file]);
 
         let (pipeline_layout, descriptor_set_layouts, _) =
             create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);
@@ -316,7 +316,7 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::Reflection,
+            vulkan::shader::ShaderReflect,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
@@ -325,7 +325,7 @@ impl Pipeline {
         let compute_spv_file = vulkan::shader::compile_glsl_shader(compute_shader_path)?;
         let compute_spv_file = compute_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::Reflection::new(&[compute_spv_file]);
+        let reflection = vulkan::shader::ShaderReflect::new(&[compute_spv_file]);
 
         let (pipeline_layout, descriptor_set_layouts, _) =
             create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);

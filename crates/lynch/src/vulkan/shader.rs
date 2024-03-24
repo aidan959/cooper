@@ -25,7 +25,7 @@ pub struct Binding {
 }
 
 #[derive(Default)]
-pub struct Reflection {
+pub struct ShaderReflect {
     pub descriptor_set_reflections: DescriptorSetMap,
     pub push_constant_reflections: Vec<rspirv_reflect::PushConstantInfo>,
     pub binding_mappings: HashMap<String, Binding>,
@@ -33,8 +33,8 @@ pub struct Reflection {
 
 const MAIN_ENTRY_POINT: &'static str = "main";
 
-impl Reflection {
-    pub fn new(shader_stages: &[&[u8]]) -> Reflection {
+impl ShaderReflect {
+    pub fn new(shader_stages: &[&[u8]]) -> ShaderReflect {
         let mut descriptor_sets_combined: DescriptorSetMap = BTreeMap::new();
         let mut push_constant_ranges: Vec<rspirv_reflect::PushConstantInfo> = vec![];
 
@@ -98,7 +98,7 @@ impl Reflection {
             })
             .collect();
 
-        Reflection {
+        ShaderReflect {
             descriptor_set_reflections: descriptor_sets_combined,
             push_constant_reflections: push_constant_ranges,
             binding_mappings,
@@ -182,7 +182,7 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
 #[must_use]
 pub fn create_layouts_from_reflection(
     device: &ash::Device,
-    reflection: &Reflection,
+    reflection: &ShaderReflect,
     bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
 ) -> (
     vk::PipelineLayout,

@@ -106,20 +106,7 @@ pub struct Image {
     pub debug_name: String,
     pub device: Arc<Device>,
 }
-/* //TODO implement appropriate dropping
-impl Drop for Image {
-    fn drop(&mut self) {
-        unsafe {
-            self.device
-                .ash_device
-                .destroy_image_view(self.image_view, None);
-            self.device.ash_device.destroy_image(self.image, None);
-            self.layer_views
-                .iter()
-                .for_each(|iv| self.device.ash_device.destroy_image_view(*iv, None));
-        }
-    }
-}*/
+
 impl Image {
     pub fn clean_vk_resources(&self) {
         unsafe {

@@ -5,7 +5,7 @@ use glam::{Vec3, Mat4};
 use winit::
     event::{Event, WindowEvent}
 ;
-use winit::event_loop::EventLoop;
+use winit::event_loop::{ControlFlow, EventLoop};
 use log::{debug, info};
 use std::sync::mpsc::{self, Sender};
 use std::time::{Instant, Duration};
@@ -64,10 +64,10 @@ impl CooperApplication
 
     pub fn run<E, F, G, H>(mut self: Self, mut start: E, mut update: F, mut fixed_update: G, mut finally: H)
     where
-        E: FnMut( &Sender<GameEvent>, &mut World),
-        F: FnMut( &Sender<GameEvent>, f32),
-        G: FnMut( &Sender<GameEvent>, f32, &World),
-        H: FnMut( &Sender<GameEvent>),
+        E: FnMut( &Sender<GameEvent>, &mut World) + 'static,
+        F: FnMut( &Sender<GameEvent>, f32) + 'static,
+        G: FnMut( &Sender<GameEvent>, f32, &World) + 'static,
+        H: FnMut( &Sender<GameEvent>) + 'static,
     {
         let mut world = World::new();
         let mut frame_count = 0;
@@ -87,12 +87,19 @@ impl CooperApplication
         let mut lag = 0.0;
         let mut count = 0;
         let mut interval_start = Instant::now();
+        let mut last_frame = Instant::now();
         self.event_loop.run( 
-            |event, _elwt|{
+            move |event, _elwt, control_flow|{
+                *control_flow = ControlFlow::Poll;
                 match event{
-                    Event::WindowEvent {event, .. } => match event {
-                        WindowEvent::RedrawRequested=> {
-                            let delta = self.renderer.render(&mut self.graph, &self.camera);
+                    Event::NewEvents(_) => {
+                        let now = Instant::now();
+                        self.renderer.gui.io_mut().update_delta_time(now.duration_since(last_frame));
+
+                        last_frame = now;
+                    },
+                    Event::MainEventsCleared => {
+                        let delta = self.renderer.render(&mut self.graph, &self.camera);
                             let current_time = Instant::now();
                             let elapsed = current_time.duration_since(last_fixed_update);
                             last_fixed_update = current_time;
@@ -166,10 +173,12 @@ impl CooperApplication
                                     std::thread::sleep(self.engine_settings.fps_settings.frame_time - elapsed);
                                 }
                             }  
-                        },
+                    },
+                    Event::WindowEvent {event, .. } => match event {
+
                         WindowEvent::CloseRequested => {
                             self.graph.clear();
-                            _elwt.exit();
+                            
                         },
                         WindowEvent::Resized(resize_value) => {
                             self.renderer.resize(resize_value);
@@ -177,18 +186,14 @@ impl CooperApplication
                         WindowEvent::MouseInput {..} | WindowEvent::CursorMoved {..}| WindowEvent::KeyboardInput {..}| WindowEvent::MouseWheel {..} => {
                             input.update(&event);
                         },
-                        _ => { 
-                        }
-                    },
-                    Event::LoopExiting => 
-                        info!("Main program loop exiting."),
-                    Event::AboutToWait => {
-                        self.window.window.request_redraw();
-                    },
+                        _ => {}
+                    }
+                    ,
+
                     _ => {}
                 }                
             }
-        ).unwrap()
+        );
     }
 
     fn create_scene(&mut self) {

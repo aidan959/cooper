@@ -136,6 +136,7 @@ pub fn build_render_graph(
     base: &VulkanRenderer,
     view_data: &ViewUniformData,
     camera: &Camera,
+
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;

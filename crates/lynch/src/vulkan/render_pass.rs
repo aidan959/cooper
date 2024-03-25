@@ -14,6 +14,7 @@ use super::{Device, Image, Pipeline, PipelineType};
 
 pub struct RenderPass {
     pub pipeline_handle: PipelineId,
+    pub render_pass: vk::RenderPass,
     pub render_func: Option<
         Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
     >,

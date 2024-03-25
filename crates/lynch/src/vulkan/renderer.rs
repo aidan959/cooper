@@ -14,9 +14,13 @@ use gpu_allocator::vulkan::AllocatorCreateDesc;
 use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
-use super::{descriptor::DescriptorSet, Buffer, Device, Image, ImageDesc};
+use super::{descriptor::DescriptorSet, render_pass, Buffer, Device, Image, ImageDesc};
 use glam::{self, Mat4, Vec3, Vec4};
-use std::{ffi::CString, sync::{Arc, Mutex}, time::Instant};
+use std::{
+    ffi::CString,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 pub const MAX_NUM_GPU_MATERIALS: usize = 1024;
 pub const MAX_NUM_GPU_MESHES: usize = 1024;
 pub const DESCRIPTOR_SET_INDEX_BINDLESS: u32 = 0;
@@ -46,6 +50,8 @@ pub struct VulkanRenderer {
     pub surface_resolution: vk::Extent2D,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_loader: ash::extensions::khr::Swapchain,
+    pub render_pass: vk::RenderPass,
+    pub framebuffers: Vec<vk::Framebuffer>,
     pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
     pub internal_renderer: RendererInternal,
     pub current_frame: usize,
@@ -57,8 +63,6 @@ pub struct VulkanRenderer {
     pub gui: imgui::Context,
     pub gui_renderer: imgui_rs_vulkan_renderer::Renderer,
     pub platform: imgui_winit_support::WinitPlatform,
-
-
 }
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
@@ -358,6 +362,7 @@ impl VulkanRenderer {
         vk::SurfaceFormatKHR,
         vk::Extent2D,
         u32,
+        vk::RenderPass,
     ) {
         let surface_loader = context.surface();
         let physical_device = context.physical_device();
@@ -410,6 +415,43 @@ impl VulkanRenderer {
             let swapchain = swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
+            let attachment_descs = [vk::AttachmentDescription::builder()
+                .format(surface_format.format)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                .build()];
+
+            let color_attachment_refs = [vk::AttachmentReference::builder()
+                .attachment(0)
+                .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .build()];
+
+            let subpass_descs = [vk::SubpassDescription::builder()
+                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+                .color_attachments(&color_attachment_refs)
+                .build()];
+
+            let subpass_deps = [vk::SubpassDependency::builder()
+                .src_subpass(vk::SUBPASS_EXTERNAL)
+                .dst_subpass(0)
+                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .dst_access_mask(
+                    vk::AccessFlags::COLOR_ATTACHMENT_READ
+                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                )
+                .build()];
+
+            let render_pass_info = vk::RenderPassCreateInfo::builder()
+                .attachments(&attachment_descs)
+                .subpasses(&subpass_descs)
+                .dependencies(&subpass_deps);
+            let render_pass = unsafe { context.ash_device().create_render_pass(&render_pass_info, None).unwrap()};
+
 
             (
                 swapchain,
@@ -417,6 +459,7 @@ impl VulkanRenderer {
                 surface_format,
                 surface_resolution,
                 desired_image_count,
+                render_pass
             )
         }
     }
@@ -505,18 +548,19 @@ impl VulkanRenderer {
                 self.arc_device(),
                 &self,
                 &self.view_data,
-                &camera
+                &camera,
             );
+
             // render_tools::build_render_graph_gbuffer_only(
             //     graph,
             //     self.arc_device(),
             //     &self,
             // );
             // render_tools::build_render_graph_atmosphere(
-                // graph,
-                // self.arc_device(),
-                // &self,
-                // &camera
+            // graph,
+            // self.arc_device(),
+            // &self,
+            // &camera
             // );
             // render_tools::build_render_graph_opt(
             //     graph,
@@ -532,21 +576,47 @@ impl VulkanRenderer {
             //     true,
             //     true
             // );
+            let framebuffer = self.framebuffers[present_index as usize];
+            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                .render_pass(self.render_pass)
+                
+                .framebuffer(framebuffer)
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: self.surface_resolution,
+                })
+                .clear_values(&[vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [1.0, 1.0, 1.0, 1.0],
+                    },
+                }]);
+
+            self.vk_context.ash_device().cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+            ;
             graph.prepare(&self);
             let image = self.present_images[present_index].clone();
             graph.render(&command_buffer, &self, &image);
+            self.present_images[self.current_frame].current_layout =
+            vk::ImageLayout::PRESENT_SRC_KHR;
 
-            self.ash_device()
-                .end_command_buffer(command_buffer)
-                .expect("End commandbuffer failed.");
-            let mut ui = self.gui.frame();
+            let ui = self.gui.frame();
             let mut a = true;
             ui.show_demo_window(&mut a);
             let draw_data = self.gui.render();
-            self.present_images[self.current_frame].current_layout =
-                vk::ImageLayout::PRESENT_SRC_KHR;
             
+            self.gui_renderer
+                .cmd_draw(command_buffer, draw_data)
+                .unwrap();
+            self.vk_context.ash_device().cmd_end_render_pass(command_buffer) ;
+            self.ash_device()
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer failed.");
 
+            
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
             self.current_frame = (self.current_frame + 1) % self.num_frames_in_flight as usize;
@@ -558,7 +628,6 @@ impl VulkanRenderer {
         self.last_frame_end = now;
         delta_time
     }
-
 }
 
 impl Renderer for VulkanRenderer {
@@ -593,7 +662,7 @@ impl Renderer for VulkanRenderer {
 
         let vk_context = VkContext::new(entry, instance, surface, surface_khr, device);
 
-        let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count) =
+        let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count,render_pass) =
             Self::create_swapchain(&vk_context);
 
         let (present_images, depth_image) = Self::setup_swapchain_images(
@@ -603,6 +672,18 @@ impl Renderer for VulkanRenderer {
             surface_format,
             surface_resolution,
         );
+        let framebuffers :Vec<vk::Framebuffer> = present_images.iter()
+        .map(|view| [view.image_view])
+        .map(|attachments| {
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(render_pass)
+                .attachments(&attachments)
+                .width(surface_resolution.width)
+                .height(surface_resolution.height)
+                .layers(1);
+            unsafe { vk_context.ash_device().create_framebuffer(&framebuffer_info, None) }
+        })
+        .collect::<Result<Vec<_>, _>>().unwrap();
         let command_pool = Self::create_command_pool(&vk_context);
 
         let sync_frames =
@@ -613,8 +694,8 @@ impl Renderer for VulkanRenderer {
         let camera_uniform_buffer = (0..image_count)
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
-        
-        let (mut gui, mut platform) = {
+
+        let (mut gui, platform) = {
             let mut g = imgui::Context::create();
             let mut platform = WinitPlatform::init(&mut g);
 
@@ -650,23 +731,25 @@ impl Renderer for VulkanRenderer {
                 debug_settings: Default::default(),
                 buffer_device_address: false,
                 allocation_sizes: Default::default(),
-            }).unwrap();
+            })
+            .unwrap();
 
             imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
                 Arc::new(Mutex::new(allocator)),
                 vk_context.ash_device().clone(),
                 vk_context.device().queue,
                 vk_context.device().cmd_pool,
-                imgui_rs_vulkan_renderer::DynamicRendering{
+                imgui_rs_vulkan_renderer::DynamicRendering {
                     color_attachment_format: vk::Format::R32G32B32A32_SFLOAT,
                     depth_attachment_format: None,
                 },
                 &mut gui,
-                Some(imgui_rs_vulkan_renderer::Options { 
+                Some(imgui_rs_vulkan_renderer::Options {
                     in_flight_frames: image_count as usize,
                     ..Default::default()
                 }),
-            ).unwrap()
+            )
+            .unwrap()
         };
         Self {
             vk_context,
@@ -679,6 +762,7 @@ impl Renderer for VulkanRenderer {
             surface_resolution,
             swapchain,
             swapchain_loader,
+            render_pass,
             debug_utils_messenger,
             internal_renderer,
             current_frame: 0,
@@ -689,10 +773,11 @@ impl Renderer for VulkanRenderer {
             last_frame_end: Instant::now(),
             gui_renderer,
             gui,
-            platform
+            platform,
+            framebuffers
         }
     }
-    
+
     fn begin_frame(self: &mut Self) -> usize {
         unsafe {
             let (present_index, _) = self

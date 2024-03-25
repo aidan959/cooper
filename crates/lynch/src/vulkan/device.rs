@@ -132,6 +132,7 @@ impl Device {
                     ..Default::default()
                 },
                 buffer_device_address: true,
+                allocation_sizes: Default::default()
             })
             .expect("Failed to create GPU allocator");
 

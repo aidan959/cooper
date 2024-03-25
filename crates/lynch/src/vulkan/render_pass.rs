@@ -14,7 +14,6 @@ use super::{Device, Image, Pipeline, PipelineType};
 
 pub struct RenderPass {
     pub pipeline_handle: PipelineId,
-    pub render_pass: vk::RenderPass,
     pub render_func: Option<
         Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
     >,
@@ -45,6 +44,8 @@ impl RenderPass {
         copy_command: Option<TextureCopy>,
         extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
         device: Arc<Device>,
+        
+        
     ) -> RenderPass {
         RenderPass {
             pipeline_handle,

@@ -1,3 +1,5 @@
+use ash::vk;
+
 use crate::{
     render_graph::{RenderGraph, TextureId},
     vulkan::PipelineDesc,
@@ -17,6 +19,8 @@ pub fn setup_deferred_pass(
     brdf_lut: TextureId,
     cascade_data: ([glam::Mat4; 4], [f32; 4]),
     deferred_output: TextureId,
+    render_pass: vk::RenderPass,
+    framebuffers: Vec<vk::Framebuffer>,
 ) {
     graph
         .add_pass_from_desc(
@@ -41,5 +45,5 @@ pub fn setup_deferred_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(graph);
+        .build(graph,render_pass, framebuffers);
 }

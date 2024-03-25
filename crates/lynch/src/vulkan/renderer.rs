@@ -11,7 +11,8 @@ use ash::{
 };
 use ash::{vk, Entry, Instance};
 use gpu_allocator::vulkan::AllocatorCreateDesc;
-use imgui::DrawData;
+use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource};
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 use super::{descriptor::DescriptorSet, Buffer, Device, Image, ImageDesc};
 use glam::{self, Mat4, Vec3, Vec4};
@@ -53,7 +54,10 @@ pub struct VulkanRenderer {
     pub camera_uniform_buffer: Vec<Buffer>,
     pub view_data: ViewUniformData,
     pub last_frame_end: Instant,
-    pub gui_renderer: imgui_rs_vulkan_renderer::Renderer
+    pub gui: imgui::Context,
+    pub gui_renderer: imgui_rs_vulkan_renderer::Renderer,
+    pub platform: imgui_winit_support::WinitPlatform,
+
 
 }
 pub struct RendererInternal {
@@ -456,7 +460,7 @@ impl VulkanRenderer {
         self.vk_context.ash_device()
     }
 
-    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera, gui_draw_data: &imgui::DrawData) -> f32 {
+    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera) -> f32 {
         self.update_view_to_camera(&camera);
         let command_buffer = self.sync_frames[self.current_frame].command_buffer;
         let wait_fence = self.sync_frames[self.current_frame].command_buffer_reuse_fence;
@@ -501,8 +505,7 @@ impl VulkanRenderer {
                 self.arc_device(),
                 &self,
                 &self.view_data,
-                &camera,
-                gui_draw_data
+                &camera
             );
             // render_tools::build_render_graph_gbuffer_only(
             //     graph,
@@ -536,9 +539,14 @@ impl VulkanRenderer {
             self.ash_device()
                 .end_command_buffer(command_buffer)
                 .expect("End commandbuffer failed.");
-
+            let mut ui = self.gui.frame();
+            let mut a = true;
+            ui.show_demo_window(&mut a);
+            let draw_data = self.gui.render();
             self.present_images[self.current_frame].current_layout =
                 vk::ImageLayout::PRESENT_SRC_KHR;
+            
+
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
             self.current_frame = (self.current_frame + 1) % self.num_frames_in_flight as usize;
@@ -605,12 +613,40 @@ impl Renderer for VulkanRenderer {
         let camera_uniform_buffer = (0..image_count)
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
-        let mut gui = imgui::Context::create();
+        
+        let (mut gui, mut platform) = {
+            let mut g = imgui::Context::create();
+            let mut platform = WinitPlatform::init(&mut g);
+
+            let hidpi_factor = platform.hidpi_factor();
+            let font_size = (13.0 * hidpi_factor) as f32;
+            g.fonts().add_font(&[
+                FontSource::DefaultFontData {
+                    config: Some(FontConfig {
+                        size_pixels: font_size,
+                        ..FontConfig::default()
+                    }),
+                },
+                FontSource::TtfData {
+                    data: include_bytes!("../../../../assets/fonts/mplus-1p-regular.ttf"),
+                    size_pixels: font_size,
+                    config: Some(FontConfig {
+                        rasterizer_multiply: 1.75,
+                        glyph_ranges: FontGlyphRanges::default(),
+                        ..FontConfig::default()
+                    }),
+                },
+            ]);
+
+            g.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+            platform.attach_window(g.io_mut(), &window.window, HiDpiMode::Rounded);
+            (g, platform)
+        };
         let gui_renderer = {
             let allocator = gpu_allocator::vulkan::Allocator::new(&AllocatorCreateDesc {
-                instance: instance.clone(),
-                device: device.device().clone(),
-                physical_device: device.physical_device,
+                instance: vk_context.instance().clone(),
+                device: vk_context.ash_device().clone(),
+                physical_device: vk_context.physical_device(),
                 debug_settings: Default::default(),
                 buffer_device_address: false,
                 allocation_sizes: Default::default(),
@@ -618,19 +654,19 @@ impl Renderer for VulkanRenderer {
 
             imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
                 Arc::new(Mutex::new(allocator)),
-                device.device().clone(),
-                device.queue,
-                device.cmd_pool,
+                vk_context.ash_device().clone(),
+                vk_context.device().queue,
+                vk_context.device().cmd_pool,
                 imgui_rs_vulkan_renderer::DynamicRendering{
-                    color_attachment_format: todo!(),
-                    depth_attachment_format: todo!(),
+                    color_attachment_format: vk::Format::R32G32B32A32_SFLOAT,
+                    depth_attachment_format: None,
                 },
                 &mut gui,
                 Some(imgui_rs_vulkan_renderer::Options { 
                     in_flight_frames: image_count as usize,
                     ..Default::default()
                 }),
-            )?
+            ).unwrap()
         };
         Self {
             vk_context,
@@ -651,7 +687,9 @@ impl Renderer for VulkanRenderer {
             camera_uniform_buffer,
             view_data,
             last_frame_end: Instant::now(),
-            gui_renderer
+            gui_renderer,
+            gui,
+            platform
         }
     }
     

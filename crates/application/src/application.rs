@@ -92,7 +92,7 @@ impl CooperApplication
                 match event{
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
-                            let delta = self.renderer.render(&mut self.graph, &self.camera, data);
+                            let delta = self.renderer.render(&mut self.graph, &self.camera);
                             let current_time = Instant::now();
                             let elapsed = current_time.duration_since(last_fixed_update);
                             last_fixed_update = current_time;

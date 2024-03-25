@@ -45,6 +45,7 @@ impl Buffer {
                     requirements: buffer_memory_req,
                     location: memory_location,
                     linear: true,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 })
                 .unwrap();
 

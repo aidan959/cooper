@@ -54,16 +54,16 @@ impl Camera {
         let transform = self.camera_rig.final_transform;
 
         let mut movement = Vec3::new(0.0, 0.0, 0.0);
-        if input.key_down(winit::keyboard::KeyCode::KeyW) {
+        if input.key_down(winit::event::VirtualKeyCode::W) {
             movement += self.speed * transform.forward();
         }
-        if input.key_down(winit::keyboard::KeyCode::KeyS) {
+        if input.key_down(winit::event::VirtualKeyCode::S) {
             movement -= self.speed * transform.forward();
         }
-        if input.key_down(winit::keyboard::KeyCode::KeyA) {
+        if input.key_down(winit::event::VirtualKeyCode::A) {
             movement -= self.speed * transform.right();
         }
-        if input.key_down(winit::keyboard::KeyCode::KeyD) {
+        if input.key_down(winit::event::VirtualKeyCode::D) {
             movement += self.speed * transform.right();
         }
 

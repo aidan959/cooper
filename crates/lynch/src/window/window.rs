@@ -30,9 +30,9 @@ impl Window {
     fn create_event_loop() -> EventLoop<()> {
         let event_loop = EventLoopBuilder::new()
             .with_any_thread(true)
-            .build()
-            .unwrap();
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+            .build();
+        
+        //event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
         event_loop
     }
     fn create_window(

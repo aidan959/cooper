@@ -1,8 +1,9 @@
 use ash::extensions::khr::{Surface, Win32Surface};
 use ash::vk;
+use raw_window_handle::HasRawWindowHandle;
 use std::{os::raw::c_void, ptr};
 use winapi::{shared::windef::HWND, um::libloaderapi::GetModuleHandleW};
-use winit::raw_window_handle::HasWindowHandle;
+
 use winit::window::Window;
 
 /// Get required instance extensions.
@@ -17,21 +18,36 @@ pub unsafe fn create_surface(
     instance: &ash::Instance,
     window: &Window,
 ) -> Result<vk::SurfaceKHR, vk::Result> {
-    let a = window.window_handle().unwrap().as_raw();
+    let a = window.raw_window_handle();
     match a {
-        winit::raw_window_handle::RawWindowHandle::Win32(raw_win32) => {
-            let hwnd = raw_win32.hwnd.get() as HWND;
+        raw_window_handle::RawWindowHandle::Windows(raw) => {
             let hinstance = GetModuleHandleW(ptr::null()) as *const c_void;
+            let hwnd = raw.hwnd as *const c_void;
             let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
                 s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
                 flags: Default::default(),
                 hinstance,
-                hwnd: hwnd as *const c_void,
+                hwnd,
             };
             let win32_surface_loader = Win32Surface::new(entry, instance);
             return win32_surface_loader.create_win32_surface(&win32_create_info, None);
-        }
+        },
+        _ => todo!(),
+        // winit::raw_window_handle::RawWindowHandle::Win32(raw_win32) => {
+        //     let hwnd = raw_win32.hwnd.get() as HWND;
+        //     let hinstance = GetModuleHandleW(ptr::null()) as *const c_void;
+        //     let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
+        //         s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
+        //         p_next: ptr::null(),
+        //         flags: Default::default(),
+        //         hinstance,
+        //         hwnd: hwnd as *const c_void,
+        //     };
+        //     let win32_surface_loader = Win32Surface::new(entry, instance);
+        //     return win32_surface_loader.create_win32_surface(&win32_create_info, None);
+        // }
+        
         // winit::raw_window_handle::RawWindowHandle::UiKit(_) => todo!(),
         // winit::raw_window_handle::RawWindowHandle::AppKit(_) => todo!(),
         // winit::raw_window_handle::RawWindowHandle::Orbital(_) => todo!(),

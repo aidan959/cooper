@@ -136,7 +136,6 @@ pub fn build_render_graph(
     base: &VulkanRenderer,
     view_data: &ViewUniformData,
     camera: &Camera,
-    gui_draw_data: &imgui::DrawData,
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;
@@ -191,7 +190,6 @@ pub fn build_render_graph(
         deferred_output,
     );
     setup_atmosphere_pass(graph, base, deferred_output, environment_map, camera, true);
-    setup_gui_pass(graph, base, deferred_output,gui_draw_data);
     setup_present_pass(graph, deferred_output);
 }
 

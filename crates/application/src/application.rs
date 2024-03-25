@@ -17,10 +17,11 @@ pub struct CooperApplication
 {
     window: Window,
     pub renderer: VulkanRenderer,
+
     graph: RenderGraph,
     pub camera: Camera,
     event_loop: EventLoop<()>,
-    engine_settings: EngineSettings
+    engine_settings: EngineSettings,
 }
 const WIDTH : f64= 1280.;
 const HEIGHT : f64 = 720.;
@@ -50,7 +51,7 @@ impl CooperApplication
         let engine_settings = EngineSettingsBuilder::new()
                                 .fps_cap(Some(DEFAULT_MAX_FPS))
                                 .update_rate_hz(DEFAULT_UPDATE_RATE)
-                                .build();
+                                .build();      
         CooperApplication {
             window,
             renderer,
@@ -91,7 +92,7 @@ impl CooperApplication
                 match event{
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
-                            let delta = self.renderer.render(&mut self.graph, &self.camera);
+                            let delta = self.renderer.render(&mut self.graph, &self.camera, data);
                             let current_time = Instant::now();
                             let elapsed = current_time.duration_since(last_fixed_update);
                             last_fixed_update = current_time;

@@ -9,9 +9,7 @@ use crate::{
 };
 
 use self::{
-    atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass,
-    irradiancebasedlighting::setup_cubemap_pass, present::setup_present_pass, irradiancebasedlighting::setup_cubemap_pass_opt,
-    ssao::setup_ssao_pass,
+    atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass, gui::setup_gui_pass, irradiancebasedlighting::{setup_cubemap_pass, setup_cubemap_pass_opt}, present::setup_present_pass, ssao::setup_ssao_pass
 };
 
 pub mod atmosphere;
@@ -22,6 +20,7 @@ pub mod irradiancebasedlighting;
 pub mod present;
 pub mod shadow;
 pub mod ssao;
+pub mod gui;
 use phf::phf_ordered_map;
 
 static GBUFFER_MAP: phf::OrderedMap<&'static str, vk::Format> = phf_ordered_map! {
@@ -137,6 +136,7 @@ pub fn build_render_graph(
     base: &VulkanRenderer,
     view_data: &ViewUniformData,
     camera: &Camera,
+    gui_draw_data: &imgui::DrawData,
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;
@@ -191,6 +191,7 @@ pub fn build_render_graph(
         deferred_output,
     );
     setup_atmosphere_pass(graph, base, deferred_output, environment_map, camera, true);
+    setup_gui_pass(graph, base, deferred_output,gui_draw_data);
     setup_present_pass(graph, deferred_output);
 }
 

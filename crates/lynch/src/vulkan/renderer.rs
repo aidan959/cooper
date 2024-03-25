@@ -10,10 +10,12 @@ use ash::{
     vk::Extent2D,
 };
 use ash::{vk, Entry, Instance};
+use gpu_allocator::vulkan::AllocatorCreateDesc;
+use imgui::DrawData;
 
 use super::{descriptor::DescriptorSet, Buffer, Device, Image, ImageDesc};
 use glam::{self, Mat4, Vec3, Vec4};
-use std::{ffi::CString, sync::Arc, time::Instant};
+use std::{ffi::CString, sync::{Arc, Mutex}, time::Instant};
 pub const MAX_NUM_GPU_MATERIALS: usize = 1024;
 pub const MAX_NUM_GPU_MESHES: usize = 1024;
 pub const DESCRIPTOR_SET_INDEX_BINDLESS: u32 = 0;
@@ -51,7 +53,7 @@ pub struct VulkanRenderer {
     pub camera_uniform_buffer: Vec<Buffer>,
     pub view_data: ViewUniformData,
     pub last_frame_end: Instant,
-    pub gui: imgui::Context
+    pub gui_renderer: imgui_rs_vulkan_renderer::Renderer
 
 }
 pub struct RendererInternal {
@@ -453,7 +455,8 @@ impl VulkanRenderer {
     fn ash_device(self: &Self) -> &ash::Device {
         self.vk_context.ash_device()
     }
-    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera) -> f32 {
+
+    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera, gui_draw_data: &imgui::DrawData) -> f32 {
         self.update_view_to_camera(&camera);
         let command_buffer = self.sync_frames[self.current_frame].command_buffer;
         let wait_fence = self.sync_frames[self.current_frame].command_buffer_reuse_fence;
@@ -492,24 +495,26 @@ impl VulkanRenderer {
             self.internal_renderer.instances[0]
                 .transform
                 .add_mat4(&Mat4::from_rotation_x(0.01));
-            // render_tools::build_render_graph(
-                // graph,
-                // self.arc_device(),
-                // &self,
-                // &self.view_data,
-                // &camera,
-            // );
+
+            render_tools::build_render_graph(
+                graph,
+                self.arc_device(),
+                &self,
+                &self.view_data,
+                &camera,
+                gui_draw_data
+            );
             // render_tools::build_render_graph_gbuffer_only(
             //     graph,
             //     self.arc_device(),
             //     &self,
             // );
-            render_tools::build_render_graph_atmosphere(
-                graph,
-                self.arc_device(),
-                &self,
-                &camera
-            );
+            // render_tools::build_render_graph_atmosphere(
+                // graph,
+                // self.arc_device(),
+                // &self,
+                // &camera
+            // );
             // render_tools::build_render_graph_opt(
             //     graph,
             //     self.arc_device(),
@@ -545,6 +550,7 @@ impl VulkanRenderer {
         self.last_frame_end = now;
         delta_time
     }
+
 }
 
 impl Renderer for VulkanRenderer {
@@ -599,7 +605,33 @@ impl Renderer for VulkanRenderer {
         let camera_uniform_buffer = (0..image_count)
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
-        let imgui = imgui::Context::create();
+        let mut gui = imgui::Context::create();
+        let gui_renderer = {
+            let allocator = gpu_allocator::vulkan::Allocator::new(&AllocatorCreateDesc {
+                instance: instance.clone(),
+                device: device.device().clone(),
+                physical_device: device.physical_device,
+                debug_settings: Default::default(),
+                buffer_device_address: false,
+                allocation_sizes: Default::default(),
+            }).unwrap();
+
+            imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
+                Arc::new(Mutex::new(allocator)),
+                device.device().clone(),
+                device.queue,
+                device.cmd_pool,
+                imgui_rs_vulkan_renderer::DynamicRendering{
+                    color_attachment_format: todo!(),
+                    depth_attachment_format: todo!(),
+                },
+                &mut gui,
+                Some(imgui_rs_vulkan_renderer::Options { 
+                    in_flight_frames: image_count as usize,
+                    ..Default::default()
+                }),
+            )?
+        };
         Self {
             vk_context,
             sync_frames,
@@ -619,10 +651,10 @@ impl Renderer for VulkanRenderer {
             camera_uniform_buffer,
             view_data,
             last_frame_end: Instant::now(),
-            gui: imgui
+            gui_renderer
         }
     }
-
+    
     fn begin_frame(self: &mut Self) -> usize {
         unsafe {
             let (present_index, _) = self

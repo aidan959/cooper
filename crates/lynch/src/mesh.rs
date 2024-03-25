@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use ash::vk;
 use glam::{Mat4, Vec2, Vec3, Vec4};
+use imgui::DrawVert;
 use memoffset::offset_of;
 
 use crate::{
@@ -231,6 +232,18 @@ pub struct Vertex {
     pub uv: Vec2,
     pub color: Vec4,
     pub tangent: Vec4,
+}
+impl From <DrawVert> for Vertex {
+    fn from(v: DrawVert) -> Self {
+        Vertex {
+            pos: Vec4::new(v.pos[0], v.pos[1], 0.0, 0.0),
+            uv: Vec2::new(v.uv[0], v.uv[1]),
+            normal: Vec4::ZERO,
+            tangent: Vec4::ZERO,
+            color: Vec4::ZERO,
+        }
+    }
+
 }
 pub struct Primitive {
     pub index_buffer: Buffer,

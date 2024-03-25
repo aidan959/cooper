@@ -671,6 +671,7 @@ impl RenderGraph {
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
         present_image: &Image,
+        present_index: usize,
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
@@ -827,7 +828,8 @@ impl RenderGraph {
                 ViewType::Full(),
                 vk::AttachmentLoadOp::CLEAR,
             )];
-
+            let framebuffer = self.render_framebuffers.get(&pass.name).unwrap()[present_index];
+            let renderpass = self.render_passes.get(&pass.name).unwrap();
             pass.prepare_render(
                 command_buffer,
                 if !pass.presentation_pass {
@@ -861,6 +863,8 @@ impl RenderGraph {
                     }
                 },
                 &self.resources.pipelines,
+                *renderpass,
+                framebuffer
             );
             unsafe {
                 let bind_point = match pass_pipeline.pipeline_type {

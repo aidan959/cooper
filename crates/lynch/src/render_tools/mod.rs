@@ -99,6 +99,9 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_normal,
         gbuffer_albedo,
         gbuffer_pbr,
+        base.surface_resolution,
+        base.surface_format.format,
+        &base.present_images
     );
     setup_present_pass(graph, gbuffer_albedo, base.surface_resolution, base.surface_format.format, &base.present_images);
 }

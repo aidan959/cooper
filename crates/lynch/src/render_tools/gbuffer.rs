@@ -18,6 +18,7 @@ pub fn setup_gbuffer_pass(
     graph
         .add_pass_from_desc(
             "gbuffer_pass",
+            format,
             PipelineDesc::builder()
                 .vertex_path("assets/shaders/gbuffer.vert")
                 .fragment_path("assets/shaders/gbuffer.frag")
@@ -38,5 +39,5 @@ pub fn setup_gbuffer_pass(
                 pipeline.pipeline_layout,
             );
         })
-        .build(graph);
+        .build(graph, extent, images);
 }

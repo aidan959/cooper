@@ -1,6 +1,6 @@
 use crate::{
-    gltf_loader::Model, render_graph::RenderGraph, render_tools, renderer::Renderer,
-    vulkan::cont::*, vulkan::debug::*, window::window::Window, Camera, Texture,
+    gltf_loader::Model, render_graph::RenderGraph, render_tools::{self, present}, renderer::Renderer,
+    vulkan::{cont::*, debug::*}, window::window::Window, Camera, Texture,
 };
 use ash::{
     extensions::{
@@ -599,7 +599,7 @@ impl VulkanRenderer {
             ;
             graph.prepare(&self);
             let image = self.present_images[present_index].clone();
-            graph.render(&command_buffer, &self, &image);
+            graph.render(&command_buffer, &self, &image, present_index);
             self.present_images[self.current_frame].current_layout =
             vk::ImageLayout::PRESENT_SRC_KHR;
 

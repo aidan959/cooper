@@ -158,6 +158,8 @@ impl RenderPass {
         depth_attachment: Option<(Image, ViewType, vk::AttachmentLoadOp)>,
         extent: vk::Extent2D,
         pipelines: &[Pipeline],
+        render_pass: vk::RenderPass,
+        framebuffers: vk::Framebuffer
     ) {
         let bind_point = match pipelines[self.pipeline_handle].pipeline_type {
             PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,

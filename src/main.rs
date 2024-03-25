@@ -347,5 +347,9 @@ mod tests {
             event_stream.send(GameEvent::NextFrame).unwrap();
         },);
     }
+    #[test]
+    fn test_window () {
+        
+    }
     
 }

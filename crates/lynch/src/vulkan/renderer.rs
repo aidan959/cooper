@@ -51,8 +51,9 @@ pub struct VulkanRenderer {
     pub camera_uniform_buffer: Vec<Buffer>,
     pub view_data: ViewUniformData,
     pub last_frame_end: Instant,
-}
+    pub gui: imgui::Context
 
+}
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     pub bindless_descriptor_set: vk::DescriptorSet,
@@ -598,7 +599,7 @@ impl Renderer for VulkanRenderer {
         let camera_uniform_buffer = (0..image_count)
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
-
+        let imgui = imgui::Context::create();
         Self {
             vk_context,
             sync_frames,
@@ -618,6 +619,7 @@ impl Renderer for VulkanRenderer {
             camera_uniform_buffer,
             view_data,
             last_frame_end: Instant::now(),
+            gui: imgui
         }
     }
 

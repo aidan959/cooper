@@ -673,16 +673,16 @@ impl Renderer for VulkanRenderer {
             surface_resolution,
         );
         let framebuffers :Vec<vk::Framebuffer> = present_images.iter()
-        .map(|view| [view.image_view])
-        .map(|attachments| {
-            let framebuffer_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(render_pass)
-                .attachments(&attachments)
-                .width(surface_resolution.width)
-                .height(surface_resolution.height)
-                .layers(1);
-            unsafe { vk_context.ash_device().create_framebuffer(&framebuffer_info, None) }
-        })
+            .map(|view| [view.image_view])
+            .map(|attachments| {
+                let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(render_pass)
+                    .attachments(&attachments)
+                    .width(surface_resolution.width)
+                    .height(surface_resolution.height)
+                    .layers(1);
+                unsafe { vk_context.ash_device().create_framebuffer(&framebuffer_info, None) }
+            })
         .collect::<Result<Vec<_>, _>>().unwrap();
         let command_pool = Self::create_command_pool(&vk_context);
 

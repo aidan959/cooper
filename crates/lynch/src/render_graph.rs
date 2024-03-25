@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-use ash::vk::{self};
+use ash::vk::{self, Framebuffer, ImageView};
 
 use crate::renderer::Renderer;
 use crate::vulkan::renderer::{
@@ -82,8 +82,11 @@ pub struct TextureCopy {
     pub dst: TextureId,
     pub copy_desc: vk::ImageCopy,
 }
-pub struct RenderGraph {
+pub struct RenderGraph{
     pub passes: Vec<Vec<RenderPass>>,
+    pub render_passes: HashMap<String, vk::RenderPass>,
+    pub render_framebuffers: HashMap<String, Vec<vk::Framebuffer>>,
+
     pub resources: GraphResources,
     pub descriptor_set_camera: Vec<DescriptorSet>,
     pub pipeline_descs: Vec<PipelineDesc>,
@@ -271,7 +274,32 @@ impl RenderPassBuilder {
         self
     }
 
-    pub fn build(self, graph: &mut RenderGraph) {
+    pub fn build(self, graph: &mut RenderGraph, extent: vk::Extent2D, image_views: &Vec<Image>) {
+        if !graph.render_passes.contains_key(&self.name) {
+            graph.render_passes.insert(
+                self.name.clone(),
+                vulkan::create_render_pass(
+                    &graph.device,
+                    graph.resources.textures[self.writes[0].texture].texture.image.desc.format,
+                ),
+            );
+        }
+        let image_views = image_views
+            .iter()
+            .map(|image| image.image_view.clone())
+            .collect::<Vec<vk::ImageView>>();
+        let render_pass = graph.render_passes.get(&self.name).unwrap();
+        if !graph.render_framebuffers.contains_key(&self.name) {
+            graph.render_framebuffers.insert(
+                self.name.clone(),
+                vulkan::create_vulkan_framebuffers(
+                    &graph.device,
+                    *render_pass,
+                    extent,
+                    &image_views,
+                ),
+            );
+        }
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
@@ -339,7 +367,7 @@ impl RenderPassBuilder {
                 ),
             );
         }
-
+        
         graph.passes[graph.current_frame].push(pass);
     }
 }
@@ -397,6 +425,8 @@ impl RenderGraph {
                 .map(|buffer| Self::create_camera_descriptor_set(device.clone(), buffer))
                 .collect(),
             pipeline_descs: vec![],
+            render_passes: HashMap::new(),
+            render_framebuffers: HashMap::new(),
             current_frame: 0,
             device: device,
         }
@@ -471,7 +501,14 @@ impl RenderGraph {
         descriptor_set_camera
     }
 
-    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> RenderPassBuilder {
+    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId, format: vk::Format) -> RenderPassBuilder {
+        self.render_passes.insert(
+            name.clone(),
+            vulkan::create_render_pass(
+                &self.device,
+                format,
+            ),
+        );
         RenderPassBuilder {
             name,
             pipeline_handle,
@@ -490,10 +527,11 @@ impl RenderGraph {
     pub fn add_pass_from_desc(
         &mut self,
         name: &str,
+        format: vk::Format,
         desc_builder: PipelineDescBuilder,
     ) -> RenderPassBuilder {
         let pipeline_handle = self.create_pipeline(desc_builder.build());
-        self.add_pass(name.to_string(), pipeline_handle)
+        self.add_pass(name.to_string(), pipeline_handle, format)
     }
 
     /// Creates a texture and returns its handle.

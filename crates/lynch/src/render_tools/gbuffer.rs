@@ -1,6 +1,6 @@
 use crate::{
     render_graph::{RenderGraph, TextureId},
-    vulkan::{renderer::VulkanRenderer, PipelineDesc},
+    vulkan::{renderer::VulkanRenderer, Image, PipelineDesc},
 };
 use ash::vk;
 
@@ -11,6 +11,9 @@ pub fn setup_gbuffer_pass(
     gbuffer_normal: TextureId,
     gbuffer_albedo: TextureId,
     gbuffer_pbr: TextureId,
+    extent: vk::Extent2D,
+    format: vk::Format,
+    images: &Vec<Image>,
 ) {
     graph
         .add_pass_from_desc(

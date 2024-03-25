@@ -81,7 +81,8 @@ pub fn create_shadowmap_texture(graph: &mut RenderGraph, device: Arc<Device>) ->
 pub fn build_render_graph_gbuffer_only(
     graph: &mut RenderGraph,
     device: Arc<Device>,
-    base: &VulkanRenderer
+    base: &VulkanRenderer,
+
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;
@@ -99,9 +100,9 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_albedo,
         gbuffer_pbr,
     );
-    setup_present_pass(graph, gbuffer_albedo);
+    setup_present_pass(graph, gbuffer_albedo, base.surface_resolution, base.surface_format.format, &base.present_images);
 }
-pub fn build_render_graph_atmosphere(
+/*pub fn build_render_graph_atmosphere(
     graph: &mut RenderGraph,
     device: Arc<Device>,
     base: &VulkanRenderer,
@@ -191,7 +192,7 @@ pub fn build_render_graph(
         deferred_output,
     );
     setup_atmosphere_pass(graph, base, deferred_output, environment_map, camera, true);
-    setup_present_pass(graph, deferred_output);
+    setup_present_pass(graph, deferred_output¸);
 }
 
 pub fn viewport(width: u32, height: u32) -> vk::Viewport {
@@ -314,4 +315,4 @@ pub fn build_render_graph_opt(
         let output = deferred_output.or(gbuffer_albedo);
         setup_present_pass(graph, output.unwrap());
     }
-}
+}*/

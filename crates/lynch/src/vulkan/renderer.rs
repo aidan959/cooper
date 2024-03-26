@@ -12,7 +12,7 @@ use ash::{
 use ash::{vk, Entry, Instance};
 use gpu_allocator::vulkan::AllocatorCreateDesc;
 use image::DynamicImage::ImageBgr8;
-use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource};
+use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 use super::{descriptor::DescriptorSet, Buffer, Device, Image, ImageDesc};
@@ -55,9 +55,8 @@ pub struct VulkanRenderer {
     pub camera_uniform_buffer: Vec<Buffer>,
     pub view_data: ViewUniformData,
     pub last_frame_end: Instant,
-    pub gui: imgui::Context,
+
     pub gui_renderer: imgui_rs_vulkan_renderer::Renderer,
-    pub platform: imgui_winit_support::WinitPlatform,
 
 
 }
@@ -461,7 +460,9 @@ impl VulkanRenderer {
         self.vk_context.ash_device()
     }
 
-    pub fn render(&mut self, graph: &mut RenderGraph, camera: &Camera) -> f32 {
+    pub fn render(&mut self, graph: &mut RenderGraph,  camera: &Camera, draw_data: &DrawData) -> f32 
+
+    {
         self.update_view_to_camera(&camera);
         let command_buffer = self.sync_frames[self.current_frame].command_buffer;
         let wait_fence = self.sync_frames[self.current_frame].command_buffer_reuse_fence;
@@ -557,10 +558,7 @@ impl VulkanRenderer {
             
             self.ash_device().cmd_begin_rendering(command_buffer, &rendering_info);
             
-            let mut ui = self.gui.frame();
-            let mut a = true;
-            ui.show_demo_window(&mut a);
-            let draw_data = self.gui.render();
+
             
             self.gui_renderer.cmd_draw(command_buffer, draw_data).unwrap();
             
@@ -605,7 +603,7 @@ impl Renderer for VulkanRenderer {
         let device = self.vk_context.device();
         self.internal_renderer.add_model(device, model, transform);
     }
-    fn create(window: &Window, camera: &Camera) -> Self {
+    fn create(window: &Window, camera: &Camera,  gui: &mut imgui::Context) -> Self {
         let entry = ash::Entry::linked();
         let instance = Self::create_instance(&entry);
         let (debug_utils, debug_utils_messenger) = Self::create_debug_utils(&entry, &instance);
@@ -638,34 +636,7 @@ impl Renderer for VulkanRenderer {
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
         
-        let (mut gui, platform) = {
-            let mut g = imgui::Context::create();
-            let mut platform = WinitPlatform::init(&mut g);
-
-            let hidpi_factor = platform.hidpi_factor();
-            let font_size = (13.0 * hidpi_factor) as f32;
-            g.fonts().add_font(&[
-                FontSource::DefaultFontData {
-                    config: Some(FontConfig {
-                        size_pixels: font_size,
-                        ..FontConfig::default()
-                    }),
-                },
-                FontSource::TtfData {
-                    data: include_bytes!("../../../../assets/fonts/mplus-1p-regular.ttf"),
-                    size_pixels: font_size,
-                    config: Some(FontConfig {
-                        rasterizer_multiply: 1.75,
-                        glyph_ranges: FontGlyphRanges::default(),
-                        ..FontConfig::default()
-                    }),
-                },
-            ]);
-
-            g.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
-            platform.attach_window(g.io_mut(), &window.window, HiDpiMode::Rounded);
-            (g, platform)
-        };
+        
         let gui_renderer = {
             let allocator = gpu_allocator::vulkan::Allocator::new(&AllocatorCreateDesc {
                 instance: vk_context.instance().clone(),
@@ -685,7 +656,7 @@ impl Renderer for VulkanRenderer {
                     color_attachment_format: vk::Format::R8G8B8A8_UNORM,
                     depth_attachment_format: None,
                 },
-                &mut gui,
+                gui,
                 Some(imgui_rs_vulkan_renderer::Options { 
                     in_flight_frames: image_count as usize,
                     enable_depth_test: false,
@@ -714,8 +685,6 @@ impl Renderer for VulkanRenderer {
             view_data,
             last_frame_end: Instant::now(),
             gui_renderer,
-            gui,
-            platform
         }
     }
     

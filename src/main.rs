@@ -4,7 +4,7 @@ use application::application::{CooperApplication, GameEvent};
 use frost::{obb, physics::math::physics_system, RigidBody, System,SearchIter,Transform};
 use glam::{Mat4, Quat, Vec3};
 
-struct GfxLocation(usize);
+struct GfxLocation(usize); 
 fn main() {   
     env_logger::init();
 

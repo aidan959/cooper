@@ -14,7 +14,7 @@ use gpu_allocator::vulkan::AllocatorCreateDesc;
 use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
-use super::{descriptor::DescriptorSet, render_pass, Buffer, Device, Image, ImageDesc};
+use super::{create_render_pass, descriptor::DescriptorSet, render_pass, Buffer, Device, Image, ImageDesc};
 use glam::{self, Mat4, Vec3, Vec4};
 use std::{
     ffi::CString,
@@ -46,12 +46,14 @@ pub struct VulkanRenderer {
     pub image_count: u32,
     pub present_images: Vec<Image>,
     pub depth_image: Image,
+    pub ui_image: Image,
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_resolution: vk::Extent2D,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_loader: ash::extensions::khr::Swapchain,
-    pub render_pass: vk::RenderPass,
+    pub ui_render_pass: vk::RenderPass,
     pub present_framebuffers: Vec<vk::Framebuffer>,
+    pub ui_framebuffer: vk::Framebuffer,
     pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
     pub internal_renderer: RendererInternal,
     pub current_frame: usize,
@@ -362,7 +364,6 @@ impl VulkanRenderer {
         vk::SurfaceFormatKHR,
         vk::Extent2D,
         u32,
-        vk::RenderPass,
     ) {
         let surface_loader = context.surface();
         let physical_device = context.physical_device();
@@ -415,43 +416,6 @@ impl VulkanRenderer {
             let swapchain = swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
-            let attachment_descs = [vk::AttachmentDescription::builder()
-                .format(surface_format.format)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-                .build()];
-
-            let color_attachment_refs = [vk::AttachmentReference::builder()
-                .attachment(0)
-                .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .build()];
-
-            let subpass_descs = [vk::SubpassDescription::builder()
-                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-                .color_attachments(&color_attachment_refs)
-                .build()];
-
-            let subpass_deps = [vk::SubpassDependency::builder()
-                .src_subpass(0)
-                .dst_subpass(0)
-                .dependency_flags(vk::DependencyFlags::BY_REGION)
-                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .src_access_mask(vk::AccessFlags::empty())
-                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .dst_access_mask(
-                    vk::AccessFlags::COLOR_ATTACHMENT_READ
-                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                )
-                .build()];
-
-            let render_pass_info = vk::RenderPassCreateInfo::builder()
-                .attachments(&attachment_descs)
-                .subpasses(&subpass_descs)
-                .dependencies(&subpass_deps);
-            let render_pass = context.ash_device().create_render_pass(&render_pass_info, None).unwrap();
 
 
             (
@@ -460,7 +424,6 @@ impl VulkanRenderer {
                 surface_format,
                 surface_resolution,
                 desired_image_count,
-                render_pass
             )
         }
     }
@@ -543,11 +506,13 @@ impl VulkanRenderer {
             self.internal_renderer.instances[0]
                 .transform
                 .add_mat4(&Mat4::from_rotation_x(0.01));
+            let framebuffer = self.present_framebuffers[present_index as usize];
 
             render_tools::build_render_graph_gbuffer_only(
                 graph,
                 self.arc_device(),
                 &self,
+                &framebuffer
             );
 
             // render_tools::build_render_graph_gbuffer_only(
@@ -577,14 +542,13 @@ impl VulkanRenderer {
             // );
             
             graph.prepare(&self);
-            let framebuffer = self.present_framebuffers[present_index as usize];
 
             let image = self.present_images[present_index].clone();
-            graph.render(&command_buffer, &self, &image);
+            graph.render(&command_buffer, &self, &image, present_index);
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(self.render_pass)
+                .render_pass(self.ui_render_pass)
                 
-                .framebuffer(framebuffer)
+                .framebuffer(self.ui_framebuffer)
                 .render_area(vk::Rect2D {
                     offset: vk::Offset2D { x: 0, y: 0 },
                     extent: self.surface_resolution,
@@ -659,7 +623,7 @@ impl Renderer for VulkanRenderer {
 
         let vk_context = VkContext::new(entry, instance, surface, surface_khr, device);
 
-        let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count,render_pass) =
+        let (swapchain, swapchain_loader, surface_format, surface_resolution, image_count) =
             Self::create_swapchain(&vk_context);
 
         let (present_images, depth_image) = Self::setup_swapchain_images(
@@ -669,11 +633,23 @@ impl Renderer for VulkanRenderer {
             surface_format,
             surface_resolution,
         );
+        let ui_image = Image::new_from_desc(vk_context.arc_device(), ImageDesc::new_2d(surface_resolution.width, surface_resolution.height, vk::Format::B8G8R8A8_UNORM));
+        let ui_render_pass = create_render_pass(vk_context.device(),vec![ui_image.format()], None);
+        let ui_framebuffer = vk::FramebufferCreateInfo::builder()
+            .render_pass(ui_render_pass)
+            .attachments(&[ui_image.image_view])
+            .width(ui_image.width())
+            .height(ui_image.height())
+            .layers(1)
+            .build();
+        let ui_framebuffer = unsafe{vk_context.ash_device().create_framebuffer(&ui_framebuffer, None) }.unwrap();
+    
+        
         let present_framebuffers :Vec<vk::Framebuffer> = present_images.iter()
             .map(|view| [view.image_view])
             .map(|attachments| {
                 let framebuffer_info = vk::FramebufferCreateInfo::builder()
-                    .render_pass(render_pass)
+                    .render_pass(ui_render_pass)
                     .attachments(&attachments)
                     .width(surface_resolution.width)
                     .height(surface_resolution.height)
@@ -681,7 +657,7 @@ impl Renderer for VulkanRenderer {
                 unsafe { vk_context.ash_device().create_framebuffer(&framebuffer_info, None) }
             })
         .collect::<Result<Vec<_>, _>>().unwrap();
-        let command_pool = Self::create_command_pool(&vk_context);
+       let command_pool = Self::create_command_pool(&vk_context);
         
         let sync_frames =
             Self::create_synchronization_frames(&vk_context, command_pool, image_count);
@@ -760,7 +736,7 @@ impl Renderer for VulkanRenderer {
             surface_resolution,
             swapchain,
             swapchain_loader,
-            render_pass,
+            ui_render_pass,
             debug_utils_messenger,
             internal_renderer,
             current_frame: 0,
@@ -771,6 +747,8 @@ impl Renderer for VulkanRenderer {
             last_frame_end: Instant::now(),
             gui_renderer,
             gui,
+            ui_image,
+            ui_framebuffer,
             platform,
         }
     }

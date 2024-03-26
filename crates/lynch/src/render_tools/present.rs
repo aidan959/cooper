@@ -8,6 +8,7 @@ use crate::{
 pub fn setup_present_pass(
     graph: &mut RenderGraph,
     color_output: TextureId,
+    present_framebuffer: &vk::Framebuffer
 ) {
     let fxaa_threshold = 0.45;
 
@@ -29,5 +30,5 @@ pub fn setup_present_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(graph);
+        .build_presentation(graph);
 }

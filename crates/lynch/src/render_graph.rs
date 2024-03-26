@@ -275,12 +275,7 @@ impl RenderPassBuilder {
         }
         self
     }
-    pub fn build_presentation( self, graph: &mut RenderGraph, present_image: &Image) {
-        
-    }
-    pub fn build(self, graph: &mut RenderGraph) {
-        
-
+    pub fn build_presentation( self, graph: &mut RenderGraph) {
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
@@ -344,15 +339,113 @@ impl RenderPassBuilder {
                 }
             }
         };
+        if !graph.render_passes.contains_key(&pass.name){
+            graph.render_passes.insert(
+                pass.name.clone(),
+                vulkan::create_render_pass(
+                    &self.device,
+                    color_attachment_formats,
+                    depth_attachment_format
+                ),
+            );
+        }
+
+
         
-        graph.render_passes.insert(
-            pass.name.clone(),
-            vulkan::create_render_pass(
-                &self.device,
-                color_attachment_formats,
-                depth_attachment_format
-            ),
+        
+        if !self.uniforms.is_empty() {
+            pass.uniform_buffer.replace(
+                graph.create_buffer(
+                    // Todo: Hack: this is very bad just to get unique buffers for every frame_index
+                    format!(
+                        "{}_frame_{}",
+                        self.uniforms.keys().next().unwrap(),
+                        graph.current_frame
+                    )
+                    .as_str(),
+                    self.uniforms.values().next().unwrap().1.size,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    gpu_allocator::MemoryLocation::CpuToGpu,
+                ),
+            );
+        }
+        
+        graph.passes[graph.current_frame].push(pass);
+    }
+    pub fn build(self, graph: &mut RenderGraph) {
+        let mut pass = RenderPass::new(
+            self.name,
+            self.pipeline_handle,
+            self.presentation_pass,
+            self.depth_attachment,
+            self.uniforms.clone(),
+            self.render_func,
+            self.copy_command,
+            self.extra_barriers,
+            self.device.clone(),
         );
+
+        for read in &self.reads {
+            pass.reads.push(*read);
+        }
+
+        for write in &self.writes {
+            pass.writes.push(*write);
+        }
+        graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
+            .writes
+            .iter()
+            .map(|write| {
+
+                graph
+                    .resources
+                    .texture(write.texture)
+                    .texture
+                    .image
+                    .format()
+            })
+            .collect();
+
+    
+        let color_attachment_formats = graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats.clone();
+        let mut depth_attachment_format = None;
+        if let Some(depth) = &pass.depth_attachment {
+            match depth {
+                DepthAttachment::GraphHandle(write) => {
+                    depth_attachment_format = Some(graph
+                        .resources
+                        .texture(write.texture)
+                        .texture
+                        .image
+                        .format());
+                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
+                        graph
+                            .resources
+                            .texture(write.texture)
+                            .texture
+                            .image
+                            .format()
+                    
+                }
+                DepthAttachment::External(image, _) => {
+                    depth_attachment_format = None;
+                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
+                        image.format();
+
+
+                }
+            }
+        };
+        if !graph.render_passes.contains_key(&pass.name){
+            graph.render_passes.insert(
+                pass.name.clone(),
+                vulkan::create_render_pass(
+                    &self.device,
+                    color_attachment_formats,
+                    depth_attachment_format
+                ),
+            );
+        }
 
         let render_pass = graph.render_passes.get(&pass.name).unwrap();
         let image_views = pass
@@ -445,7 +538,10 @@ impl RenderGraph {
         device: Arc<Device>,
         camera_uniform_buffer: &Vec<Buffer>,
         num_frames_in_flight: u32,
+        present_framebuffers: &Vec<Framebuffer>
     ) -> Self {
+        let mut render_framebuffers = HashMap::new();
+        render_framebuffers.insert("present_pass".to_string(), present_framebuffers.clone());
         RenderGraph {
             passes: (0..num_frames_in_flight).map(|_| vec![]).collect(),
             resources: GraphResources::new(),
@@ -455,7 +551,7 @@ impl RenderGraph {
                 .collect(),
             pipeline_descs: vec![],
             render_passes: HashMap::new(),
-            render_framebuffers: HashMap::new(),
+            render_framebuffers: render_framebuffers,
             
             render_subpasses: HashMap::new(),
             current_frame: 0,
@@ -698,6 +794,7 @@ impl RenderGraph {
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
         present_image: &Image,
+        present_index: usize
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
@@ -854,7 +951,12 @@ impl RenderGraph {
                 ViewType::Full(),
                 vk::AttachmentLoadOp::CLEAR,
             )];
-            let framebuffer = self.render_framebuffers.get(&pass.name).unwrap()[0];
+            let framebuffer = if !pass.presentation_pass {
+                self.render_framebuffers.get(&pass.name).unwrap()[0]
+            } else {
+                self.render_framebuffers.get(&pass.name).unwrap()[present_index]
+            };
+            
             let renderpass = self.render_passes.get(&pass.name).unwrap();
             pass.prepare_render(
                 command_buffer,

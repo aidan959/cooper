@@ -80,8 +80,8 @@ pub struct RendererInternal {
 
 
 pub struct RenderStatistics {
-    full_render_time: f32,
-    render_graph_time: f32,
+    pub full_render_time: f32,
+    pub render_graph_time: f32,
 }
 impl Default for RenderStatistics {
     fn default() -> Self {

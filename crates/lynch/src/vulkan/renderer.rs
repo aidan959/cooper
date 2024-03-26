@@ -78,6 +78,17 @@ pub struct RendererInternal {
     pub need_environment_map_update: bool,
 }
 
+
+pub struct RenderStatistics {
+    full_render_time: f32,
+    render_graph_time: f32,
+}
+impl Default for RenderStatistics {
+    fn default() -> Self {
+        Self { full_render_time: Default::default(), render_graph_time: Default::default() }
+    }
+}
+
 #[derive(Clone, Debug, Copy)]
 #[repr(C)]
 pub struct ViewUniformData {
@@ -460,7 +471,7 @@ impl VulkanRenderer {
         self.vk_context.ash_device()
     }
 
-    pub fn render(&mut self, graph: &mut RenderGraph,  camera: &Camera, draw_data: &DrawData) -> f32 
+    pub fn render(&mut self, graph: &mut RenderGraph,  camera: &Camera, draw_data: &DrawData, render_statistics: &RenderStatistics) -> f32 
 
     {
         self.update_view_to_camera(&camera);

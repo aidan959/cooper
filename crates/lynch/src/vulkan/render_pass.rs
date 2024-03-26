@@ -179,8 +179,27 @@ impl RenderPass {
         }
 
 
-       
-            
+
+         let mut clear_values = Vec::new();
+         for (_, _, load_op) in color_attachments {
+             if *load_op == vk::AttachmentLoadOp::CLEAR {
+                 clear_values.push(vk::ClearValue {
+                     color: vk::ClearColorValue {
+                         float32: [0.0, 0.0, 0.0, 1.0], 
+                     },
+                 });
+             }
+         }
+         if let Some((_, _, load_op)) = depth_attachment {
+            if load_op == vk::AttachmentLoadOp::CLEAR {
+                clear_values.push(vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                });
+            }
+        }    
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
             .framebuffer(framebuffer)
@@ -188,11 +207,7 @@ impl RenderPass {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
-            .clear_values(&[vk::ClearValue {
-                color: vk::ClearColorValue {
-                   float32: [1.0, 1.0, 1.0, 1.0],
-        },
-        }]);
+            .clear_values(&clear_values);
 
 
         unsafe {

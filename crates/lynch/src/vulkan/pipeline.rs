@@ -7,7 +7,7 @@ use vulkan::shader::{create_layouts_from_reflection, create_shader_module};
 
 use crate::*;
 
-use super::Device;
+use super::{render_pass, Device};
 
 #[derive(Clone)]
 pub struct PipelineDesc {
@@ -18,6 +18,7 @@ pub struct PipelineDesc {
     pub vertex_input_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
     pub color_attachment_formats: Vec<vk::Format>,
     pub depth_stencil_attachment_format: vk::Format,
+    pub render_pass: vk::RenderPass,
 }
 
 pub struct PipelineDescBuilder {
@@ -31,6 +32,7 @@ pub struct Pipeline {
     pub reflection: vulkan::shader::ShaderReflect,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
+    pub render_pass: vk::RenderPass
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -67,6 +69,7 @@ impl Pipeline {
         device: &Device,
         pipeline_desc: PipelineDesc,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
+        render_pass: vk::RenderPass,
     ) -> Pipeline {
         let pipeline_type = match &pipeline_desc.compute_path {
             Some(_) => PipelineType::Compute,
@@ -80,6 +83,7 @@ impl Pipeline {
             reflection: vulkan::shader::ShaderReflect::default(),
             pipeline_desc,
             pipeline_type,
+            render_pass
         };
 
         Self::create_pipeline(&mut pipeline, device, bindless_descriptor_set_layout)
@@ -91,7 +95,7 @@ impl Pipeline {
     pub fn recreate_pipeline(
         &mut self,
         device: &Device,
-        bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
+        bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>
     ) -> bool {
         // Todo: DESTROY OLD PIPELINE_RESOURCES
         if Self::create_pipeline(self, device, bindless_descriptor_set_layout).is_ok() {
@@ -133,6 +137,7 @@ impl Pipeline {
                 desc.depth_stencil_attachment_format,
                 pipeline_layout,
                 &pipeline.pipeline_desc,
+                pipeline.render_pass,
             ),
             PipelineType::Compute => Pipeline::create_compute_pipeline(
                 &device.ash_device,
@@ -210,6 +215,7 @@ impl Pipeline {
         depth_stencil_attachment_format: vk::Format,
         pipeline_layout: vk::PipelineLayout,
         pipeline_desc: &PipelineDesc,
+        render_pass: vk::RenderPass,
     ) -> vk::Pipeline {
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(
@@ -249,7 +255,7 @@ impl Pipeline {
             depth_compare_op: vk::CompareOp::LESS,
             front: noop_stencil_state,
             back: noop_stencil_state,
-            max_depth_bounds: 1.0,
+            max_depth_bounds: 1.0, 
             ..Default::default()
         };
         let color_blend_attachment_states = vec![
@@ -293,7 +299,7 @@ impl Pipeline {
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state_info)
             .layout(pipeline_layout)
-            .render_pass(vk::RenderPass::null())
+            .render_pass(render_pass)
             .push_next(&mut rendering_info);
 
         let graphics_pipelines = unsafe {
@@ -387,6 +393,7 @@ impl PipelineDescBuilder {
                 vertex_input_attribute_descriptions: Vec::new(),
                 color_attachment_formats: Vec::new(),
                 depth_stencil_attachment_format: vk::Format::UNDEFINED,
+                render_pass: vk::RenderPass::null(),
             },
         }
     }

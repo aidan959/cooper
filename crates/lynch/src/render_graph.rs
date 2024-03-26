@@ -85,6 +85,8 @@ pub struct TextureCopy {
 pub struct RenderGraph{
     pub passes: Vec<Vec<RenderPass>>,
     pub render_passes: HashMap<String, vk::RenderPass>,
+    pub render_subpasses: HashMap<String, vk::SubpassDependency>,
+
     pub render_framebuffers: HashMap<String, Vec<vk::Framebuffer>>,
 
     pub resources: GraphResources,
@@ -275,31 +277,12 @@ impl RenderPassBuilder {
     }
 
     pub fn build(self, graph: &mut RenderGraph, extent: vk::Extent2D, image_views: &Vec<Image>) {
-        if !graph.render_passes.contains_key(&self.name) {
-            graph.render_passes.insert(
-                self.name.clone(),
-                vulkan::create_render_pass(
-                    &graph.device,
-                    graph.resources.textures[self.writes[0].texture].texture.image.desc.format,
-                ),
-            );
-        }
+        
         let image_views = image_views
             .iter()
             .map(|image| image.image_view.clone())
             .collect::<Vec<vk::ImageView>>();
-        let render_pass = graph.render_passes.get(&self.name).unwrap();
-        if !graph.render_framebuffers.contains_key(&self.name) {
-            graph.render_framebuffers.insert(
-                self.name.clone(),
-                vulkan::create_vulkan_framebuffers(
-                    &graph.device,
-                    *render_pass,
-                    extent,
-                    &image_views,
-                ),
-            );
-        }
+        
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
@@ -332,7 +315,7 @@ impl RenderPassBuilder {
                     .format()
             })
             .collect();
-
+        let color_attachment_formats = graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats.clone();
         if let Some(depth) = &pass.depth_attachment {
             match depth {
                 DepthAttachment::GraphHandle(write) => {
@@ -350,7 +333,26 @@ impl RenderPassBuilder {
                 }
             }
         }
-
+        graph.render_passes.insert(
+            pass.name.clone(),
+            vulkan::create_render_pass(
+                &self.device,
+                color_attachment_formats,
+                graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format
+            ),
+        );
+        let render_pass = graph.render_passes.get(&pass.name).unwrap();
+        if !graph.render_framebuffers.contains_key(&pass.name) {
+            graph.render_framebuffers.insert(
+                pass.name.clone(),
+                vulkan::create_vulkan_framebuffers(
+                    &graph.device,
+                    *render_pass,
+                    extent,
+                    &image_views,
+                ),
+            );
+        }
         if !self.uniforms.is_empty() {
             pass.uniform_buffer.replace(
                 graph.create_buffer(
@@ -427,6 +429,8 @@ impl RenderGraph {
             pipeline_descs: vec![],
             render_passes: HashMap::new(),
             render_framebuffers: HashMap::new(),
+            
+            render_subpasses: HashMap::new(),
             current_frame: 0,
             device: device,
         }
@@ -501,14 +505,8 @@ impl RenderGraph {
         descriptor_set_camera
     }
 
-    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId, format: vk::Format) -> RenderPassBuilder {
-        self.render_passes.insert(
-            name.clone(),
-            vulkan::create_render_pass(
-                &self.device,
-                format,
-            ),
-        );
+    fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> RenderPassBuilder {
+
         RenderPassBuilder {
             name,
             pipeline_handle,
@@ -527,11 +525,12 @@ impl RenderGraph {
     pub fn add_pass_from_desc(
         &mut self,
         name: &str,
-        format: vk::Format,
         desc_builder: PipelineDescBuilder,
     ) -> RenderPassBuilder {
-        let pipeline_handle = self.create_pipeline(desc_builder.build());
-        self.add_pass(name.to_string(), pipeline_handle, format)
+        let desc = desc_builder.build();
+        let pipeline_handle = self.create_pipeline(desc);
+        
+        self.add_pass(name.to_string(), pipeline_handle)
     }
 
     /// Creates a texture and returns its handle.
@@ -621,6 +620,7 @@ impl RenderGraph {
                     device,
                     desc.clone(),
                     Some(renderer.internal_renderer.bindless_descriptor_set_layout),
+                    *self.render_passes.get(self.passes[self.current_frame][i].name.as_str()).unwrap(),
                 ));
             }
         }
@@ -921,7 +921,9 @@ impl RenderGraph {
             }
 
             if pass_pipeline.pipeline_type == PipelineType::Graphics {
-                unsafe { device.device().cmd_end_rendering(*command_buffer) };
+                //unsafe { device.device().cmd_end_rendering(*command_buffer) };
+                unsafe { device.device().cmd_end_render_pass(*command_buffer) };
+
             }
 
             if let Some(copy_command) = &pass.copy_command {

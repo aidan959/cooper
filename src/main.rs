@@ -5,7 +5,7 @@ use frost::{obb, physics::math::physics_system, RigidBody, System,SearchIter,Tra
 use glam::{Mat4, Quat, Vec3};
 
 struct GfxLocation(usize);
-fn main() {  
+fn main() {   
     env_logger::init();
 
     CooperApplication::create().run(

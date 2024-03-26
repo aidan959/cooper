@@ -432,11 +432,27 @@ impl VulkanRenderer {
             let subpass_descs = [vk::SubpassDescription::builder()
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
                 .color_attachments(&color_attachment_refs)
+                .build(),
+                vk::SubpassDescription::builder()
+                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+                .color_attachments(&color_attachment_refs)
                 .build()];
 
             let subpass_deps = [vk::SubpassDependency::builder()
-                .src_subpass(vk::SUBPASS_EXTERNAL)
-                .dst_subpass(0)
+                .src_subpass(0)
+                .dst_subpass(1)
+                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .dst_access_mask(
+                    vk::AccessFlags::COLOR_ATTACHMENT_READ
+                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                )
+                .build(),
+                vk::SubpassDependency::builder()
+                .src_subpass(1)
+                .dst_subpass(1)
+                .dependency_flags(vk::DependencyFlags::BY_REGION)
                 .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags::empty())
                 .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
@@ -450,7 +466,7 @@ impl VulkanRenderer {
                 .attachments(&attachment_descs)
                 .subpasses(&subpass_descs)
                 .dependencies(&subpass_deps);
-            let render_pass = unsafe { context.ash_device().create_render_pass(&render_pass_info, None).unwrap()};
+            let render_pass = context.ash_device().create_render_pass(&render_pass_info, None).unwrap();
 
 
             (
@@ -543,12 +559,10 @@ impl VulkanRenderer {
                 .transform
                 .add_mat4(&Mat4::from_rotation_x(0.01));
 
-            render_tools::build_render_graph(
+            render_tools::build_render_graph_gbuffer_only(
                 graph,
                 self.arc_device(),
                 &self,
-                &self.view_data,
-                &camera,
             );
 
             // render_tools::build_render_graph_gbuffer_only(
@@ -576,6 +590,10 @@ impl VulkanRenderer {
             //     true,
             //     true
             // );
+            
+            graph.prepare(&self);
+            let image = self.present_images[present_index].clone();
+            graph.render(&command_buffer, &self, &image, present_index);
             let framebuffer = self.framebuffers[present_index as usize];
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                 .render_pass(self.render_pass)
@@ -597,26 +615,17 @@ impl VulkanRenderer {
                 vk::SubpassContents::INLINE,
             )
             ;
-            graph.prepare(&self);
-            let image = self.present_images[present_index].clone();
-            graph.render(&command_buffer, &self, &image, present_index);
-            self.present_images[self.current_frame].current_layout =
-            vk::ImageLayout::PRESENT_SRC_KHR;
-
             let ui = self.gui.frame();
             let mut a = true;
             ui.show_demo_window(&mut a);
             let draw_data = self.gui.render();
             
             self.gui_renderer
-                .cmd_draw(command_buffer, draw_data)
-                .unwrap();
-            self.vk_context.ash_device().cmd_end_render_pass(command_buffer) ;
-            self.ash_device()
-                .end_command_buffer(command_buffer)
-                .expect("End commandbuffer failed.");
+            .cmd_draw(command_buffer, draw_data)
+            .unwrap();
 
-            
+            self.present_images[self.current_frame].current_layout = vk::ImageLayout::PRESENT_SRC_KHR;
+
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
             self.current_frame = (self.current_frame + 1) % self.num_frames_in_flight as usize;

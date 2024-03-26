@@ -18,12 +18,11 @@ pub fn setup_gbuffer_pass(
     graph
         .add_pass_from_desc(
             "gbuffer_pass",
-            format,
             PipelineDesc::builder()
                 .vertex_path("assets/shaders/gbuffer.vert")
                 .fragment_path("assets/shaders/gbuffer.frag")
                 .default_primitive_vertex_bindings()
-                .default_primitive_vertex_attributes(),
+                .default_primitive_vertex_attributes()
         )
         .write(gbuffer_position)
         .write(gbuffer_normal)

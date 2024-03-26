@@ -17,7 +17,6 @@ pub fn setup_present_pass(
     graph
         .add_pass_from_desc(
             "present_pass",
-            format,
             PipelineDesc::builder()
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/present.frag"),

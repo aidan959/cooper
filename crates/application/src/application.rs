@@ -1,10 +1,13 @@
+use frost::obb::CollisionPoint;
 use frost::{Input, RigidBody, Transform, World};
 use glam::{Mat4, Vec3};
 use imgui::{FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use log::{debug, info};
 use lynch::render_graph::RenderGraph;
+use lynch::window;
 use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window::Window, Camera};
+use std::fmt::Debug;
 use std::sync::mpsc::{self, Sender};
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
@@ -12,7 +15,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
 use crate::{
-    EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_MAX_FPS, DEFAULT_UPDATE_RATE,
+    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_MAX_FPS, DEFAULT_UPDATE_RATE
 };
 
 pub struct CooperApplication {
@@ -23,31 +26,15 @@ pub struct CooperApplication {
     pub camera: Camera,
     event_loop: EventLoop<()>,
     engine_settings: EngineSettings,
+}
+struct CooperUI {
     pub gui: imgui::Context,
     pub platform: imgui_winit_support::WinitPlatform,
-}
-const WIDTH: f64 = 1280.;
-const HEIGHT: f64 = 720.;
-pub enum GameEvent {
-    Input,
-    MoveEvent(usize, Mat4),
-    Spawn(String),
-    NextFrame,
-}
+    pub debug_info: DebugInfo
 
-impl CooperApplication {
-    pub fn create() -> Self {
-        let (window, event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
-        let fov_degrees = 90.0;
-        let camera = Camera::new(
-            Vec3::new(10.0, 0.0, 10.0),
-            Vec3::new(10.0, 0.9, 0.0),
-            fov_degrees,
-            WIDTH / HEIGHT,
-            0.01,
-            1000.0,
-            0.20,
-        );
+}
+impl CooperUI {
+    fn new(window: &Window, camera: &Camera, engine_settings: &EngineSettings) -> Self {
         let (mut gui, platform) = {
             let mut g = imgui::Context::create();
             let mut platform = WinitPlatform::init(&mut g);
@@ -76,6 +63,93 @@ impl CooperApplication {
             platform.attach_window(g.io_mut(), &window.window, HiDpiMode::Rounded);
             (g, platform)
         };
+        let debug_info = DebugInfo::new(
+            camera.get_position(),
+            0.0,
+            engine_settings.fixed_update_rate.as_secs_f32(),
+            0.0,
+            DEFAULT_UPDATE_RATE as f32,
+            0);
+            Self {
+                gui,
+                platform,
+                debug_info
+            }
+    }
+    fn update_
+}
+const WIDTH: f64 = 1280.;
+const HEIGHT: f64 = 720.;
+pub enum GameEvent {
+    Input,
+    MoveEvent(usize, Mat4),
+    Spawn(String),
+    NextFrame,
+}
+pub struct DebugInfo {
+    camera_location: Vec3,
+    recent_collisions: Vec<CollisionPoint>,
+    delta_time: f32,
+    fixed_delta_time: f32,
+    frame_rate: f32,
+    fixed_frame_rate: f32,
+
+    mesh_instances: usize
+}
+impl DebugInfo {
+    pub fn new(
+        camera_location: Vec3,
+        delta_time: f32,
+        fixed_delta_time: f32,
+        frame_rate: f32,
+        fixed_frame_rate: f32,
+
+        mesh_instances: usize
+    ) -> Self{
+        Self {
+            camera_location,
+            recent_collisions: vec![],
+            delta_time,
+            fixed_delta_time,
+            frame_rate,
+            fixed_frame_rate,
+            mesh_instances,
+        }
+    }
+    pub fn update (&mut self, 
+        camera_location: Vec3,
+        recent_collisions: Vec<CollisionPoint>,
+        delta_time: f32,
+        fixed_delta_time: f32,
+        frame_rate: f32,
+        fixed_frame_rate: f32,
+        mesh_instances: usize
+        ) -> &Self {
+        self.camera_location = camera_location;
+        self.recent_collisions.extend(recent_collisions);
+        self.delta_time = delta_time;
+        self.fixed_delta_time =fixed_delta_time;
+        self.frame_rate = frame_rate;
+        self.mesh_instances =mesh_instances;
+        self.fixed_frame_rate= fixed_frame_rate;
+        return self
+    }
+}
+
+impl CooperApplication {
+    pub fn create() -> Self {
+        let (window, event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
+        let fov_degrees = 90.0;
+        let camera = Camera::new(
+            Vec3::new(10.0, 0.0, 10.0),
+            Vec3::new(10.0, 0.9, 0.0),
+            fov_degrees,
+            WIDTH / HEIGHT,
+            0.01,
+            1000.0,
+            0.20,
+        );
+        
         let renderer = VulkanRenderer::create(&window, &camera, &mut gui);
         let graph = RenderGraph::new(
             renderer.vk_context.arc_device(),
@@ -86,6 +160,9 @@ impl CooperApplication {
             .fps_cap(Some(DEFAULT_MAX_FPS))
             .update_rate_hz(DEFAULT_UPDATE_RATE)
             .build();
+
+
+
         CooperApplication {
             window,
             renderer,
@@ -95,6 +172,7 @@ impl CooperApplication {
             engine_settings,
             gui,
             platform,
+            debug_info
         }
     }
 
@@ -136,6 +214,7 @@ impl CooperApplication {
         self.event_loop.run(move |event, _elwt, control_flow| {
             self.platform
                 .handle_event(self.gui.io_mut(), &self.window.window, &event);
+            
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::NewEvents(_) => {
@@ -145,10 +224,11 @@ impl CooperApplication {
                         .update_delta_time(now.duration_since(last_frame));
 
                     last_frame = now;
+                    
                 }
                 Event::MainEventsCleared => {
                     let mut ui = self.gui.frame();
-                    ui_func(&mut run, &mut ui);
+                    ui_func(&mut run, &mut ui,);
                     let draw_data = self.gui.render();
                     let delta = self
                         .renderer
@@ -238,6 +318,8 @@ impl CooperApplication {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
                         self.graph.clear();
+                        
+                        return;
                     }
                     WindowEvent::Resized(resize_value) => {
                         self.renderer.resize(resize_value);
@@ -254,7 +336,9 @@ impl CooperApplication {
             }
         });
     }
-
+    fn debug_ui(&mut self) {
+        
+    }
     fn create_scene(&mut self) {
         self.renderer.initialize();
         self.build_scene();

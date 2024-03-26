@@ -275,8 +275,10 @@ impl RenderPassBuilder {
         }
         self
     }
-
-    pub fn build(self, graph: &mut RenderGraph, extent: vk::Extent2D) {
+    pub fn build_presentation( self, graph: &mut RenderGraph, present_image: &Image) {
+        
+    }
+    pub fn build(self, graph: &mut RenderGraph) {
         
 
         let mut pass = RenderPass::new(
@@ -359,7 +361,13 @@ impl RenderPassBuilder {
             .map(|write| { 
                 graph.resources.texture(write.texture).texture.image.image_view.clone()
             }).collect();
-        
+        let image_extents: Vec<vk::Extent2D> = pass
+            .writes
+            .iter()
+            .map(|write| { 
+                let image = &graph.resources.texture(write.texture).texture.image;
+                vk::Extent2D::builder().width(image.width()).height(image.height()).build()
+            }).collect();
         
         if !graph.render_framebuffers.contains_key(&pass.name) {
             graph.render_framebuffers.insert(
@@ -367,7 +375,7 @@ impl RenderPassBuilder {
                 vec![vulkan::create_vulkan_framebuffer(
                     &graph.device, 
                     *render_pass,
-                    extent,
+                    image_extents[0],
                     &image_views,
                 )],
             );
@@ -690,7 +698,6 @@ impl RenderGraph {
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
         present_image: &Image,
-        present_index: usize,
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
@@ -847,7 +854,7 @@ impl RenderGraph {
                 ViewType::Full(),
                 vk::AttachmentLoadOp::CLEAR,
             )];
-            let framebuffer = self.render_framebuffers.get(&pass.name).unwrap()[present_index];
+            let framebuffer = self.render_framebuffers.get(&pass.name).unwrap()[0];
             let renderpass = self.render_passes.get(&pass.name).unwrap();
             pass.prepare_render(
                 command_buffer,

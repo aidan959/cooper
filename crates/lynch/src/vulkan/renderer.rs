@@ -51,7 +51,7 @@ pub struct VulkanRenderer {
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub render_pass: vk::RenderPass,
-    pub framebuffers: Vec<vk::Framebuffer>,
+    pub present_framebuffers: Vec<vk::Framebuffer>,
     pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
     pub internal_renderer: RendererInternal,
     pub current_frame: usize,
@@ -577,9 +577,10 @@ impl VulkanRenderer {
             // );
             
             graph.prepare(&self);
+            let framebuffer = self.present_framebuffers[present_index as usize];
+
             let image = self.present_images[present_index].clone();
-            graph.render(&command_buffer, &self, &image, present_index);
-            let framebuffer = self.framebuffers[present_index as usize];
+            graph.render(&command_buffer, &self, &image);
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                 .render_pass(self.render_pass)
                 
@@ -590,7 +591,7 @@ impl VulkanRenderer {
                 })
                 .clear_values(&[vk::ClearValue {
                     color: vk::ClearColorValue {
-                        float32: [1.0, 1.0, 1.0, 1.0],
+                        float32: [1.0, 1.0, 1.0, 0.0],
                     },
                 }]);
 
@@ -608,7 +609,9 @@ impl VulkanRenderer {
             self.gui_renderer
             .cmd_draw(command_buffer, draw_data)
             .unwrap();
-
+            self.ash_device()
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer failed.");
             self.present_images[self.current_frame].current_layout = vk::ImageLayout::PRESENT_SRC_KHR;
 
             self.submit_commands(self.current_frame);
@@ -666,7 +669,7 @@ impl Renderer for VulkanRenderer {
             surface_format,
             surface_resolution,
         );
-        let framebuffers :Vec<vk::Framebuffer> = present_images.iter()
+        let present_framebuffers :Vec<vk::Framebuffer> = present_images.iter()
             .map(|view| [view.image_view])
             .map(|attachments| {
                 let framebuffer_info = vk::FramebufferCreateInfo::builder()
@@ -679,7 +682,7 @@ impl Renderer for VulkanRenderer {
             })
         .collect::<Result<Vec<_>, _>>().unwrap();
         let command_pool = Self::create_command_pool(&vk_context);
-
+        
         let sync_frames =
             Self::create_synchronization_frames(&vk_context, command_pool, image_count);
 
@@ -751,6 +754,7 @@ impl Renderer for VulkanRenderer {
             command_pool,
             image_count,
             present_images,
+            present_framebuffers,
             depth_image,
             surface_format,
             surface_resolution,
@@ -768,7 +772,6 @@ impl Renderer for VulkanRenderer {
             gui_renderer,
             gui,
             platform,
-            framebuffers
         }
     }
 

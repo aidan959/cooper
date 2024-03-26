@@ -313,7 +313,7 @@ mod tests {
         },);
     }
     #[test]  
-    fn graphic_scene_sponza() {
+    fn graphic_scene_sponza() { 
         env_logger::init();
         fn rotate_system (
             mut rbs: Search<(&mut RigidBody,)>,

@@ -11,6 +11,7 @@ use ash::{
 };
 use ash::{vk, Entry, Instance};
 use gpu_allocator::vulkan::AllocatorCreateDesc;
+use image::DynamicImage::ImageBgr8;
 use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
@@ -536,16 +537,39 @@ impl VulkanRenderer {
             let image = self.present_images[present_index].clone();
             graph.render(&command_buffer, &self, &image);
 
-            self.ash_device()
-                .end_command_buffer(command_buffer)
-                .expect("End commandbuffer failed.");
+            let color_attachment_info = vk::RenderingAttachmentInfo::builder()
+                .image_view(image.image_view)  // The current swapchain image view
+                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::LOAD) 
+                .store_op(vk::AttachmentStoreOp::STORE)  // Store the result for presentation
+                
+                .build();
+            let rendering_info = vk::RenderingInfo::
+                builder()
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: vk::Extent2D{width: image.width(), height: image.height()},  // The size of the swapchain image
+                })
+                .layer_count(1)
+                .color_attachments(std::slice::from_ref(&color_attachment_info))
+                
+                .build();
+            
+            self.ash_device().cmd_begin_rendering(command_buffer, &rendering_info);
+            
             let mut ui = self.gui.frame();
             let mut a = true;
             ui.show_demo_window(&mut a);
             let draw_data = self.gui.render();
+            
+            self.gui_renderer.cmd_draw(command_buffer, draw_data).unwrap();
+            
+            self.ash_device().cmd_end_rendering(command_buffer);
+            self.ash_device()
+                .end_command_buffer(command_buffer)
+                .expect("End commandbuffer failed.");
             self.present_images[self.current_frame].current_layout =
                 vk::ImageLayout::PRESENT_SRC_KHR;
-            
 
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
@@ -614,7 +638,7 @@ impl Renderer for VulkanRenderer {
             .map(|_| view_data.create_camera_buffer(&vk_context))
             .collect::<Vec<_>>();
         
-        let (mut gui, mut platform) = {
+        let (mut gui, platform) = {
             let mut g = imgui::Context::create();
             let mut platform = WinitPlatform::init(&mut g);
 
@@ -658,12 +682,14 @@ impl Renderer for VulkanRenderer {
                 vk_context.device().queue,
                 vk_context.device().cmd_pool,
                 imgui_rs_vulkan_renderer::DynamicRendering{
-                    color_attachment_format: vk::Format::R32G32B32A32_SFLOAT,
+                    color_attachment_format: vk::Format::R8G8B8A8_UNORM,
                     depth_attachment_format: None,
                 },
                 &mut gui,
                 Some(imgui_rs_vulkan_renderer::Options { 
                     in_flight_frames: image_count as usize,
+                    enable_depth_test: false,
+                    enable_depth_write:false,
                     ..Default::default()
                 }),
             ).unwrap()

@@ -52,8 +52,8 @@ pub struct VulkanRenderer {
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub ui_render_pass: vk::RenderPass,
-    pub present_framebuffers: Vec<vk::Framebuffer>,
     pub ui_framebuffer: vk::Framebuffer,
+    pub present_framebuffers: Vec<vk::Framebuffer>,
     pub debug_utils_messenger: Option<vk::DebugUtilsMessengerEXT>,
     pub internal_renderer: RendererInternal,
     pub current_frame: usize,
@@ -506,12 +506,13 @@ impl VulkanRenderer {
             self.internal_renderer.instances[0]
                 .transform
                 .add_mat4(&Mat4::from_rotation_x(0.01));
-            let framebuffer = self.present_framebuffers[present_index as usize];
+            let image = self.present_images[present_index].clone();
 
             render_tools::build_render_graph_gbuffer_only(
                 graph,
                 self.arc_device(),
                 &self,
+                &image
             );
 
             // render_tools::build_render_graph_gbuffer_only(
@@ -542,43 +543,41 @@ impl VulkanRenderer {
             
             graph.prepare(&self);
 
-            let image = self.present_images[present_index].clone();
-            graph.render(&command_buffer, &self, &image, present_index);
-            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(self.ui_render_pass)
-                
-                .framebuffer(self.ui_framebuffer)
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: self.surface_resolution,
-                })
-                .clear_values(&[vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [1.0, 1.0, 1.0, 0.0],
-                    },
-                }]);
+            graph.render(&command_buffer, &self, &image);
+            // let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            //         .render_pass(self.ui_render_pass)
+                    
+            //         .framebuffer(self.ui_framebuffer)
+            //         .render_area(vk::Rect2D {
+            //             offset: vk::Offset2D { x: 0, y: 0 },
+            //             extent: self.surface_resolution,
+            //         })
+            //         .clear_values(&[vk::ClearValue {
+            //             color: vk::ClearColorValue {
+            //                 float32: [1.0, 1.0, 1.0, 0.0],
+            //             },
+            //         }]);
 
-            self.vk_context.ash_device().cmd_begin_render_pass(
-                command_buffer,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
-            ;
-            let ui = self.gui.frame();
-            let mut a = true;
-            ui.show_demo_window(&mut a);
-            let draw_data = self.gui.render();
-            
-            self.gui_renderer
-                .cmd_draw(command_buffer, draw_data)
-                .unwrap();
-            self.vk_context.ash_device().cmd_end_render_pass(
-                command_buffer
-            );
+            //     self.vk_context.ash_device().cmd_begin_render_pass(
+            //         command_buffer,
+            //         &render_pass_begin_info,
+            //         vk::SubpassContents::INLINE,
+            //     )
+            //     ;
+            //     let ui = self.gui.frame();
+            //     let mut a = true;
+            //     ui.show_demo_window(&mut a);
+            //     let draw_data = self.gui.render();
+                
+            //     self.gui_renderer
+            //         .cmd_draw(command_buffer, draw_data)
+            //         .unwrap();
+            //     self.vk_context.ash_device().cmd_end_render_pass(
+            //         command_buffer
+            //     );
             self.ash_device()
                 .end_command_buffer(command_buffer)
                 .expect("End commandbuffer failed.");
-            self.present_images[self.current_frame].current_layout = vk::ImageLayout::PRESENT_SRC_KHR;
 
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
@@ -635,6 +634,7 @@ impl Renderer for VulkanRenderer {
             surface_format,
             surface_resolution,
         );
+
         let ui_image = Image::new_from_desc(vk_context.arc_device(), ImageDesc::new_2d(surface_resolution.width, surface_resolution.height, vk::Format::B8G8R8A8_UNORM));
         let ui_render_pass = create_render_pass_ui(vk_context.device(),ui_image.format());
         println!("Created Renderpass (ui_render_pass): {:#018x}", ui_render_pass.as_raw());
@@ -659,7 +659,7 @@ impl Renderer for VulkanRenderer {
                     .layers(1);
                 unsafe { vk_context.ash_device().create_framebuffer(&framebuffer_info, None) }
             })
-        .collect::<Result<Vec<_>, _>>().unwrap();
+            .collect::<Result<Vec<_>, _>>().unwrap();
        let command_pool = Self::create_command_pool(&vk_context);
         
         let sync_frames =

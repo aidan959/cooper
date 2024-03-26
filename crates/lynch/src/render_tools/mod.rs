@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::{
     render_graph::{RenderGraph, TextureId},
-    vulkan::{renderer::VulkanRenderer, Device, ImageDesc},
+    vulkan::{renderer::VulkanRenderer, Device, Image, ImageDesc},
     Camera, ViewUniformData,
 };
 use self::{gbuffer::setup_gbuffer_pass, present::setup_present_pass};
@@ -82,6 +82,7 @@ pub fn build_render_graph_gbuffer_only(
     graph: &mut RenderGraph,
     device: Arc<Device>,
     base: &VulkanRenderer,
+    present_image : &Image
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;
@@ -98,7 +99,7 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_albedo,
         gbuffer_pbr,
     );
-    setup_present_pass(graph, gbuffer_albedo);
+    setup_present_pass(graph, gbuffer_albedo, present_image);
 }
 /*pub fn build_render_graph_atmosphere(
     graph: &mut RenderGraph,

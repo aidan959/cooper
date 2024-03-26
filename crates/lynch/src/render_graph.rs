@@ -85,7 +85,6 @@ pub struct TextureCopy {
 pub struct RenderGraph{
     pub passes: Vec<Vec<RenderPass>>,
     pub render_passes: HashMap<String, vk::RenderPass>,
-    pub render_subpasses: HashMap<String, vk::SubpassDependency>,
 
     pub render_framebuffers: HashMap<String, Vec<vk::Framebuffer>>,
 
@@ -275,7 +274,7 @@ impl RenderPassBuilder {
         }
         self
     }
-    pub fn build_presentation( self, graph: &mut RenderGraph) {
+    pub fn build_presentation( self, graph: &mut RenderGraph, present_image:&Image) {
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
@@ -295,63 +294,20 @@ impl RenderPassBuilder {
         for write in &self.writes {
             pass.writes.push(*write);
         }
-        graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
-            .writes
-            .iter()
-            .map(|write| {
-
-                graph
-                    .resources
-                    .texture(write.texture)
-                    .texture
-                    .image
-                    .format()
-            })
-            .collect();
 
     
-        let color_attachment_formats = graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats.clone();
-        let mut depth_attachment_format = None;
-        if let Some(depth) = &pass.depth_attachment {
-            match depth {
-                DepthAttachment::GraphHandle(write) => {
-                    depth_attachment_format = Some(graph
-                        .resources
-                        .texture(write.texture)
-                        .texture
-                        .image
-                        .format());
-                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        graph
-                            .resources
-                            .texture(write.texture)
-                            .texture
-                            .image
-                            .format()
-                    
-                }
-                DepthAttachment::External(image, _) => {
-                    depth_attachment_format = None;
-                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        image.format();
-
-
-                }
-            }
-        };
         if !graph.render_passes.contains_key(&pass.name){
+            let render_pass = vulkan::create_present_render_pass(
+                &self.device,
+                vec![present_image.format()]
+            );
             graph.render_passes.insert(
                 pass.name.clone(),
-                vulkan::create_render_pass(
-                    &self.device,
-                    color_attachment_formats,
-                    depth_attachment_format
-                ),
+                render_pass
             );
+            println!("Created Renderpass ({}): {:#018x}",&pass.name, render_pass.as_raw());
+
         }
-
-
-        
         
         if !self.uniforms.is_empty() {
             pass.uniform_buffer.replace(
@@ -563,8 +519,6 @@ impl RenderGraph {
             pipeline_descs: vec![],
             render_passes: HashMap::new(),
             render_framebuffers: render_framebuffers,
-            
-            render_subpasses: HashMap::new(),
             current_frame: 0,
             device: device,
         }
@@ -804,8 +758,7 @@ impl RenderGraph {
         &mut self,
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
-        present_image: &Image,
-        present_index: usize
+        present_image: &Image
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
@@ -1107,6 +1060,46 @@ impl RenderGraph {
                     )
                 };
             }
+            // if pass.presentation_pass {
+            //     let next_access = vulkan::image_pipeline_barrier(
+            //         device,
+            //         *command_buffer,
+            //         &self.resources.textures[src].texture.image,
+            //         self.resources.textures[src].prev_access,
+            //         vk_sync::AccessType::TransferRead,
+            //         false,
+            //     );
+            //     self.resources.textures.get_mut(src).unwrap().prev_access = next_access;
+
+            //     let next_access = vulkan::image_pipeline_barrier(
+            //         device,
+            //         *command_buffer,
+            //         &self.resources.textures[dst].texture.image,
+            //         self.resources.textures[dst].prev_access,
+            //         vk_sync::AccessType::TransferWrite,
+            //         false,
+            //     );
+            //     self.resources.textures.get_mut(dst).unwrap().prev_access = next_access;
+
+            //     let src = &self.resources.textures[src].texture.image;
+            //     let dst = &self.resources.textures[dst].texture.image;
+
+            //     let mut copy_desc = copy_command.copy_desc;
+            //     copy_desc.src_subresource.aspect_mask = src.desc.aspect_flags;
+            //     copy_desc.dst_subresource.aspect_mask = dst.desc.aspect_flags;
+
+            //     unsafe {
+            //         device.device().cmd_copy_image(
+            //             *command_buffer,
+            //             src.image,
+            //             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            //             dst.image,
+            //             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            //             &[copy_desc],
+            //         )
+            //     };
+            // }
         }
+
     }
 }

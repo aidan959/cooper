@@ -47,7 +47,7 @@ impl CooperApplication
             0.20,
         );
         let renderer = VulkanRenderer::create(&window, &camera);
-        let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count, &renderer.present_framebuffers);
+        let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count);
         let engine_settings = EngineSettingsBuilder::new()
                                 .fps_cap(Some(DEFAULT_MAX_FPS))
                                 .update_rate_hz(DEFAULT_UPDATE_RATE)

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-use ash::vk::{self, Framebuffer, ImageView};
+use ash::vk::{self, Framebuffer, Handle, ImageView};
 
 use crate::renderer::Renderer;
 use crate::vulkan::renderer::{
@@ -437,38 +437,50 @@ impl RenderPassBuilder {
             }
         };
         if !graph.render_passes.contains_key(&pass.name){
+            let render_pass = vulkan::create_render_pass(
+                &self.device,
+                color_attachment_formats,
+                depth_attachment_format
+            );
             graph.render_passes.insert(
                 pass.name.clone(),
-                vulkan::create_render_pass(
-                    &self.device,
-                    color_attachment_formats,
-                    depth_attachment_format
-                ),
+                render_pass
             );
+            println!("Created Renderpass ({}): {:#018x}",&pass.name, render_pass.as_raw());
+
         }
 
         let render_pass = graph.render_passes.get(&pass.name).unwrap();
-        let image_views = pass
-            .writes
-            .iter()
-            .map(|write| { 
+        let image_views : Vec<ImageView> = pass.writes.iter().map(|write|{
                 graph.resources.texture(write.texture).texture.image.image_view.clone()
-            }).collect();
-        let image_extents: Vec<vk::Extent2D> = pass
-            .writes
-            .iter()
-            .map(|write| { 
+            })
+            .collect::<Vec<ImageView>>();
+        let image_extents: Vec<vk::Extent2D> = 
+            pass.writes.iter().map(|write|{
                 let image = &graph.resources.texture(write.texture).texture.image;
                 vk::Extent2D::builder().width(image.width()).height(image.height()).build()
-            }).collect();
-        
+                
+            })
+            .collect::<Vec<vk::Extent2D>>() ;
+        let extents = if self.presentation_pass {
+            match pass.reads[0] {
+                Resource::Texture(texture) => {
+                    let image = &graph.resources.texture(texture.texture).texture.image;
+                    vec![vk::Extent2D::builder().width(image.width()).height(image.height()).build()]
+                },
+                _=> {panic!("No buffer should be attached to presentation pass.")}
+            }
+        } else {
+            image_extents
+        };
+         
         if !graph.render_framebuffers.contains_key(&pass.name) {
             graph.render_framebuffers.insert(
                 pass.name.clone(),
                 vec![vulkan::create_vulkan_framebuffer(
                     &graph.device, 
                     *render_pass,
-                    image_extents[0],
+                    extents[0],
                     &image_views,
                 )],
             );
@@ -538,10 +550,9 @@ impl RenderGraph {
         device: Arc<Device>,
         camera_uniform_buffer: &Vec<Buffer>,
         num_frames_in_flight: u32,
-        present_framebuffers: &Vec<Framebuffer>
     ) -> Self {
-        let mut render_framebuffers = HashMap::new();
-        render_framebuffers.insert("present_pass".to_string(), present_framebuffers.clone());
+        let render_framebuffers = HashMap::new();
+        
         RenderGraph {
             passes: (0..num_frames_in_flight).map(|_| vec![]).collect(),
             resources: GraphResources::new(),
@@ -954,7 +965,7 @@ impl RenderGraph {
             let framebuffer = if !pass.presentation_pass {
                 self.render_framebuffers.get(&pass.name).unwrap()[0]
             } else {
-                self.render_framebuffers.get(&pass.name).unwrap()[present_index]
+                self.render_framebuffers.get(&pass.name).unwrap()[0]
             };
             
             let renderpass = self.render_passes.get(&pass.name).unwrap();

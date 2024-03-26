@@ -7,20 +7,20 @@ use crate::{
     vulkan::{renderer::VulkanRenderer, Device, ImageDesc},
     Camera, ViewUniformData,
 };
+use self::{gbuffer::setup_gbuffer_pass, present::setup_present_pass};
+// use self::{
+//     atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass, gui::setup_gui_pass, irradiancebasedlighting::{setup_cubemap_pass, setup_cubemap_pass_opt}, present::setup_present_pass, ssao::setup_ssao_pass
+// };
 
-use self::{
-    atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass, gui::setup_gui_pass, irradiancebasedlighting::{setup_cubemap_pass, setup_cubemap_pass_opt}, present::setup_present_pass, ssao::setup_ssao_pass
-};
-
-pub mod atmosphere;
-pub mod deferred;
-pub mod forward;
+//pub mod atmosphere;
+//pub mod deferred;
+//pub mod forward;
 pub mod gbuffer;
-pub mod irradiancebasedlighting;
+//pub mod irradiancebasedlighting;
 pub mod present;
-pub mod shadow;
-pub mod ssao;
-pub mod gui;
+//pub mod shadow;
+//pub mod ssao;
+//pub mod gui;
 use phf::phf_ordered_map;
 
 static GBUFFER_MAP: phf::OrderedMap<&'static str, vk::Format> = phf_ordered_map! {

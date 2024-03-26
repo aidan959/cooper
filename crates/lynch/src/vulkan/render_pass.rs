@@ -159,7 +159,7 @@ impl RenderPass {
         extent: vk::Extent2D,
         pipelines: &[Pipeline],
         render_pass: vk::RenderPass,
-        framebuffers: vk::Framebuffer
+        framebuffer: vk::Framebuffer
     ) {
         let bind_point = match pipelines[self.pipeline_handle].pipeline_type {
             PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,
@@ -178,59 +178,31 @@ impl RenderPass {
             return;
         }
 
-        let color_attachments = color_attachments
-            .iter()
-            .map(|image| {
-                vk::RenderingAttachmentInfo::builder()
-                    .image_view(match image.1 {
-                        ViewType::Full() => image.0.image_view,
-                        ViewType::Layer(layer) => image.0.layer_view(layer),
-                    })
-                    .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                    .load_op(image.2)
-                    .store_op(vk::AttachmentStoreOp::STORE)
-                    .clear_value(vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 0.0],
-                        },
-                    })
-                    .build()
-            })
-            .collect::<Vec<_>>();
 
-        let rendering_info = vk::RenderingInfo::builder()
-            .view_mask(0)
-            .layer_count(1)
-            .color_attachments(&color_attachments)
-            .depth_attachment(&if let Some(depth_attachment) = depth_attachment {
-                vk::RenderingAttachmentInfo::builder()
-                    .image_view(match depth_attachment.1 {
-                        ViewType::Full() => depth_attachment.0.image_view,
-                        ViewType::Layer(layer) => depth_attachment.0.layer_view(layer),
-                    })
-                    .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                    .load_op(depth_attachment.2)
-                    .store_op(vk::AttachmentStoreOp::STORE)
-                    .clear_value(vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    })
-                    .build()
-            } else {
-                vk::RenderingAttachmentInfo::default()
-            })
+       
+            
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
-            .build();
+            .clear_values(&[vk::ClearValue {
+                color: vk::ClearColorValue {
+                   float32: [1.0, 1.0, 1.0, 1.0],
+        },
+        }]);
+
 
         unsafe {
             self.device
                 .device()
-                .cmd_begin_rendering(*command_buffer, &rendering_info);
+                .cmd_begin_render_pass(
+                    *command_buffer,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                );
 
             self.device.device().cmd_bind_pipeline(
                 *command_buffer,

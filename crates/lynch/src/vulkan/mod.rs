@@ -31,9 +31,11 @@ pub(crate) fn create_render_pass_ui(
     let attachment_descs = [vk::AttachmentDescription::builder()
         .format(format)
         .samples(vk::SampleCountFlags::TYPE_1)
-        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .load_op(vk::AttachmentLoadOp::LOAD)
         .store_op(vk::AttachmentStoreOp::STORE)
-        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
         .build()];
 
@@ -50,12 +52,10 @@ pub(crate) fn create_render_pass_ui(
     let subpass_deps = [vk::SubpassDependency::builder()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
         .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
         .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(
-            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-        )
         .build()];
 
     let render_pass_info = vk::RenderPassCreateInfo::builder()
@@ -63,6 +63,55 @@ pub(crate) fn create_render_pass_ui(
         .subpasses(&subpass_descs)
         .dependencies(&subpass_deps);
     unsafe { device.ash_device.create_render_pass(&render_pass_info, None).unwrap()}
+}
+pub(crate) fn create_present_render_pass(
+    device: &Device,
+    attachment_formats: Vec<vk::Format>,
+) -> vk::RenderPass {
+    log::debug!("Creating vulkan render pass");
+    
+    let color_attachment_descs = attachment_formats.iter().map(|format| {
+        vk::AttachmentDescription::builder()
+            .format(*format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .build()
+    }).collect::<Vec<_>>();
+
+
+
+    let mut color_attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
+    for i  in 0..attachment_formats.len() {
+        color_attachment_refs.push(vk::AttachmentReference::builder()
+            .attachment(i as u32)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build());
+    }
+
+    let subpass = [vk::SubpassDescription::builder()
+    .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+    .color_attachments(&color_attachment_refs)
+    .build()];
+    let subpass_deps = [vk::SubpassDependency::builder()
+        .src_subpass(vk::SUBPASS_EXTERNAL)
+        .dst_subpass(0)
+        .dependency_flags(vk::DependencyFlags::BY_REGION)
+        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .src_access_mask(vk::AccessFlags::empty())
+        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        ).build()];
+
+    let render_pass_info = vk::RenderPassCreateInfo::builder()
+        .attachments(&color_attachment_descs)
+        .subpasses(&subpass)
+        .dependencies(&subpass_deps);
+
+    unsafe { device.ash_device.create_render_pass(&render_pass_info, None).unwrap() }
 }
 
 pub(crate) fn create_render_pass(
@@ -128,7 +177,7 @@ pub(crate) fn create_render_pass(
 
 
     let subpass_deps = [vk::SubpassDependency::builder()
-        .src_subpass(0)
+        .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
         .dependency_flags(vk::DependencyFlags::BY_REGION)
         .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)

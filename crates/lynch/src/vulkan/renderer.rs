@@ -1,13 +1,13 @@
 use crate::{
     gltf_loader::Model, render_graph::RenderGraph, render_tools::{self, present}, renderer::Renderer,
-    vulkan::{cont::*, debug::*}, window::window::Window, Camera, Texture,
+    vulkan::{cont::*, create_render_pass_ui, debug::*}, window::window::Window, Camera, Texture,
 };
 use ash::{
     extensions::{
         ext::DebugUtils,
         khr::{Surface, Swapchain},
     },
-    vk::Extent2D,
+    vk::{Extent2D, Handle},
 };
 use ash::{vk, Entry, Instance};
 use gpu_allocator::vulkan::AllocatorCreateDesc;
@@ -512,7 +512,6 @@ impl VulkanRenderer {
                 graph,
                 self.arc_device(),
                 &self,
-                &framebuffer
             );
 
             // render_tools::build_render_graph_gbuffer_only(
@@ -571,8 +570,11 @@ impl VulkanRenderer {
             let draw_data = self.gui.render();
             
             self.gui_renderer
-            .cmd_draw(command_buffer, draw_data)
-            .unwrap();
+                .cmd_draw(command_buffer, draw_data)
+                .unwrap();
+            self.vk_context.ash_device().cmd_end_render_pass(
+                command_buffer
+            );
             self.ash_device()
                 .end_command_buffer(command_buffer)
                 .expect("End commandbuffer failed.");
@@ -634,7 +636,8 @@ impl Renderer for VulkanRenderer {
             surface_resolution,
         );
         let ui_image = Image::new_from_desc(vk_context.arc_device(), ImageDesc::new_2d(surface_resolution.width, surface_resolution.height, vk::Format::B8G8R8A8_UNORM));
-        let ui_render_pass = create_render_pass(vk_context.device(),vec![ui_image.format()], None);
+        let ui_render_pass = create_render_pass_ui(vk_context.device(),ui_image.format());
+        println!("Created Renderpass (ui_render_pass): {:#018x}", ui_render_pass.as_raw());
         let ui_framebuffer = vk::FramebufferCreateInfo::builder()
             .render_pass(ui_render_pass)
             .attachments(&[ui_image.image_view])

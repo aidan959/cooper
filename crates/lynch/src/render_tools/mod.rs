@@ -82,7 +82,6 @@ pub fn build_render_graph_gbuffer_only(
     graph: &mut RenderGraph,
     device: Arc<Device>,
     base: &VulkanRenderer,
-    present_framebuffer: &vk::Framebuffer
 ) {
     let width = base.surface_resolution.width;
     let height = base.surface_resolution.height;
@@ -99,7 +98,7 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_albedo,
         gbuffer_pbr,
     );
-    setup_present_pass(graph, gbuffer_albedo, present_framebuffer);
+    setup_present_pass(graph, gbuffer_albedo);
 }
 /*pub fn build_render_graph_atmosphere(
     graph: &mut RenderGraph,

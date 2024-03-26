@@ -11,8 +11,6 @@ pub fn setup_gbuffer_pass(
     gbuffer_normal: TextureId,
     gbuffer_albedo: TextureId,
     gbuffer_pbr: TextureId,
-    extent: vk::Extent2D,
-    format: vk::Format,
 ) {
     graph
         .add_pass_from_desc(
@@ -37,5 +35,5 @@ pub fn setup_gbuffer_pass(
                 pipeline.pipeline_layout,
             );
         })
-        .build(graph, extent);
+        .build(graph);
 }

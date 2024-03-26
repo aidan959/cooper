@@ -98,10 +98,8 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_normal,
         gbuffer_albedo,
         gbuffer_pbr,
-        base.surface_resolution,
-        base.surface_format.format,
     );
-    setup_present_pass(graph, gbuffer_albedo, base.surface_resolution, base.surface_format.format);
+    setup_present_pass(graph, gbuffer_albedo);
 }
 /*pub fn build_render_graph_atmosphere(
     graph: &mut RenderGraph,

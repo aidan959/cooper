@@ -277,7 +277,7 @@ mod tests {
     use glam::{Mat4, Quat, Vec3};
     struct GfxLocation(usize); 
 
-    #[test] 
+    #[test]
     fn graphic_scene_engine() { 
 
         fn rotate_system (

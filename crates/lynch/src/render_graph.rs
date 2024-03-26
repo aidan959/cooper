@@ -276,13 +276,9 @@ impl RenderPassBuilder {
         self
     }
 
-    pub fn build(self, graph: &mut RenderGraph, extent: vk::Extent2D, image_views: &Vec<Image>) {
+    pub fn build(self, graph: &mut RenderGraph, extent: vk::Extent2D) {
         
-        let image_views = image_views
-            .iter()
-            .map(|image| image.image_view.clone())
-            .collect::<Vec<vk::ImageView>>();
-        
+
         let mut pass = RenderPass::new(
             self.name,
             self.pipeline_handle,
@@ -302,11 +298,11 @@ impl RenderPassBuilder {
         for write in &self.writes {
             pass.writes.push(*write);
         }
-
         graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
             .writes
             .iter()
             .map(|write| {
+
                 graph
                     .resources
                     .texture(write.texture)
@@ -315,10 +311,19 @@ impl RenderPassBuilder {
                     .format()
             })
             .collect();
+
+    
         let color_attachment_formats = graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats.clone();
+        let mut depth_attachment_format = None;
         if let Some(depth) = &pass.depth_attachment {
             match depth {
                 DepthAttachment::GraphHandle(write) => {
+                    depth_attachment_format = Some(graph
+                        .resources
+                        .texture(write.texture)
+                        .texture
+                        .image
+                        .format());
                     graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
                         graph
                             .resources
@@ -326,31 +331,45 @@ impl RenderPassBuilder {
                             .texture
                             .image
                             .format()
+                    
                 }
                 DepthAttachment::External(image, _) => {
+                    depth_attachment_format = None;
                     graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        image.format()
+                        image.format();
+
+
                 }
             }
-        }
+        };
+        
         graph.render_passes.insert(
             pass.name.clone(),
             vulkan::create_render_pass(
                 &self.device,
                 color_attachment_formats,
-                graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format
+                depth_attachment_format
             ),
         );
+
         let render_pass = graph.render_passes.get(&pass.name).unwrap();
+        let image_views = pass
+            .writes
+            .iter()
+            .map(|write| { 
+                graph.resources.texture(write.texture).texture.image.image_view.clone()
+            }).collect();
+        
+        
         if !graph.render_framebuffers.contains_key(&pass.name) {
             graph.render_framebuffers.insert(
                 pass.name.clone(),
-                vulkan::create_vulkan_framebuffers(
-                    &graph.device,
+                vec![vulkan::create_vulkan_framebuffer(
+                    &graph.device, 
                     *render_pass,
                     extent,
                     &image_views,
-                ),
+                )],
             );
         }
         if !self.uniforms.is_empty() {

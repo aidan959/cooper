@@ -32,7 +32,7 @@ pub struct Pipeline {
     pub reflection: vulkan::shader::ShaderReflect,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
-    pub render_pass: vk::RenderPass
+    pub render_pass: vk::RenderPass,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -83,7 +83,7 @@ impl Pipeline {
             reflection: vulkan::shader::ShaderReflect::default(),
             pipeline_desc,
             pipeline_type,
-            render_pass
+            render_pass,
         };
 
         Self::create_pipeline(&mut pipeline, device, bindless_descriptor_set_layout)
@@ -95,7 +95,7 @@ impl Pipeline {
     pub fn recreate_pipeline(
         &mut self,
         device: &Device,
-        bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>
+        bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> bool {
         // Todo: DESTROY OLD PIPELINE_RESOURCES
         if Self::create_pipeline(self, device, bindless_descriptor_set_layout).is_ok() {
@@ -249,18 +249,11 @@ impl Pipeline {
             compare_op: vk::CompareOp::ALWAYS,
             ..Default::default()
         };
-        let depth_state_info = vk::PipelineDepthStencilStateCreateInfo {
-            depth_test_enable: 1,
-            depth_write_enable: 1,
-            depth_compare_op: vk::CompareOp::LESS,
-            front: noop_stencil_state,
-            back: noop_stencil_state,
-            max_depth_bounds: 1.0, 
-            ..Default::default()
-        };
-        let color_blend_attachment_states = vec![
-            vk::PipelineColorBlendAttachmentState {
-                blend_enable: 0,
+        // Create color blend attachment states correctly
+        let color_blend_attachment_states = color_attachment_formats
+            .iter()
+            .map(|_| vk::PipelineColorBlendAttachmentState {
+                blend_enable: vk::FALSE,
                 src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
                 dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
                 color_blend_op: vk::BlendOp::ADD,
@@ -271,9 +264,22 @@ impl Pipeline {
                     | vk::ColorComponentFlags::G
                     | vk::ColorComponentFlags::B
                     | vk::ColorComponentFlags::A,
-            };
-            color_attachment_formats.len()
-        ];
+            })
+            .collect::<Vec<_>>();
+        let depth_state_info = if depth_stencil_attachment_format != vk::Format::UNDEFINED {
+            vk::PipelineDepthStencilStateCreateInfo {
+                depth_test_enable: vk::TRUE,
+                depth_write_enable: vk::TRUE,
+                depth_compare_op: vk::CompareOp::LESS,
+                front: noop_stencil_state,
+                back: noop_stencil_state,
+                max_depth_bounds: 1.0,
+                ..Default::default()
+            }
+        } else {
+            vk::PipelineDepthStencilStateCreateInfo::default()
+        };
+        
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
             .attachments(&color_blend_attachment_states);
@@ -299,8 +305,8 @@ impl Pipeline {
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state_info)
             .layout(pipeline_layout)
-            .render_pass(render_pass)
-            .push_next(&mut rendering_info);
+            .render_pass(render_pass);
+            //.push_next(&mut rendering_info);
 
         let graphics_pipelines = unsafe {
             device

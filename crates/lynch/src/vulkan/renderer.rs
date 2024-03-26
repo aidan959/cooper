@@ -432,26 +432,11 @@ impl VulkanRenderer {
             let subpass_descs = [vk::SubpassDescription::builder()
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
                 .color_attachments(&color_attachment_refs)
-                .build(),
-                vk::SubpassDescription::builder()
-                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-                .color_attachments(&color_attachment_refs)
                 .build()];
 
             let subpass_deps = [vk::SubpassDependency::builder()
                 .src_subpass(0)
-                .dst_subpass(1)
-                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .src_access_mask(vk::AccessFlags::empty())
-                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .dst_access_mask(
-                    vk::AccessFlags::COLOR_ATTACHMENT_READ
-                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                )
-                .build(),
-                vk::SubpassDependency::builder()
-                .src_subpass(1)
-                .dst_subpass(1)
+                .dst_subpass(0)
                 .dependency_flags(vk::DependencyFlags::BY_REGION)
                 .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags::empty())

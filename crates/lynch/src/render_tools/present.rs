@@ -10,7 +10,6 @@ pub fn setup_present_pass(
     color_output: TextureId,
     extent: vk::Extent2D,
     format: vk::Format,
-    images: &Vec<Image>,
 ) {
     let fxaa_threshold = 0.45;
 
@@ -32,5 +31,5 @@ pub fn setup_present_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(graph, extent, images);
+        .build(graph, extent);
 }

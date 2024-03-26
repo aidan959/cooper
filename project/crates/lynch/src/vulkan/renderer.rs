@@ -503,9 +503,9 @@ impl VulkanRenderer {
             let image = self.present_images[present_index].clone();
             graph.render(&command_buffer, &self, &image);
 
-            self.ash_device()
-                .end_command_buffer(command_buffer)
-                .expect("End commandbuffer failed.");
+//            self.ash_device()
+//                .end_command_buffer(command_buffer)
+//                .expect("End commandbuffer failed.");
 
             self.present_images[self.current_frame].current_layout =
                 vk::ImageLayout::PRESENT_SRC_KHR;

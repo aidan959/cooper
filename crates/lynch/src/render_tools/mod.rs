@@ -90,7 +90,6 @@ pub fn build_render_graph_gbuffer_only(
     let (gbuffer_position, gbuffer_normal, gbuffer_albedo, gbuffer_pbr) =
         create_gbuffer_textures(graph, device.clone(), width, height);
 
-    let image_desc = ImageDesc::new_2d(width, height, vk::Format::R32G32B32A32_SFLOAT);
 
     setup_gbuffer_pass(
         graph,
@@ -101,9 +100,8 @@ pub fn build_render_graph_gbuffer_only(
         gbuffer_pbr,
         base.surface_resolution,
         base.surface_format.format,
-        &base.present_images
     );
-    setup_present_pass(graph, gbuffer_albedo, base.surface_resolution, base.surface_format.format, &base.present_images);
+    setup_present_pass(graph, gbuffer_albedo, base.surface_resolution, base.surface_format.format);
 }
 /*pub fn build_render_graph_atmosphere(
     graph: &mut RenderGraph,

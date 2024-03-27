@@ -20,7 +20,7 @@ pub fn vk_viewport(width: u32, height: u32) -> vk::Viewport {
 }
 const PASS_NO: u8 = 6;
 const LUT_TEXTURE_SIZE: u32 = 512;
-pub fn setup_cubemap_pass(
+pub fn  setup_cubemap_pass(
     device: Arc<Device>,
     graph: &mut RenderGraph,
     renderer: &VulkanRenderer,

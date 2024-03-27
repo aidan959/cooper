@@ -4,11 +4,11 @@ use application::application::{CooperApplication, GameEvent, GfxLocation};
 use frost::{obb, physics::math::physics_system, RigidBody, SearchIter, System, Transform};
 use glam::{Mat4, Quat, Vec3};
 
-
-fn main() {
+ 
+fn main() { 
     env_logger::init();
  
-    CooperApplication::create().run(    
+    CooperApplication::create().run(   
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>, world| {
             (0..13).into_iter().for_each(|_| {
@@ -27,7 +27,7 @@ fn main() {
             };
             world
                 .new_entity((
-                    GfxLocation(0),
+                    GfxLocation(13),
                     RigidBody::new_static(platform_transform.clone()),
                     obb::DynamicOBB::from_transform(platform_transform),
                 ))

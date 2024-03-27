@@ -127,7 +127,7 @@ impl Texture {
             unsafe {
                 device
                     .ash_device
-                    .destroy_buffer(buffer_to_destroy.buffer, None)
+                    .destroy_buffer(buffer_to_destroy.vk_buffer, None)
             }
         }
         Texture {

@@ -396,14 +396,14 @@ impl CooperApplication {
                         last_fps_time = Instant::now();
                     }
                     // apply fps limit //TODO explore why this is limiting the fps to HALF the rate (? how)
-                    if self.engine_settings.fps_settings.limit {
-                        let elapsed = last_fixed_update.elapsed();
-                        if elapsed < self.engine_settings.fps_settings.frame_time {
-                            std::thread::sleep(
-                                self.engine_settings.fps_settings.frame_time - elapsed,
-                            );
-                        }
-                    }
+                    // if self.engine_settings.fps_settings.limit {
+                        // let elapsed = last_fixed_update.elapsed();
+                        // if elapsed < self.engine_settings.fps_settings.frame_time {
+                            // std::thread::sleep(
+                                // self.engine_settings.fps_settings.frame_time - elapsed,
+                            // );
+                        // }
+                    // }
                     debug_info.update(
                         self.camera.get_position(),
                         vec![],

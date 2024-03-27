@@ -5,7 +5,7 @@ use ash::vk;
 use gpu_allocator::vulkan::*;
 use log::info;
 pub struct Buffer {
-    pub buffer: vk::Buffer,
+    pub vk_buffer: vk::Buffer,
     pub allocation: Allocation,
     pub memory_req: vk::MemoryRequirements,
     pub memory_location: gpu_allocator::MemoryLocation,
@@ -55,7 +55,7 @@ impl Buffer {
                 .unwrap();
 
             Buffer {
-                buffer,
+                vk_buffer: buffer,
                 allocation,
                 memory_req: buffer_memory_req,
                 memory_location,
@@ -127,8 +127,8 @@ impl Buffer {
 
                     self.device.ash_device.cmd_copy_buffer(
                         cb,
-                        staging_buffer.buffer,
-                        self.buffer,
+                        staging_buffer.vk_buffer,
+                        self.vk_buffer,
                         &[regions],
                     );
                 });
@@ -141,7 +141,7 @@ impl Buffer {
                     .unwrap();
                 self.device
                     .ash_device
-                    .destroy_buffer(staging_buffer.buffer, None);
+                    .destroy_buffer(staging_buffer.vk_buffer, None);
             }
         }
     }
@@ -155,8 +155,8 @@ impl Buffer {
         unsafe {
             self.device.ash_device.cmd_copy_buffer(
                 cb,
-                self.buffer,
-                dst.buffer,
+                self.vk_buffer,
+                dst.vk_buffer,
                 &[buffer_copy_regions],
             );
         }
@@ -179,7 +179,7 @@ impl Buffer {
         unsafe {
             self.device.ash_device.cmd_copy_buffer_to_image(
                 cb,
-                self.buffer,
+                self.vk_buffer,
                 image.image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[buffer_copy_regions.build()],
@@ -189,7 +189,7 @@ impl Buffer {
 
     pub fn get_device_address(&self, device: &Device) -> vk::DeviceAddress {
         let info = vk::BufferDeviceAddressInfo::builder()
-            .buffer(self.buffer)
+            .buffer(self.vk_buffer)
             .build();
 
         unsafe { device.ash_device.get_buffer_device_address(&info) }
@@ -198,12 +198,12 @@ impl Buffer {
     pub fn set_debug_name(&mut self, name: &str) {
         self.debug_name = String::from(name);
         self.device.set_debug_name(
-            vk::Handle::as_raw(self.buffer),
+            vk::Handle::as_raw(self.vk_buffer),
             vk::ObjectType::BUFFER,
             name,
         );
     }
     pub fn clean_vk_resources(&self) {
-        unsafe { self.device.ash_device.destroy_buffer(self.buffer, None) }
+        unsafe { self.device.ash_device.destroy_buffer(self.vk_buffer, None) }
     }
 }

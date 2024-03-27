@@ -116,7 +116,7 @@ impl ViewUniformData {
             eye_pos: camera.get_position(),
             viewport_width: surface_resolution.width,
             viewport_height: surface_resolution.height,
-            sun_dir: Vec3::new(0.0, 0.9, 0.15).normalize(),
+            sun_dir: Vec3::new(0.0, -0.9, 0.15).normalize(),
             shadows_enabled: 1,
             ssao_enabled: 1,
             fxaa_enabled: 1,
@@ -927,7 +927,7 @@ impl RendererInternal {
         let new_buffer_index = self.next_bindless_vertex_buffer_index;
 
         let buffer_info = vk::DescriptorBufferInfo::builder()
-            .buffer(buffer.buffer)
+            .buffer(buffer.vk_buffer)
             .range(buffer.size)
             .build();
 
@@ -954,7 +954,7 @@ impl RendererInternal {
         let new_buffer_index = self.next_bindless_index_buffer_index;
 
         let buffer_info = vk::DescriptorBufferInfo::builder()
-            .buffer(buffer.buffer)
+            .buffer(buffer.vk_buffer)
             .range(buffer.size)
             .build();
 
@@ -1016,12 +1016,12 @@ impl RendererInternal {
                     device.device().cmd_bind_vertex_buffers(
                         command_buffer,
                         0,
-                        &[mesh.primitive.vertex_buffer.buffer],
+                        &[mesh.primitive.vertex_buffer.vk_buffer],
                         &[0],
                     );
                     device.device().cmd_bind_index_buffer(
                         command_buffer,
-                        mesh.primitive.index_buffer.buffer,
+                        mesh.primitive.index_buffer.vk_buffer,
                         0,
                         vk::IndexType::UINT32,
                     );

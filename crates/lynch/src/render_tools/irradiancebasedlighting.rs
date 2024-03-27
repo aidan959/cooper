@@ -29,31 +29,31 @@ pub fn setup_cubemap_pass(
 
     let rgba32_fmt = vk::Format::R32G32B32A32_SFLOAT;
 
-    let environment_map = graph.create_texture(
+    let environment_map = graph.get_or_create_texture(
         "environment_map",
         device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt).mip_levels(num_mips),
     );
 
-    let irradiance_map = graph.create_texture(
+    let irradiance_map = graph.get_or_create_texture(
         "irradiance_map",
         device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt),
     );
 
-    let specular_map = graph.create_texture(
+    let specular_map = graph.get_or_create_texture(
         "specular_map",
         device.clone(),
         ImageDesc::new_cubemap(mip0_size, mip0_size, rgba32_fmt).mip_levels(num_mips),
     );
 
-    let offscreen = graph.create_texture(
+    let offscreen = graph.get_or_create_texture(
         "cubemap_offscreen",
         device.clone(),
         ImageDesc::new_2d(mip0_size, mip0_size, rgba32_fmt),
     );
 
-    let brdf_lut = graph.create_texture(
+    let brdf_lut = graph.get_or_create_texture(
         "brdf_lut",
         device.clone(),
         ImageDesc::new_2d(LUT_TEXTURE_SIZE, LUT_TEXTURE_SIZE, vk::Format::R16G16_SFLOAT),

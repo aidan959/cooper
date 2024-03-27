@@ -210,39 +210,7 @@ impl DescriptorSet {
         };
     }
 
-    pub fn write_acceleration_structure(
-        &self,
-        device: &Device,
-        name: DescriptorIdentifier,
-        acceleration_structure: vk::AccelerationStructureKHR,
-    ) {
-        let binding = match name {
-            DescriptorIdentifier::Name(name) => match self.binding_map.get(&name) {
-                Some(binding) => binding.binding,
-                None => panic!("No descriptor binding found with name: \"{}\"", name),
-            },
-            DescriptorIdentifier::Index(index) => index,
-        };
-
-        let mut descriptor_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-            .acceleration_structures(std::slice::from_ref(&acceleration_structure))
-            .build();
-
-        let mut descriptor_writes = vk::WriteDescriptorSet::builder()
-            .dst_set(self.handle)
-            .dst_binding(binding)
-            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .push_next(&mut descriptor_info)
-            .build();
-        descriptor_writes.descriptor_count = 1;
-
-        unsafe {
-            device
-                .device()
-                .update_descriptor_sets(&[descriptor_writes], &[])
-        };
-    }
-
+   
     pub fn write_raw_storage_buffer(
         device: &Device,
         descriptor_set: vk::DescriptorSet,

@@ -68,7 +68,6 @@ impl RenderPass {
         pipelines: &[Pipeline],
         textures: &[GraphTexture],
         buffers: &[GraphBuffer],
-        _tlas: vk::AccelerationStructureKHR,
     ) {
         if !(!self.reads.is_empty() && self.read_resources_descriptor_set.is_none()) {
             return;

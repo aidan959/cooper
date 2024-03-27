@@ -93,12 +93,13 @@ impl Pipeline {
         device: &Device,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> bool {
-        // Todo: DESTROY OLD PIPELINE_RESOURCES
+
         if Self::create_pipeline(self, device, bindless_descriptor_set_layout).is_ok() {
-            info!("Successfully recreated pipeline.");
-            return true;
+            info!("Pipeline recompiled.");
+            true
+        } else {
+            false
         }
-        false
     }
 
     fn create_pipeline(

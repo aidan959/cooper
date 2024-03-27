@@ -100,11 +100,11 @@ pub struct ViewUniformData {
     pub sun_dir: glam::Vec3,
     pub viewport_width: u32,
     pub viewport_height: u32,
-    pub shadows_enabled: u32,
-    pub ssao_enabled: u32,
-    pub fxaa_enabled: u32,
-    pub cubemap_enabled: u32,
-    pub ibl_enabled: u32,
+    pub shadows_enabled: bool,
+    pub ssao_enabled: bool,
+    pub fxaa_enabled: bool,
+    pub cubemap_enabled: bool,
+    pub ibl_enabled: bool,
 }
 impl ViewUniformData {
     pub fn new(camera: &Camera, surface_resolution: Extent2D) -> Self {
@@ -116,19 +116,19 @@ impl ViewUniformData {
             eye_pos: camera.get_position(),
             viewport_width: surface_resolution.width,
             viewport_height: surface_resolution.height,
-            sun_dir: Vec3::new(0.0, -0.9, 0.15).normalize(),
-            shadows_enabled: 1,
-            ssao_enabled: 1,
-            fxaa_enabled: 1,
-            cubemap_enabled: 1,
-            ibl_enabled: 1,
+            sun_dir: Vec3::new(0.0, 1.0, 0.15).normalize(),
+            shadows_enabled: true,
+            ssao_enabled: true,
+            fxaa_enabled: true,
+            cubemap_enabled: true,
+            ibl_enabled: true,
         }
     }
     pub fn create_camera_buffer(&self, vk_context: &VkContext) -> Buffer {
         Buffer::new(
             vk_context.arc_device(),
             Some(std::slice::from_ref(self)),
-            std::mem::size_of_val(self) as u64,
+            std::mem::size_of::<Self>() as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             gpu_allocator::MemoryLocation::CpuToGpu,
             Some(String::from("camera_uniform_buffer")),

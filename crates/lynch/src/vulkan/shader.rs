@@ -141,7 +141,7 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
         Some(".vert") => ShaderKind::Vertex,
         Some(".frag") => ShaderKind::Fragment,
         Some(".comp") => ShaderKind::Compute,
-        _ => todo!("Unsupported shader extension."),
+        _ => todo!("Unsupported."),
     };
 
     let mut compiler = shaderc::Compiler::new().unwrap();

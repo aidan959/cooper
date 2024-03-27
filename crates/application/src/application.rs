@@ -2,7 +2,7 @@ use frost::obb::CollisionPoint;
 use frost::physics::math::physics_system;
 use frost::{Input, RigidBody, Search, SearchIter, Transform, World};
 use glam::{Mat4, Vec3};
-use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, ImString, Ui, UiBuffer};
+use imgui::{Condition, DragRange, FontConfig, FontGlyphRanges, FontSource, ImString, Ui, UiBuffer};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use log::{debug, info};
 use lynch::render_graph::RenderGraph;
@@ -480,42 +480,41 @@ impl CooperApplication {
                 for (i, rigidbody) in rbs.iter().enumerate() {
                     let pos = &mut rigidbody.transform.position;
                 
-                    // Create a unique ID for each input box to avoid conflicts, using the index
-                    let x_label = format!("X##{}", i);
-                    let y_label = format!("Y##{}", i);
-                    let z_label = format!("Z##{}", i);
-                    let mut x = pos.x.to_string();
-                    let mut y = pos.y.to_string();
-                    let mut z = pos.z.to_string();
+
+
+                    // Unique identifiers for each component's drag control
+                    let x_id = format!("X:##{}", i);
+                    let y_id = format!("Y:##{}", i);
+                    let z_id = format!("Z:##{}", i);
+
+                    let drag_speed = 0.1; // The rate of change when dragging
+                    let drag_min = -std::f32::MAX; // Minimum value
+                    let drag_max = std::f32::MAX; // Maximum value
+
                     // Display text box for the x-component
                     gui_frame.set_next_item_width(input_width);
-                    // Input text for the x-component
-                    if gui_frame
-                        .input_text(&x_label, &mut x)
-                        
-                        .build() {
-                            pos.x =x.parse::<f32>().unwrap_or(pos.x);
-                    }
+                    imgui::Drag::new(x_id)
+                        .range(drag_min, drag_max)
+                        .speed(drag_speed)
+                        .build(&gui_frame, &mut pos.x);
                 
-                    gui_frame.same_line(); // Keeps the next widget on the same line
+                    gui_frame.same_line(); 
                     gui_frame.set_next_item_width(input_width);
                 
-                    // Input text for the y-component
-                    gui_frame
-                        .input_text(&y_label, &mut pos.y.to_string())
-                        .read_only(true)
-                        .build();
+                    imgui::Drag::new(y_id)
+                        .range(drag_min, drag_max)
+                        .speed(drag_speed)
+                        .build(&gui_frame, &mut pos.y);
                 
-                    gui_frame.same_line(); // Keeps the next widget on the same line
+                
+                    gui_frame.same_line(); 
                     gui_frame.set_next_item_width(input_width);
                 
-                    // Input text for the z-component
-                    gui_frame
-                        .input_text(&z_label, &mut pos.z.to_string())
-                        .read_only(true)
-                        .build();
+                    imgui::Drag::new(z_id)
+                        .range(drag_min, drag_max)
+                        .speed(drag_speed)
+                        .build(&gui_frame, &mut pos.z);
                 
-                    // Add spacing or a separator if needed
                     gui_frame.separator();
                 }
             });
@@ -533,27 +532,9 @@ impl CooperApplication {
         self.build_scene();
     }
     fn build_scene(&mut self) {
-        let sphere = self.renderer.load_model("models/cube.gltf");
-        let translation = Mat4::from_translation(Vec3::new(10., -100., 10.));
+        let mut sphere = self.renderer.load_model("models/sphere.gltf");
+        let translation = Mat4::from_translation(Vec3::new(0., 0., 0.));
         self.renderer.add_model(sphere, translation);
-        // let sphere = self.renderer.load_model("models/sphere.gltf");
-        // let translation = Mat4::default();
-        // self.renderer.add_model(
-        //     sphere,
-        //     translation
-        // );
-        // let sphere = self.renderer.load_model("models/cube.gltf");
-        // let translation = Mat4::from_translation(Vec3::new(10.,10.,10.));
-        // self.renderer.add_model(
-        //     sphere,
-        //     translation
-        // );
-        // let sphere = self.renderer.load_model("models/MetalRoughSpheres.gltf");
-        // let translation = Mat4::from_translation(-Vec3::new(10.,10.,10.));
-        // self.renderer.add_model(
-        //     sphere,
-        //     translation
-        // );
     }
 }
 

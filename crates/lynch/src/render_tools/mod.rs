@@ -80,7 +80,7 @@ pub fn build_render_graph(
         shadow_map,
         view_data.sun_dir,
         camera,
-        view_data.shadows_enabled == 1,
+        view_data.shadows_enabled,
     );
 
     let image_desc = ImageDesc::new_2d(width, height, vk::Format::R32G32B32A32_SFLOAT);
@@ -88,7 +88,6 @@ pub fn build_render_graph(
     let deferred_output = graph.get_or_create_texture("deferred_output", device.clone(), image_desc);
 
     let image_desc = ImageDesc::new_2d(width, height, vk::Format::R16_UNORM);
-    let ssao_output = graph.get_or_create_texture("ssao_output", device.clone(), image_desc);
     setup_gbuffer_pass(
         graph,
         base,
@@ -99,12 +98,14 @@ pub fn build_render_graph(
     );
     let (environment_map, irradiance_map, specular_map, brdf_lut) =
         setup_cubemap_pass(device.clone(), graph, &base);
+    let ssao_output = graph.get_or_create_texture("ssao_output", device.clone(), image_desc);
+    
     setup_ssao_pass(
         graph,
         gbuffer_position,
         gbuffer_normal,
         ssao_output,
-        view_data.ssao_enabled == 1,
+        view_data.ssao_enabled,
     );
     setup_deferred_pass(
         graph,

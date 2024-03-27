@@ -335,7 +335,6 @@ impl RenderPassBuilder {
         if !self.uniforms.is_empty() {
             pass.uniform_buffer.replace(
                 graph.get_or_create_buffer(
-                    // Todo: Hack: this is very bad just to get unique buffers for every frame_index
                     format!(
                         "{}_frame_{}",
                         self.uniforms.keys().next().unwrap(),

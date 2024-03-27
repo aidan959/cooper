@@ -31,6 +31,9 @@ impl Input {
         self.mouse_delta.x =0.;
         self.mouse_delta.y =0.  ;
     }
+    pub fn end_frame(&mut self) {
+        self.prev_key_states = self.key_states.clone();
+    }
     pub fn update(&mut self, event: &WindowEvent) {
         self.prev_key_states = self.key_states.clone();
         let prev_mouse_pos = (self.mouse_pos.x, self.mouse_pos.y);

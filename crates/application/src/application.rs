@@ -2,7 +2,7 @@ use frost::obb::CollisionPoint;
 use frost::physics::math::physics_system;
 use frost::{Input, RigidBody, Search, SearchIter, Transform, World};
 use glam::{Mat4, Vec3};
-use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, Ui, UiBuffer};
+use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, ImString, Ui, UiBuffer};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use log::{debug, info};
 use lynch::render_graph::RenderGraph;
@@ -10,16 +10,17 @@ use lynch::render_graph::RenderGraph;
 use lynch::vulkan::renderer::RenderStatistics;
 use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window::Window, Camera};
 
+use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
+use crate::{
+    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_MAX_FPS,
+    DEFAULT_UPDATE_RATE,
+};
+use frost::System;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use frost::System;
-use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
-use crate::{
-    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_MAX_FPS, DEFAULT_UPDATE_RATE
-};
 pub struct GfxLocation(pub usize);
 
 pub struct CooperApplication {
@@ -30,10 +31,10 @@ pub struct CooperApplication {
     pub camera: Camera,
     event_loop: EventLoop<()>,
     engine_settings: EngineSettings,
-    ui: CooperUI
+    ui: CooperUI,
 }
 struct UIContext<'a> {
-    pub ui_frame: Option<Mutex<Box<&'a mut Ui>>>
+    pub ui_frame: Option<Mutex<Box<&'a mut Ui>>>,
 }
 struct CooperUI {
     pub gui: imgui::Context,
@@ -110,17 +111,12 @@ impl CooperUI {
             (g, platform)
         };
 
-            Self {
-                gui,
-                platform,
-            }
+        Self { gui, platform }
     }
     fn mut_ui(&mut self) -> &mut imgui::Context {
         &mut self.gui
     }
-    fn update_ui(&self, guiframe: &mut Ui) {
-
-    }
+    fn update_ui(&self, guiframe: &mut Ui) {}
 }
 const WIDTH: f64 = 1280.;
 const HEIGHT: f64 = 720.;
@@ -138,7 +134,7 @@ pub struct DebugInfo {
     frame_rate: f32,
     fixed_frame_rate: f32,
     mesh_instances: usize,
-    opened: bool
+    opened: bool,
 }
 impl DebugInfo {
     pub fn new(
@@ -148,8 +144,8 @@ impl DebugInfo {
         frame_rate: f32,
         fixed_frame_rate: f32,
 
-        mesh_instances: usize
-    ) -> Self{
+        mesh_instances: usize,
+    ) -> Self {
         Self {
             camera_location,
             recent_collisions: vec![],
@@ -158,26 +154,27 @@ impl DebugInfo {
             frame_rate,
             fixed_frame_rate,
             mesh_instances,
-            opened: true
+            opened: true,
         }
     }
-    pub fn update (&mut self, 
+    pub fn update(
+        &mut self,
         camera_location: Vec3,
         recent_collisions: Vec<CollisionPoint>,
         delta_time: f32,
         fixed_delta_time: f32,
         frame_rate: f32,
         fixed_frame_rate: f32,
-        mesh_instances: usize
-        ) -> &Self {
+        mesh_instances: usize,
+    ) -> &Self {
         self.camera_location = camera_location;
         self.recent_collisions.extend(recent_collisions);
         self.delta_time = delta_time;
-        self.fixed_delta_time =fixed_delta_time;
+        self.fixed_delta_time = fixed_delta_time;
         self.frame_rate = frame_rate;
-        self.mesh_instances =mesh_instances;
-        self.fixed_frame_rate= fixed_frame_rate;
-        return self
+        self.mesh_instances = mesh_instances;
+        self.fixed_frame_rate = fixed_frame_rate;
+        return self;
     }
 }
 
@@ -188,7 +185,7 @@ impl CooperApplication {
             .fps_cap(Some(DEFAULT_MAX_FPS))
             .update_rate_hz(DEFAULT_UPDATE_RATE)
             .build();
-        
+
         let fov_degrees = 90.0;
         let camera = Camera::new(
             Vec3::new(10.0, 0.0, 10.0),
@@ -200,17 +197,13 @@ impl CooperApplication {
             0.20,
         );
 
-        let mut ui = CooperUI::new(
-            &window
-        );
+        let mut ui = CooperUI::new(&window);
         let renderer = VulkanRenderer::create(&window, &camera, ui.mut_ui());
         let graph = RenderGraph::new(
             renderer.vk_context.arc_device(),
             &renderer.camera_uniform_buffer,
             renderer.image_count,
         );
-
-
 
         CooperApplication {
             window,
@@ -235,16 +228,13 @@ impl CooperApplication {
         F: FnMut(&Sender<GameEvent>, f32) + 'static,
         G: FnMut(&Sender<GameEvent>, f32, &World) + 'static,
         H: FnMut(&Sender<GameEvent>) + 'static,
-        J: FnMut(&mut bool, &mut Ui, ) + 'static,
+        J: FnMut(&mut bool, &mut Ui) + 'static,
     {
         let mut world = World::new();
         let mut frame_count = 0;
         let mut last_fps_time = Instant::now();
         let fps_update_interval = Duration::new(1, 0); // 1 second
 
-
-        
-        
         self.create_scene();
         let mut input: Input = Input::default();
         let _events: Vec<WindowEvent> = Vec::new();
@@ -254,9 +244,9 @@ impl CooperApplication {
         let fixed_update_transmitter = event_trasmitter.clone();
         let finally_transmitter = event_trasmitter.clone();
 
-        let mut physics_control = PhysicsControl{
+        let mut physics_control = PhysicsControl {
             paused: false,
-            step: false
+            step: false,
         };
 
         let mut debug_info = DebugInfo::new(
@@ -265,7 +255,8 @@ impl CooperApplication {
             self.engine_settings.fixed_update_rate.as_secs_f32(),
             0.0,
             DEFAULT_UPDATE_RATE as f32,
-            0);
+            0,
+        );
         //let cube_hash_map : HashMap<str, usize>  = HashMap::default();
         let mut last_fixed_update = Instant::now();
         let mut lag = 0.0;
@@ -273,39 +264,45 @@ impl CooperApplication {
         let mut interval_start = Instant::now();
         let mut last_frame = Instant::now();
         let mut run = true;
-        let mut rigidbody_list : Vec<RigidBody> = vec![]; 
+        let mut rigidbody_list: Vec<RigidBody> = vec![];
         let mut render_statistics = RenderStatistics::default();
         self.event_loop.run(move |event, _elwt, control_flow| {
-            self.ui.platform
+            self.ui
+                .platform
                 .handle_event(self.ui.gui.io_mut(), &self.window.window, &event);
-            
+
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::NewEvents(_) => {
                     let now = Instant::now();
-                    self.ui.gui
+                    self.ui
+                        .gui
                         .io_mut()
                         .update_delta_time(now.duration_since(last_frame));
 
                     last_frame = now;
-                    
                 }
                 Event::MainEventsCleared => {
                     // call fixed_update fixed_update_rate times per second
-                    while lag >= self.engine_settings.fixed_update_rate.as_secs_f32() {
+                    while lag >= self.engine_settings.fixed_update_rate.as_secs_f32()
+                        || physics_control.step
+                    {
                         // user fixed update call
                         count += 1; // Increment the count for each execution
-                        if physics_control.should_update_physics(){
-                            physics_system.run(&world, self.engine_settings.fixed_update_rate.as_secs_f32()).unwrap();
-                            let mut rb_search = world.search::<(&GfxLocation, &RigidBody)>().unwrap();
+                        if physics_control.should_update_physics() {
+                            physics_system
+                                .run(&world, self.engine_settings.fixed_update_rate.as_secs_f32())
+                                .unwrap();
+                            let mut rb_search =
+                                world.search::<(&GfxLocation, &RigidBody)>().unwrap();
                             rb_search.iter().for_each(|(gfx, rb)| {
                                 let new_location = Mat4::from_scale_rotation_translation(
                                     rb.transform.scale,
                                     rb.transform.rotation,
                                     rb.transform.position,
                                 );
-                                self.renderer.internal_renderer.instances[gfx.0]
-                                                .transform = new_location;
+                                self.renderer.internal_renderer.instances[gfx.0].transform =
+                                    new_location;
                             });
                         }
 
@@ -326,8 +323,8 @@ impl CooperApplication {
                             interval_start = Instant::now(); // Reset the timer for the next second
                         }
                         let mut search = world.search::<(&RigidBody,)>().unwrap();
-                        for (i,rb) in search.iter().enumerate() {
-                            if i == rigidbody_list.len(){
+                        for (i, rb) in search.iter().enumerate() {
+                            if i == rigidbody_list.len() {
                                 rigidbody_list.push(rb.clone())
                             } else {
                                 rigidbody_list[i] = rb.clone()
@@ -336,15 +333,24 @@ impl CooperApplication {
                     }
 
                     let mut gui_frame = self.ui.gui.frame();
-                    Self::debug_ui(gui_frame, &mut debug_info, &rigidbody_list, &mut physics_control, &input);
-                    ui_func(&mut run, &mut gui_frame,);
-                    
-                    let draw_data = self.ui.gui.render();
-                    render_statistics.full_render_time = self
-                        .renderer
-                        .render(&mut self.graph, &self.camera, draw_data, &mut render_statistics);
+                    Self::debug_ui(
+                        gui_frame,
+                        &mut debug_info,
+                        &rigidbody_list,
+                        &mut physics_control,
+                        &input,
+                        &mut world,
+                    );
+                    ui_func(&mut run, &mut gui_frame);
 
-                    
+                    let draw_data = self.ui.gui.render();
+                    render_statistics.full_render_time = self.renderer.render(
+                        &mut self.graph,
+                        &self.camera,
+                        draw_data,
+                        &mut render_statistics,
+                    );
+
                     let current_time = Instant::now();
                     let elapsed = current_time.duration_since(last_fixed_update);
                     last_fixed_update = current_time;
@@ -352,9 +358,8 @@ impl CooperApplication {
                     // user update call
                     update(&update_transmitter, render_statistics.full_render_time);
                     // submit input data to camera
-                    self.camera.update(&input, render_statistics.full_render_time);
-
-                    
+                    self.camera
+                        .update(&input, render_statistics.full_render_time);
 
                     input.reset_mouse();
                     // last user definable call
@@ -397,27 +402,28 @@ impl CooperApplication {
                     }
                     // apply fps limit //TODO explore why this is limiting the fps to HALF the rate (? how)
                     // if self.engine_settings.fps_settings.limit {
-                        // let elapsed = last_fixed_update.elapsed();
-                        // if elapsed < self.engine_settings.fps_settings.frame_time {
-                            // std::thread::sleep(
-                                // self.engine_settings.fps_settings.frame_time - elapsed,
-                            // );
-                        // }
+                    // let elapsed = last_fixed_update.elapsed();
+                    // if elapsed < self.engine_settings.fps_settings.frame_time {
+                    // std::thread::sleep(
+                    // self.engine_settings.fps_settings.frame_time - elapsed,
+                    // );
+                    // }
                     // }
                     debug_info.update(
                         self.camera.get_position(),
                         vec![],
                         render_statistics.full_render_time,
                         self.engine_settings.fixed_update_rate.as_secs_f32(),
-                        1./render_statistics.full_render_time,
+                        1. / render_statistics.full_render_time,
                         count as f32,
-                        self.renderer.internal_renderer.instances.len()
+                        self.renderer.internal_renderer.instances.len(),
                     );
+                    input.end_frame();
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
                         self.graph.clear();
-                        
+
                         return;
                     }
                     WindowEvent::Resized(resize_value) => {
@@ -440,52 +446,87 @@ impl CooperApplication {
         debug_info: &mut DebugInfo,
         rigidbody_list: &Vec<RigidBody>,
         physics_control: &mut PhysicsControl,
-        input: &Input
+        input: &Input,
+        world: &mut World,
     ) {
         if input.key_pressed(winit::event::VirtualKeyCode::M) {
             println!("M was pressed");
             debug_info.opened = !debug_info.opened;
         }
+        if !debug_info.opened {return};
         let w = gui_frame
             .window("Debug Menu")
             .opened(&mut debug_info.opened)
             .position([1000.0, 20.0], Condition::Appearing)
             .size([200.0, 100.0], Condition::Appearing);
-    
-        w.build(||{
+
+        w.build(|| {
             gui_frame.text(format!("FPS: {}", debug_info.frame_rate));
             gui_frame.text(format!("Delta Time: {}", debug_info.delta_time));
-            
+
             gui_frame.text(format!("Camera location: {:?}", debug_info.camera_location));
-            }
-        );
+        });
 
         gui_frame
             .window("Rigidbody Debug")
-            .size([50.,100.], Condition::FirstUseEver)
+            .size([50., 100.], Condition::FirstUseEver)
             .position([10., 10.], Condition::FirstUseEver)
-            .build(
-                || {
-                    let clipper = imgui::ListClipper::new(rigidbody_list.len() as i32)
-                        .items_height(gui_frame.current_font_size())
-                        .begin(gui_frame);
-                    for row_num in clipper.iter() {
-                        gui_frame.text(&rigidbody_list[row_num as usize].debug_string());
+            .build(|| {
+                imgui::ListClipper::new(rigidbody_list.len() as i32)
+                    .items_height(gui_frame.current_font_size() * 2.0)
+                    .begin(gui_frame);
+                let mut rbs = world.search::<(&mut RigidBody,)>().unwrap();
+                let input_width = 70.0;
+                for (i, rigidbody) in rbs.iter().enumerate() {
+                    let pos = &mut rigidbody.transform.position;
+                
+                    // Create a unique ID for each input box to avoid conflicts, using the index
+                    let x_label = format!("X##{}", i);
+                    let y_label = format!("Y##{}", i);
+                    let z_label = format!("Z##{}", i);
+                    let mut x = pos.x.to_string();
+                    let mut y = pos.y.to_string();
+                    let mut z = pos.z.to_string();
+                    // Display text box for the x-component
+                    gui_frame.set_next_item_width(input_width);
+                    // Input text for the x-component
+                    if gui_frame
+                        .input_text(&x_label, &mut x)
+                        
+                        .build() {
+                            pos.x =x.parse::<f32>().unwrap_or(pos.x);
                     }
+                
+                    gui_frame.same_line(); // Keeps the next widget on the same line
+                    gui_frame.set_next_item_width(input_width);
+                
+                    // Input text for the y-component
+                    gui_frame
+                        .input_text(&y_label, &mut pos.y.to_string())
+                        .read_only(true)
+                        .build();
+                
+                    gui_frame.same_line(); // Keeps the next widget on the same line
+                    gui_frame.set_next_item_width(input_width);
+                
+                    // Input text for the z-component
+                    gui_frame
+                        .input_text(&z_label, &mut pos.z.to_string())
+                        .read_only(true)
+                        .build();
+                
+                    // Add spacing or a separator if needed
+                    gui_frame.separator();
                 }
-            );
+            });
         gui_frame
             .window("Physics Control")
-            .size([50.,50.], Condition::FirstUseEver)
+            .size([50., 50.], Condition::FirstUseEver)
             .position([10., 110.], Condition::FirstUseEver)
             .build(|| {
                 gui_frame.checkbox("Do Physics? ", &mut physics_control.paused);
-                physics_control.step  = gui_frame.button("Step");
-
+                physics_control.step = gui_frame.button("Step");
             });
-
-        
-    
     }
     fn create_scene(&mut self) {
         self.renderer.initialize();
@@ -514,4 +555,12 @@ impl CooperApplication {
         //     translation
         // );
     }
+}
+
+
+struct Vec3Control {
+    vec: Vec3,
+    x_input: ImString,
+    y_input: ImString,
+    z_input: ImString,
 }

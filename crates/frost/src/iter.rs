@@ -2,8 +2,6 @@ use std::iter::Zip;
 
 // This first iterator wraps the standard library `Zip` iterator and flattens nested tuples
 // of values returned to a flat list.
-// Through experimentation I found this to be the a reasonable way to wrap the the standard library `Zip
-// without dramatically hurting the optimizations the compiler can make..
 macro_rules! impl_zip {
     ($name: ident, $zip_type: ty, $m_stuff: expr, $($T: ident),*) => {
         pub struct $name<A: Iterator, $($T: Iterator,)*> {

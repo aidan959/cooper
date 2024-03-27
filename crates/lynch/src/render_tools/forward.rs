@@ -21,8 +21,8 @@ pub fn setup_forward_pass(
                 .default_primitive_vertex_bindings()
                 .default_primitive_vertex_attributes(),
         )
-        .read(shadow_map)
-        .write(forward_output)
+        .layout_in(shadow_map)
+        .layout_out(forward_output)
         .uniforms("shadowmapParams", &(cascade_data))
         .external_depth_attachment(base.depth_image.clone(), vk::AttachmentLoadOp::CLEAR)
         .record_render(move |device, command_buffer, renderer, pass, resources| {

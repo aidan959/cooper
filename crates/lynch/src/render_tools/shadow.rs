@@ -5,26 +5,26 @@ use crate::{
 };
 use glam::{Mat4, Vec3, Vec4Swizzles};
 
-const SHADOW_MAP_CASCADE_COUNT: usize = 4;
+const SHADOW_TEXTURE_CASCADE_NO: usize = 4;
 pub fn setup_shadow_pass(
     graph: &mut RenderGraph,
-    shadow_map: TextureId,
+    shadow_texture: TextureId,
     sun_dir: glam::Vec3,
     camera: &camera::Camera,
     enabled: bool,
 ) -> (
-    [glam::Mat4; SHADOW_MAP_CASCADE_COUNT],
-    [f32; SHADOW_MAP_CASCADE_COUNT],
+    [glam::Mat4; SHADOW_TEXTURE_CASCADE_NO],
+    [f32; SHADOW_TEXTURE_CASCADE_NO],
 ) {
-    let mut out_cascade_matrices: [Mat4; SHADOW_MAP_CASCADE_COUNT] =
-        [glam::Mat4::IDENTITY; SHADOW_MAP_CASCADE_COUNT];
-    let mut out_split_depths: [f32; SHADOW_MAP_CASCADE_COUNT] = [0.0; SHADOW_MAP_CASCADE_COUNT];
+    let mut out_cascade_matrices: [Mat4; SHADOW_TEXTURE_CASCADE_NO] =
+        [glam::Mat4::IDENTITY; SHADOW_TEXTURE_CASCADE_NO];
+    let mut out_split_depths: [f32; SHADOW_TEXTURE_CASCADE_NO] = [0.0; SHADOW_TEXTURE_CASCADE_NO];
 
     if !enabled {
         return (out_cascade_matrices, out_split_depths);
     }
 
-    let mut cascade_splits: [f32; SHADOW_MAP_CASCADE_COUNT] = [0.0; SHADOW_MAP_CASCADE_COUNT];
+    let mut cascade_splits: [f32; SHADOW_TEXTURE_CASCADE_NO] = [0.0; SHADOW_TEXTURE_CASCADE_NO];
 
     let near_clip: f32 = camera.get_near_plane();
     let far_clip: f32 = camera.get_far_plane();
@@ -34,15 +34,15 @@ pub fn setup_shadow_pass(
     let max_z: f32 = near_clip + clip_range;
 
     let cascade_split_lambda: f32 = 0.927;
-    for i in 0..SHADOW_MAP_CASCADE_COUNT {
-        let p: f32 = (i + 1) as f32 / SHADOW_MAP_CASCADE_COUNT as f32;
+    for i in 0..SHADOW_TEXTURE_CASCADE_NO {
+        let p: f32 = (i + 1) as f32 / SHADOW_TEXTURE_CASCADE_NO as f32;
         let log: f32 = min_z * (max_z / min_z).powf(p);
         let uniform: f32 = min_z + (max_z - min_z) * p;
         let d: f32 = cascade_split_lambda * (log - uniform) + uniform;
         cascade_splits[i] = (d - near_clip) / clip_range;
     }
     let mut last_split_dist = 0.0;
-    for i in 0..SHADOW_MAP_CASCADE_COUNT {
+    for i in 0..SHADOW_TEXTURE_CASCADE_NO {
         let split_dist = cascade_splits[i];
 
         let mut frustum_corners: [Vec3; 8] = [
@@ -62,7 +62,7 @@ pub fn setup_shadow_pass(
             *corner = inv_corner.xyz() / inv_corner.w;
         }
 
-        for i in 0..SHADOW_MAP_CASCADE_COUNT {
+        for i in 0..SHADOW_TEXTURE_CASCADE_NO {
             let dist: Vec3 = frustum_corners[i + 4] - frustum_corners[i];
             frustum_corners[i + 4] = frustum_corners[i] + (dist * split_dist);
             frustum_corners[i] += dist * last_split_dist;
@@ -111,7 +111,7 @@ pub fn setup_shadow_pass(
                     .default_primitive_vertex_attributes(),
             )
             .uniforms("cascade_view_projection", &view_projection_matrix)
-            .depth_attachment_layer(shadow_map, i as u32)
+            .depth_attachment_layer(shadow_texture, i as u32)
             .record_render(move |device, command_buffer, renderer, pass, resources| {
                 if enabled {
                     let pipeline = resources.pipeline(pass.pipeline_handle);
@@ -126,4 +126,19 @@ pub fn setup_shadow_pass(
     }
 
     (out_cascade_matrices, out_split_depths)
+}
+
+
+fn calculate_cascade_splits(near_clip: f32, far_clip: f32) -> [f32; SHADOW_TEXTURE_CASCADE_NO] {
+    let mut cascade_splits = [0.0; SHADOW_TEXTURE_CASCADE_NO];
+    let clip_range = far_clip - near_clip;
+    let cascade_split_lambda = 0.927;
+
+    for i in 0..SHADOW_TEXTURE_CASCADE_NO {
+        let p = (i + 1) as f32 / SHADOW_TEXTURE_CASCADE_NO as f32;
+        let log = near_clip * (far_clip / near_clip).powf(p);
+        let uniform = near_clip + clip_range * p;
+        cascade_splits[i] = (cascade_split_lambda * (log - uniform) + uniform - near_clip) / clip_range;
+    }
+    cascade_splits
 }

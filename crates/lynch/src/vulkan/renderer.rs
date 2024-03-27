@@ -75,7 +75,7 @@ pub struct RendererInternal {
     next_bindless_image_index: u32,
     next_bindless_vertex_buffer_index: u32,
     next_bindless_index_buffer_index: u32,
-    pub need_environment_map_update: bool,
+    pub recreate_environment: bool,
 }
 
 
@@ -583,7 +583,7 @@ impl VulkanRenderer {
             self.submit_commands(self.current_frame);
             self.present_frame(present_index, self.current_frame);
             self.current_frame = (self.current_frame + 1) % self.num_frames_in_flight as usize;
-            self.internal_renderer.need_environment_map_update = false;
+            self.internal_renderer.recreate_environment = false;
             graph.current_frame = self.current_frame;
         }
         let now = Instant::now();
@@ -813,7 +813,7 @@ impl RendererInternal {
             default_normal_map_index: 0,
             default_occlusion_map_index: 0,
             default_metallic_roughness_map_index: 0,
-            need_environment_map_update: true,
+            recreate_environment: true,
         }
     }
 

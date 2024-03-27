@@ -117,7 +117,7 @@ pub struct RenderPassBuilder {
 }
 
 impl RenderPassBuilder {
-    pub fn read(mut self, resource_id: TextureId) -> Self {
+    pub fn layout_in(mut self, resource_id: TextureId) -> Self {
         self.reads.push(Resource::Texture(TextureResource {
             texture: resource_id,
             input_type: TextureResourceType::CombinedImageSampler,
@@ -151,7 +151,7 @@ impl RenderPassBuilder {
         self
     }
 
-    pub fn write(mut self, resource_id: TextureId) -> Self {
+    pub fn layout_out(mut self, resource_id: TextureId) -> Self {
         self.writes.push(Attachment {
             texture: resource_id,
             view: ViewType::Full(),

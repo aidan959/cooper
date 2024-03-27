@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::viewport;
-const PASS_AMOUNT: u8 = 6;
+const PASS_NO: u8 = 6;
+const LUT_TEXTURE_SIZE: u32 = 512;
 pub fn setup_cubemap_pass(
     device: Arc<Device>,
     graph: &mut RenderGraph,
@@ -46,8 +47,13 @@ pub fn setup_cubemap_pass(
     let brdf_lut = graph.create_texture(
         "brdf_lut",
         device.clone(),
-        ImageDesc::new_2d(512, 512, vk::Format::R16G16_SFLOAT),
+        ImageDesc::new_2d(LUT_TEXTURE_SIZE, LUT_TEXTURE_SIZE, vk::Format::R16G16_SFLOAT),
     );
+
+
+    if !renderer.internal_renderer.recreate_environment {
+        return (environment_map, irradiance_map, specular_map, brdf_lut);
+    }
 
     let projection = Mat4::perspective_rh(90.0_f32.to_radians(), 1.0, 0.01, f32::INFINITY);
     let view_matrices = [
@@ -58,14 +64,12 @@ pub fn setup_cubemap_pass(
         Mat4::look_at_rh(Vec3::ZERO, Vec3::Z, -Vec3::Y),
         Mat4::look_at_rh(Vec3::ZERO, -Vec3::Z, -Vec3::Y),
     ];
-    if !renderer.internal_renderer.need_environment_map_update {
-        return (environment_map, irradiance_map, specular_map, brdf_lut);
-    }
+
     print!("Updating environment map\n");
     for mip in 0..num_mips {
         let size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..PASS_AMOUNT {
+        for layer in 0..PASS_NO {
             graph
                 .add_pass_from_desc(
                     format!("cubemap_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -73,7 +77,7 @@ pub fn setup_cubemap_pass(
                         .vertex_path("assets/shaders/fullscreen.vert")
                         .fragment_path("assets/shaders/cubemap.frag"),
                 )
-                .write(offscreen)
+                .layout_out(offscreen)
                 .uniforms("params", &(view_matrices[layer as usize], projection))
                 .record_render(move |device, cb, _renderer, _pass, _resources| unsafe {
                     let viewport = [viewport(size, size)];
@@ -92,7 +96,7 @@ pub fn setup_cubemap_pass(
         }
     }
 
-    for layer in 0..PASS_AMOUNT {
+    for layer in 0..PASS_NO {
         graph
             .add_pass_from_desc(
                 format!("irradiance_filter_pass_layer_{layer}").as_str(),
@@ -100,7 +104,7 @@ pub fn setup_cubemap_pass(
                     .vertex_path("assets/shaders/fullscreen.vert")
                     .fragment_path("assets/shaders/irradiance_filter.frag"),
             )
-            .read(environment_map)
+            .layout_in(environment_map)
             .write_layer(irradiance_map, layer as u32)
             .uniforms("params", &(view_matrices[layer as usize], projection))
             .record_render(move |device, cb, _renderer, _pass, _resources| unsafe {
@@ -114,7 +118,7 @@ pub fn setup_cubemap_pass(
     for mip in 0..num_mips {
         let mip_size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..PASS_AMOUNT {
+        for layer in 0..PASS_NO {
             graph
                 .add_pass_from_desc(
                     format!("specular_filter_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -122,8 +126,8 @@ pub fn setup_cubemap_pass(
                         .vertex_path("assets/shaders/fullscreen_with_pushconst.vert")
                         .fragment_path("assets/shaders/specular_filter.frag"),
                 )
-                .read(environment_map)
-                .write(offscreen)
+                .layout_in(environment_map)
+                .layout_out(offscreen)
                 .uniforms("params", &(view_matrices[layer as usize], projection))
                 .record_render(move |device, cb, _renderer, pass, resources| unsafe {
                     let viewport = [viewport(mip_size, mip_size)];
@@ -158,7 +162,7 @@ pub fn setup_cubemap_pass(
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/brdf_lut.frag"),
         )
-        .write(brdf_lut)
+        .layout_out(brdf_lut)
         .record_render(move |device, command_buffer, _, _, _| unsafe {
             device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
         })
@@ -216,14 +220,14 @@ pub fn setup_cubemap_pass_opt(
         Mat4::look_at_rh(Vec3::ZERO, Vec3::Z, -Vec3::Y),
         Mat4::look_at_rh(Vec3::ZERO, -Vec3::Z, -Vec3::Y),
     ];
-    if !renderer.internal_renderer.need_environment_map_update {
+    if !renderer.internal_renderer.recreate_environment {
         return (Some(environment_map), Some(irradiance_map), Some(specular_map), Some(brdf_lut));
     }
 
     for mip in 0..num_mips {
         let size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..PASS_AMOUNT {
+        for layer in 0..PASS_NO {
             graph
                 .add_pass_from_desc(
                     format!("cubemap_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -231,7 +235,7 @@ pub fn setup_cubemap_pass_opt(
                         .vertex_path("assets/shaders/fullscreen.vert")
                         .fragment_path("assets/shaders/cubemap.frag"),
                 )
-                .write(offscreen)
+                .layout_out(offscreen)
                 .uniforms("params", &(view_matrices[layer as usize], projection))
                 .record_render(move |device, cb, _renderer, _pass, _resources| unsafe {
                     let viewport = [viewport(size, size)];
@@ -250,7 +254,7 @@ pub fn setup_cubemap_pass_opt(
         }
     }
 
-    for layer in 0..PASS_AMOUNT {
+    for layer in 0..PASS_NO {
         graph
             .add_pass_from_desc(
                 format!("irradiance_filter_pass_layer_{layer}").as_str(),
@@ -258,7 +262,7 @@ pub fn setup_cubemap_pass_opt(
                     .vertex_path("assets/shaders/fullscreen.vert")
                     .fragment_path("assets/shaders/irradiance_filter.frag"),
             )
-            .read(environment_map)
+            .layout_in(environment_map)
             .write_layer(irradiance_map, layer as u32)
             .uniforms("params", &(view_matrices[layer as usize], projection))
             .record_render(move |device, cb, _renderer, _pass, _resources| unsafe {
@@ -272,7 +276,7 @@ pub fn setup_cubemap_pass_opt(
     for mip in 0..num_mips {
         let mip_size = (mip0_size as f32 * 0.5f32.powf(mip as f32)) as u32;
 
-        for layer in 0..PASS_AMOUNT {
+        for layer in 0..PASS_NO {
             graph
                 .add_pass_from_desc(
                     format!("specular_filter_pass_layer_{layer}_mip_{mip}").as_str(),
@@ -280,8 +284,8 @@ pub fn setup_cubemap_pass_opt(
                         .vertex_path("assets/shaders/fullscreen_with_pushconst.vert")
                         .fragment_path("assets/shaders/specular_filter.frag"),
                 )
-                .read(environment_map)
-                .write(offscreen)
+                .layout_in(environment_map)
+                .layout_out(offscreen)
                 .uniforms("params", &(view_matrices[layer as usize], projection))
                 .record_render(move |device, cb, _renderer, pass, resources| unsafe {
                     let viewport = [viewport(mip_size, mip_size)];
@@ -316,7 +320,7 @@ pub fn setup_cubemap_pass_opt(
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/brdf_lut.frag"),
         )
-        .write(brdf_lut)
+        .layout_out(brdf_lut)
         .record_render(move |device, command_buffer, _, _, _| unsafe {
             device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
         })

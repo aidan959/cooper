@@ -13,7 +13,7 @@ pub fn setup_present_pass(graph: &mut RenderGraph, color_output: TextureId) {
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/present.frag"),
         )
-        .read(color_output)
+        .layout_in(color_output)
         .uniforms(
             "settings_fxaa",
             &(glam::Vec4::new(1.0, 0.0, fxaa_threshold, 0.0)),

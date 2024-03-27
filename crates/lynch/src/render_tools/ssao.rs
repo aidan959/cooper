@@ -3,6 +3,7 @@ use crate::{
     vulkan::PipelineDesc,
 };
 
+const SSAO_BIAS : glam::Vec2 = glam::const_vec2!([0.1, 0.0]);
 pub fn setup_ssao_pass(
     graph: &mut RenderGraph,
     gbuffer_position: TextureId,
@@ -10,8 +11,7 @@ pub fn setup_ssao_pass(
     ssao_output: TextureId,
     enabled: bool,
 ) {
-    let radius_bias = glam::Vec4::new(0.1, 0.0, 0.0, 0.0);
-    // TODO additional blur pass
+
     graph
         .add_pass_from_desc(
             "ssao_pass",
@@ -22,7 +22,7 @@ pub fn setup_ssao_pass(
         .layout_in(gbuffer_position)
         .layout_in(gbuffer_normal)
         .layout_out(ssao_output)
-        .uniforms("settings_ubo", &(radius_bias))
+        .uniforms("settings_ubo", &(SSAO_BIAS))
         .record_render(
             move |device, command_buffer, _renderer, _pass, _resources| unsafe {
                 if enabled {

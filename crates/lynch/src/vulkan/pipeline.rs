@@ -21,7 +21,7 @@ pub struct PipelineDesc {
 }
 
 pub struct PipelineDescBuilder {
-    desc: PipelineDesc,
+    descriptor: PipelineDesc,
 }
 
 pub struct Pipeline {
@@ -379,7 +379,7 @@ impl PipelineDesc {
 impl PipelineDescBuilder {
     pub fn new() -> Self {
         Self {
-            desc: PipelineDesc {
+            descriptor: PipelineDesc {
                 vertex_path: None,
                 fragment_path: None,
                 compute_path: None,
@@ -392,17 +392,17 @@ impl PipelineDescBuilder {
     }
 
     pub fn vertex_path(mut self, path: &'static str) -> Self {
-        self.desc.vertex_path = Some(path);
+        self.descriptor.vertex_path = Some(path);
         self
     }
 
     pub fn fragment_path(mut self, path: &'static str) -> Self {
-        self.desc.fragment_path = Some(path);
+        self.descriptor.fragment_path = Some(path);
         self
     }
 
     pub fn compute_path(mut self, path: &'static str) -> Self {
-        self.desc.compute_path = Some(path);
+        self.descriptor.compute_path = Some(path);
         self
     }
 
@@ -410,7 +410,7 @@ impl PipelineDescBuilder {
         mut self,
         descriptions: Vec<vk::VertexInputBindingDescription>,
     ) -> Self {
-        self.desc.vertex_input_binding_descriptions = descriptions;
+        self.descriptor.vertex_input_binding_descriptions = descriptions;
         self
     }
 
@@ -418,33 +418,33 @@ impl PipelineDescBuilder {
         mut self,
         descriptions: Vec<vk::VertexInputAttributeDescription>,
     ) -> Self {
-        self.desc.vertex_input_attribute_descriptions = descriptions;
+        self.descriptor.vertex_input_attribute_descriptions = descriptions;
         self
     }
 
     pub fn default_primitive_vertex_bindings(mut self) -> Self {
-        self.desc.vertex_input_binding_descriptions =
+        self.descriptor.vertex_input_binding_descriptions =
             crate::mesh::Primitive::get_vertex_input_binding_descriptions();
         self
     }
 
     pub fn default_primitive_vertex_attributes(mut self) -> Self {
-        self.desc.vertex_input_attribute_descriptions =
+        self.descriptor.vertex_input_attribute_descriptions =
             crate::mesh::Primitive::get_vertex_input_attribute_descriptions();
         self
     }
 
     pub fn color_attachment_formats(mut self, formats: Vec<vk::Format>) -> Self {
-        self.desc.color_attachment_formats = formats;
+        self.descriptor.color_attachment_formats = formats;
         self
     }
 
     pub fn depth_stencil_attachment_format(mut self, format: vk::Format) -> Self {
-        self.desc.depth_stencil_attachment_format = format;
+        self.descriptor.depth_stencil_attachment_format = format;
         self
     }
 
     pub fn build(self) -> PipelineDesc {
-        self.desc
+        self.descriptor
     }
 }

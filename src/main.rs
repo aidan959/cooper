@@ -7,7 +7,7 @@ use glam::{Mat4, Quat, Vec3};
 
 fn main() {
     env_logger::init();
-
+ 
     CooperApplication::create().run(    
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>, world| {

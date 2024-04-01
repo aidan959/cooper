@@ -11,16 +11,4 @@ pub mod window;
 pub use camera::Camera;
 pub use texture::Texture;
 pub use vulkan::renderer::ViewUniformData;
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(add(2, 2), 4);
-    }
-}
+pub use window::WindowSize;

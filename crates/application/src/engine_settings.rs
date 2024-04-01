@@ -1,8 +1,8 @@
-use std::{time::Duration, fmt::Display};
+use std::{fmt::{Display, Formatter}, time::Duration};
 use log::{debug,error,info,warn};
 use std::fmt::Debug;
 
-use crate::application::WindowSize;
+use lynch::window::window::WindowSize;
 pub const DEFAULT_UPDATE_RATE : f64 = 64.0;
 pub const DEFAULT_MAX_FPS : u16 = 128;
 pub const DEFAULT_FPS_CAP : bool = true;
@@ -20,13 +20,7 @@ impl FPSSettings {
         self.limit = true;
     }
 }
-pub struct FPSSettingsBuilder {
-    pub frame_time : Duration,
-    pub limit : bool,
-}
-impl FPSSettingsBuilder {
-    
-}
+
 pub struct EngineSettings {
     pub fixed_update_rate : Duration,
     pub fps_settings : FPSSettings,
@@ -51,35 +45,44 @@ impl EngineSettingsBuilder {
             window_size: (WIDTH, HEIGHT)
         }
     }
-    pub fn update_rate_hz(&mut self, frequency: f64) -> &Self {
+    pub fn update_rate_hz(mut self, frequency: f64) -> Self {
         self.fixed_update_rate = interval_from_frequency(frequency);
         self
     }
-    pub fn fixed_update_rate(&mut self, interval: Duration) -> &Self {
+    pub fn fixed_update_rate(mut self, interval: Duration) -> Self {
         self.fixed_update_rate = interval;
         self
     }
-    pub fn set_window_name<T>(&mut self, name: T) -> &Self 
+    pub fn set_window_name<T>(mut self, name: T) -> Self 
     where T: std::fmt::Display
     {
         self.window_name = name.to_string();
         self
     }
-    pub fn set_window_size<T>(&mut self, width: T, height: T) -> Result<&Self,>
+    pub fn set_window_size<T>(mut self, width: T, height: T) -> Result<Self, EngineSettingsError<<T as TryInto<f64>>::Error>>
     where
         T: TryInto<f64> + Display + Copy,
         <T as TryInto<f64>>::Error:Debug,
     {
-        let _width = 
+        
+        let _width  = 
             match width.try_into() {
                 Ok(n) => n,
                 Err(e) => {
-                    
+                    return Err(EngineSettingsError::CouldNotConvertWindow(e))        
                 }
+            };
+        let _height = 
+        match height.try_into() {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(EngineSettingsError::CouldNotConvertWindow(e))        
             }
-        self
+        };
+        self.window_size = (_width, _height); 
+        Ok(self)
     }
-    pub fn fps_max<T>(&mut self, fps: T) -> &Self 
+    pub fn fps_max<T>(mut self, fps: T) -> Result<Self, EngineSettingsError<<T as TryInto<u16>>::Error>>
     where 
         T: TryInto<u16> + Display + Copy,
         <T as TryInto<u16>>::Error:Debug, // ensures that the type can produce an error,
@@ -87,13 +90,12 @@ impl EngineSettingsBuilder {
         match fps.try_into() {
             Ok(n) => self.fps_settings.frame_time = interval_from_frequency(n),
             Err(e) => {
-                error!("Could not set max FPS value to {}. Defaulting to: {} fps. {:?}", fps, DEFAULT_MAX_FPS, e);
-                self.fps_settings.frame_time = interval_from_frequency(DEFAULT_MAX_FPS) ;
+                return Err(EngineSettingsError::CouldNotConvertInterval(e));
             }
         }
-        self
+        Ok(self)
     }
-    pub fn fps_cap(&mut self, cap: Option<u16>) -> &Self
+    pub fn fps_cap(mut self, cap: Option<u16>) -> Self
     {
         match cap {
             Some(fps) => {
@@ -129,3 +131,22 @@ where
     }
     
 }
+#[derive(Debug)]
+pub enum EngineSettingsError<E> 
+{
+    CouldNotConvertWindow(E),
+    CouldNotConvertInterval(E),
+
+}
+
+impl<E: Debug> Display for EngineSettingsError<E>
+{
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            EngineSettingsError::CouldNotConvertWindow(e) => write!(f, "Could not convert provided values {:?} to type.", e),
+            EngineSettingsError::CouldNotConvertInterval(e) => write!(f, "Could not convert {:?} to interval value.", e)
+        }
+    }
+}
+
+impl<E: Debug> std::error::Error for EngineSettingsError<E> {}

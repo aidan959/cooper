@@ -3,6 +3,8 @@ use glam::{Mat3, Mat4, Quat, Vec3};
 
 use frost::Input;
 
+use crate::WindowSize;
+
 pub struct Camera {
     camera_rig: CameraRig,
     fov_degrees: f32,
@@ -16,7 +18,7 @@ impl Camera {
         pos: Vec3,
         target: Vec3,
         fov_degrees: f32,
-        aspect_ratio: f64,
+        window_size: WindowSize,
         z_near: f32,
         z_far: f32,
         speed: f32,
@@ -32,7 +34,7 @@ impl Camera {
         Camera {
             camera_rig,
             fov_degrees,
-            aspect_ratio: aspect_ratio as f32,
+            aspect_ratio: get_aspect_ratio(window_size) as f32,
             z_near,
             z_far,
             speed,
@@ -123,4 +125,9 @@ impl Camera {
     pub(crate) fn get_far_plane(&self) -> f32 {
         self.z_far
     }
+}
+
+
+fn get_aspect_ratio(window_size : WindowSize) -> f64{
+    window_size.0 / window_size.1
 }

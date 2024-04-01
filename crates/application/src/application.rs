@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 pub struct GfxLocation(pub usize);
-pub(crate) type WindowSize = (f64, f64);
+
 pub struct CooperApplication {
     window: Window,
     pub renderer: VulkanRenderer,
@@ -178,18 +178,18 @@ impl DebugInfo {
 
 impl CooperApplication {
     pub fn create() -> Self {
-        let (window, event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         let engine_settings = EngineSettingsBuilder::new()
             .fps_cap(Some(DEFAULT_MAX_FPS))
             .update_rate_hz(DEFAULT_UPDATE_RATE)
             .build();
+        let (window, event_loop) = Window::create(&engine_settings.window_name, engine_settings.window_size);
 
         let fov_degrees = 90.0;
         let camera = Camera::new(
             Vec3::new(10.0, 0.0, 10.0),
             Vec3::new(10.0, 0.9, 0.0),
             fov_degrees,
-            WIDTH / HEIGHT,
+            engine_settings.window_size,
             0.01,
             1000.0,
             0.20,

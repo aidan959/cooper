@@ -11,6 +11,7 @@ use lynch::vulkan::renderer::RenderStatistics;
 use lynch::{CameraBuilder, WindowBuilder};
 use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window::Window, Camera};
 
+
 use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
 use crate::{
     engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_MAX_FPS,
@@ -541,27 +542,56 @@ struct Vec3Control {
     z_input: ImString,
 }
 pub struct CooperApplicationBuilder {
-    window_builder: WindowBuilder,
-    camera_builder: CameraBuilder<Option<f32>>,
-    engine_settings_builder: EngineSettingsBuilder
+    window: Option<Window>,
+    camera: Option<Camera>,
+    engine_settings: Option<EngineSettings>
 }
 impl CooperApplicationBuilder {
     pub fn new() -> Self {
         Self {
-            window_builder: Window::builder(),
-            camera_builder: Camera::builder(),
-            engine_settings_builder: EngineSettings::builder()
+            window: None,
+            camera: None,
+            engine_settings: None
         }
     }
-    pub fn build(mut self) -> CooperApplication {
-        let engine_settings = self.engine_settings_builder.build();
-        self.window_builder.set_window_size()
-        let (window, event_loop) = self.window_builder.build();
+    pub fn build(self) -> CooperApplication {
+        let engine_settings = match self.engine_settings {
+            Some(engine_settings) => engine_settings,
+            None => {
+                EngineSettings::builder().build()
+            }
+        };
+
+        let (window, event_loop) = match self.window {
+            Some(window) => (window, Window::create_event_loop()),
+            None => Window::builder().build()
+        };
+
+        let mut ui = CooperUI::new(&window);
+
+        let camera = match self.camera {
+            Some(camera) => camera,
+            None => {
+                Camera::builder().build()
+            }
+        };
+
+        let renderer = VulkanRenderer::create(&window, &camera, ui.mut_ui());
+
+        let graph = RenderGraph::new(
+            renderer.vk_context.arc_device(),
+            &renderer.camera_uniform_buffer,
+            renderer.image_count,
+        );
+
         CooperApplication {
             window,
             event_loop,
-            engine_settings: self.engine_settings_builder.build(),
-            camera: self.camera_builder.build(),
+            renderer,
+            camera,
+            graph,
+            engine_settings,
+            ui
         }
     }
 }

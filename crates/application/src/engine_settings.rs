@@ -27,6 +27,11 @@ pub struct EngineSettings {
     pub window_name : String,
     pub window_size : WindowSize,
 }
+impl EngineSettings {
+    pub fn builder() -> EngineSettingsBuilder {
+        EngineSettingsBuilder::new()
+    }
+}
 pub struct EngineSettingsBuilder {
     pub fixed_update_rate : Duration,
     pub fps_settings : FPSSettings,

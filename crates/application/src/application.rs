@@ -12,7 +12,7 @@ use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window
 
 use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
 use crate::{
-    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_FPS_CAP, DEFAULT_MAX_FPS,
+    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_MAX_FPS,
     DEFAULT_UPDATE_RATE,
 };
 use frost::System;
@@ -22,11 +22,10 @@ use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 pub struct GfxLocation(pub usize);
-
+pub(crate) type WindowSize = (f64, f64);
 pub struct CooperApplication {
     window: Window,
     pub renderer: VulkanRenderer,
-
     graph: RenderGraph,
     pub camera: Camera,
     event_loop: EventLoop<()>,
@@ -118,8 +117,7 @@ impl CooperUI {
     }
     fn update_ui(&self, guiframe: &mut Ui) {}
 }
-const WIDTH: f64 = 1280.;
-const HEIGHT: f64 = 720.;
+
 pub enum GameEvent {
     Input,
     MoveEvent(usize, Mat4),
@@ -544,4 +542,9 @@ struct Vec3Control {
     x_input: ImString,
     y_input: ImString,
     z_input: ImString,
+}
+pub struct CooperApplicationBuilder {
+    window_size: (u32, u32),
+    window_name: String,
+
 }

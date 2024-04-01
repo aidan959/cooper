@@ -1,11 +1,11 @@
 use ash::vk;
-use glam::{const_mat4, const_vec3, Mat4, Vec3};
+use glam::{const_mat4, Mat4};
 
 use crate::{
     render_graph::{RenderGraph, TextureId},
     vulkan::{renderer::VulkanRenderer, PipelineDesc},
 };
-const WORLD_SCALE : Mat4 = const_mat4!([1000.0,0.0,0.0,0.0], [0.,1000.,0.,0.], [0.,0.,1000.,0.], [0.,0.,0.,1.0]);
+const WORLD_SCALE : Mat4 = const_mat4!([1000.,0.,0.,0.], [0.,1000.,0.,0.], [0.,0.,1000.,0.], [0.,0.,0.,1.0]);
 pub fn setup_atmosphere_pass(
     graph: &mut RenderGraph,
     renderer: &VulkanRenderer,

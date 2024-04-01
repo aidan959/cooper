@@ -14,7 +14,7 @@ pub struct Camera {
     speed: f32,
 }
 impl Camera {
-    pub fn new(
+    pub(crate) fn new(
         pos: Vec3,
         target: Vec3,
         fov_degrees: f32,
@@ -125,9 +125,117 @@ impl Camera {
     pub(crate) fn get_far_plane(&self) -> f32 {
         self.z_far
     }
+    pub fn builder() -> CameraBuilder<Option<f32>> {
+        CameraBuilder::new()
+    }
 }
 
 
 fn get_aspect_ratio(window_size : WindowSize) -> f64{
     window_size.0 / window_size.1
+}
+
+
+
+
+pub struct CameraBuilder<AR> {
+    camera_rig: Option<CameraRig>,
+    aspect_ratio: AR,
+    fov_degrees: f32,
+    z_near: f32,
+    z_far: f32,
+    speed: f32,
+    position: Vec3,
+    rotation: Quat
+}
+const DEFAULT_FOV: f32 = 90.0;
+const DEFAULT_NEAR: f32 = 0.01;
+const DEFAULT_FAR: f32 = 1000.0;
+const DEFAULT_SPEED: f32 = 0.2;
+
+
+impl CameraBuilder<Option<f32>> {
+    pub fn new() -> Self {
+        CameraBuilder {
+            camera_rig: None,
+            fov_degrees: DEFAULT_FOV,
+            aspect_ratio: None,
+            z_near: DEFAULT_NEAR,
+            z_far: DEFAULT_FAR,
+            speed: DEFAULT_SPEED,
+            position: Vec3::ZERO,
+            rotation: Quat::IDENTITY
+        }
+    }
+
+    pub fn camera_rig(mut self, camera_rig: CameraRig) -> Self {
+        self.camera_rig = Some(camera_rig);
+        self
+    }
+
+    pub fn fov_degrees(mut self, fov_degrees: f32) -> Self {
+        self.fov_degrees = fov_degrees;
+        self
+    }
+
+    pub fn aspect_ratio(mut self, aspect_ratio: f32) -> Self {
+        self.aspect_ratio = Some(aspect_ratio);
+        self
+    }
+
+    pub fn aspect_ratio_from_window(mut self, window_size : WindowSize) -> Self {
+        self.aspect_ratio = Some(get_aspect_ratio(window_size) as f32);
+        self
+    }
+
+    pub fn z_near(mut self, z_near: f32) -> Self {
+        self.z_near = z_near;
+        self
+    }
+
+    pub fn z_far(mut self, z_far: f32) -> Self {
+        self.z_far = z_far;
+        self
+    }
+    pub fn position(mut self, position: Vec3) -> Self {
+        self.position = position;
+        self
+    }
+    pub fn target(mut self, target: Vec3) -> Self {
+        self.rotation = Camera::get_lookat_rotation(self.position, target);
+        self
+    }
+    pub fn rotation(mut self, rotation: Quat) -> Self {
+        self.rotation = rotation;
+        self
+    }
+    pub fn speed(mut self, speed: f32) -> Self {
+        self.speed = speed;
+        self
+    }
+    pub fn build(self) -> Camera {
+        let camera_rig = self.camera_rig.unwrap_or_else(||{CameraRig::builder()
+            .with(Position::new(self.position))
+            .with(YawPitch::new().rotation_quat(self.rotation))
+            .with(Smooth::new_position_rotation(0.9, 0.9))
+            .build()});
+        let fov_degrees = self.fov_degrees;
+        let aspect_ratio = self.aspect_ratio.expect("Aspect ratio is a required property for camera builder.");
+        let z_near = self.z_near;
+        let z_far = self.z_far;
+        let speed = self.speed;
+
+        Camera {
+            camera_rig,
+            fov_degrees,
+            aspect_ratio,
+            z_near,
+            z_far,
+            speed,
+        }
+    }
+}
+
+impl Camera {
+    
 }

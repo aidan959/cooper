@@ -8,6 +8,7 @@ use log::{debug, info};
 use lynch::render_graph::RenderGraph;
 
 use lynch::vulkan::renderer::RenderStatistics;
+use lynch::{CameraBuilder, WindowBuilder};
 use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window::Window, Camera};
 
 use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
@@ -178,22 +179,15 @@ impl DebugInfo {
 
 impl CooperApplication {
     pub fn create() -> Self {
-        let engine_settings = EngineSettingsBuilder::new()
-            .fps_cap(Some(DEFAULT_MAX_FPS))
-            .update_rate_hz(DEFAULT_UPDATE_RATE)
-            .build();
+        let engine_settings = EngineSettingsBuilder::new().build();
         let (window, event_loop) = Window::create(&engine_settings.window_name, engine_settings.window_size);
 
-        let fov_degrees = 90.0;
-        let camera = Camera::new(
-            Vec3::new(10.0, 0.0, 10.0),
-            Vec3::new(10.0, 0.9, 0.0),
-            fov_degrees,
-            engine_settings.window_size,
-            0.01,
-            1000.0,
-            0.20,
-        );
+        let camera = Camera::builder()
+            .aspect_ratio_from_window(engine_settings.window_size)
+            .position(Vec3::new(10.0, 0.0, 10.0))
+            .target(Vec3::new(10.0, 0.9, 0.0))
+            .build();
+
 
         let mut ui = CooperUI::new(&window);
         let renderer = VulkanRenderer::create(&window, &camera, ui.mut_ui());
@@ -534,6 +528,9 @@ impl CooperApplication {
         let translation = Mat4::from_translation(Vec3::new(0., 0., 0.));
         self.renderer.add_model(sphere, translation);
     }
+    fn builder() -> CooperApplicationBuilder {
+        CooperApplicationBuilder::new()
+    }
 }
 
 
@@ -544,7 +541,27 @@ struct Vec3Control {
     z_input: ImString,
 }
 pub struct CooperApplicationBuilder {
-    window_size: (u32, u32),
-    window_name: String,
-
+    window_builder: WindowBuilder,
+    camera_builder: CameraBuilder<Option<f32>>,
+    engine_settings_builder: EngineSettingsBuilder
+}
+impl CooperApplicationBuilder {
+    pub fn new() -> Self {
+        Self {
+            window_builder: Window::builder(),
+            camera_builder: Camera::builder(),
+            engine_settings_builder: EngineSettings::builder()
+        }
+    }
+    pub fn build(mut self) -> CooperApplication {
+        let engine_settings = self.engine_settings_builder.build();
+        self.window_builder.set_window_size()
+        let (window, event_loop) = self.window_builder.build();
+        CooperApplication {
+            window,
+            event_loop,
+            engine_settings: self.engine_settings_builder.build(),
+            camera: self.camera_builder.build(),
+        }
+    }
 }

@@ -8,7 +8,15 @@ pub mod renderer;
 mod texture;
 pub mod vulkan;
 pub mod window;
-pub use camera::Camera;
+pub use camera::{
+    Camera,
+    CameraBuilder
+};
 pub use texture::Texture;
 pub use vulkan::renderer::ViewUniformData;
-pub use window::WindowSize;
+pub use window::{
+    WindowSize,
+    Window,
+    WindowBuilder,
+    WindowBuilderError,
+};

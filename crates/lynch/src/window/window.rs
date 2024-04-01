@@ -17,7 +17,7 @@ impl Window {
         let window = Self::create_window(&window_title, window_size, &event_loop);
         (Window { window }, event_loop)
     }
-    fn create_event_loop() -> EventLoop<()> {
+    pub fn create_event_loop() -> EventLoop<()> {
         let event_loop = EventLoopBuilder::new().with_any_thread(true).build();
         event_loop
     }
@@ -69,6 +69,10 @@ impl WindowBuilder {
         }
         Ok(self)
     }
+    pub fn window_size(mut self, window_size: WindowSize) -> Self {
+        self.window_size = window_size;
+        self
+    }
     pub fn set_window_size<T>(mut self, width: T, height: T) -> Result<Self, WindowBuilderError<<T as TryInto<f64>>::Error>>
     where
         T: TryInto<f64> + Display + Copy,
@@ -92,7 +96,7 @@ impl WindowBuilder {
         self.window_size = (_width, _height); 
         Ok(self)
     }
-    pub fn window_name(mut self, window_title: &'static str) -> Self {
+    pub fn window_title(mut self, window_title: &'static str) -> Self {
         self.window_title = window_title;
         self
     }

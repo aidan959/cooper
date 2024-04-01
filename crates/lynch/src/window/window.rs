@@ -1,5 +1,5 @@
 use winit::{
-    dpi::PhysicalSize, event::Event, event_loop::{EventLoop, EventLoopBuilder}, platform::windows::EventLoopBuilderExtWindows, window::{Window as WinitWindow, WindowBuilder}
+    dpi::PhysicalSize, event_loop::{EventLoop, EventLoopBuilder}, platform::windows::EventLoopBuilderExtWindows, window::{Window as WinitWindow, WindowBuilder}
 };
 
 pub struct Window {

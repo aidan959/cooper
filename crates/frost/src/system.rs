@@ -38,8 +38,8 @@ pub trait IntoSystem<P> {
 
 pub trait OuterSystem {
     type Input;
-    fn run<'world_borrow>(self, world: &'world_borrow World, delta_time: f32) -> Result<(), GetError>;
-    fn run_fixed<'world_borrow>(self, world: &'world_borrow World, fixed_update: f32) -> Result<(), GetError>;
+    fn run<'world>(self, world: &'world World, delta_time: f32) -> Result<(), GetError>;
+    fn run_fixed<'world>(self, world: &'world World, fixed_update: f32) -> Result<(), GetError>;
 
 }
 
@@ -87,6 +87,7 @@ macro_rules! system_defr {
 
     };
 }
+// you could continue this forever...
 system_defr!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
 

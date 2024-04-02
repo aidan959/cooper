@@ -130,13 +130,9 @@ impl Camera {
     }
 }
 
-
-fn get_aspect_ratio(window_size : WindowSize) -> f64{
+fn get_aspect_ratio(window_size: WindowSize) -> f64 {
     window_size.0 / window_size.1
 }
-
-
-
 
 pub struct CameraBuilder<AR> {
     camera_rig: Option<CameraRig>,
@@ -146,13 +142,12 @@ pub struct CameraBuilder<AR> {
     z_far: f32,
     speed: f32,
     position: Vec3,
-    rotation: Quat
+    rotation: Quat,
 }
 const DEFAULT_FOV: f32 = 90.0;
 const DEFAULT_NEAR: f32 = 0.01;
 const DEFAULT_FAR: f32 = 1000.0;
 const DEFAULT_SPEED: f32 = 0.2;
-
 
 impl CameraBuilder<Option<f32>> {
     pub fn new() -> Self {
@@ -164,7 +159,7 @@ impl CameraBuilder<Option<f32>> {
             z_far: DEFAULT_FAR,
             speed: DEFAULT_SPEED,
             position: Vec3::ZERO,
-            rotation: Quat::IDENTITY
+            rotation: Quat::IDENTITY,
         }
     }
 
@@ -183,7 +178,7 @@ impl CameraBuilder<Option<f32>> {
         self
     }
 
-    pub fn aspect_ratio_from_window(mut self, window_size : WindowSize) -> Self {
+    pub fn aspect_ratio_from_window(mut self, window_size: WindowSize) -> Self {
         self.aspect_ratio = Some(get_aspect_ratio(window_size) as f32);
         self
     }
@@ -213,14 +208,19 @@ impl CameraBuilder<Option<f32>> {
         self.speed = speed;
         self
     }
+
     pub fn build(self) -> Camera {
-        let camera_rig = self.camera_rig.unwrap_or_else(||{CameraRig::builder()
-            .with(Position::new(self.position))
-            .with(YawPitch::new().rotation_quat(self.rotation))
-            .with(Smooth::new_position_rotation(0.9, 0.9))
-            .build()});
+        let camera_rig = self.camera_rig.unwrap_or_else(|| {
+            CameraRig::builder()
+                .with(Position::new(self.position))
+                .with(YawPitch::new().rotation_quat(self.rotation))
+                .with(Smooth::new_position_rotation(0.9, 0.9))
+                .build()
+        });
         let fov_degrees = self.fov_degrees;
-        let aspect_ratio = self.aspect_ratio.expect("Aspect ratio is a required property for camera builder.");
+        let aspect_ratio = self
+            .aspect_ratio
+            .expect("Aspect ratio is a required property for camera builder.");
         let z_near = self.z_near;
         let z_far = self.z_far;
         let speed = self.speed;
@@ -236,6 +236,4 @@ impl CameraBuilder<Option<f32>> {
     }
 }
 
-impl Camera {
-    
-}
+impl Camera {}

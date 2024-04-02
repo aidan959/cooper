@@ -1,6 +1,6 @@
-use crate::{iter::*, EntityId, Generation};
+use crate::iter::*;
 use crate::{
-    Archetype, ChainedIterator, ComponentAlreadyBorrowed, ComponentDoesNotExist, GetError, World,
+    Archetype, ChainedIterator, ComponentAlreadyBorrowed, GetError, World,
 };
 use std::iter::Zip;
 use std::sync::{RwLockReadGuard, RwLockWriteGuard};
@@ -154,7 +154,6 @@ impl<'a, T: 'static> SearchParameterGet<'a> for ReadSearchParameterGet<T> {
             .position(|c| c.type_id == type_id)
             .unwrap();
         if let Ok(read_guard) = archetype.get(index).try_read() {
-            let id =  index;
             Ok(read_guard)
         } else {
             Err(GetError::ComponentAlreadyBorrowed(
@@ -164,10 +163,6 @@ impl<'a, T: 'static> SearchParameterGet<'a> for ReadSearchParameterGet<T> {
     }
 }
 
-// SearchParameter should get its own data, but the data must be requested for any lifetime
-// so an inner trait must be used instead.
-// 'SearchParameter' specifies the nature of the data requested, but not the lifetime.
-// In the future this can (hopefully) be made better with Generic Associated Types.
 pub trait SearchParameter {
     type SearchParameterGet: for<'a> SearchParameterGet<'a>;
     fn matches_archetype(archetype: &Archetype) -> bool;
@@ -370,10 +365,23 @@ macro_rules! search_paramsr{
 // TODO - this could be a little cleaner
 search_paramsr! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
 
-// TODO - I am doing this alot - switch to procedural macro?
 search_iter! {Zip3, A, B, C}
 search_iter! {Zip4, A, B, C, D}
 search_iter! {Zip5, A, B, C, D, E}
 search_iter! {Zip6, A, B, C, D, E, F}
 search_iter! {Zip7, A, B, C, D, E, F, G}
 search_iter! {Zip8, A, B, C, D, E, F, G, H}
+search_iter! {Zip9, A, B, C, D, E, F, G, H, I}
+search_iter! {Zip10, A, B, C, D, E, F, G, H, I, J}
+search_iter! {Zip11, A, B, C, D, E, F, G, H, I, J, K}
+search_iter! {Zip12, A, B, C, D, E, F, G, H, I, J, K, L}
+search_iter! {Zip13, A, B, C, D, E, F, G, H, I, J, K, L, M}
+search_iter! {Zip14, A, B, C, D, E, F, G, H, I, J, K, L, M, N}
+search_iter! {Zip15, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O}
+search_iter! {Zip16, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
+search_iter! {Zip17, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q}
+
+
+
+
+

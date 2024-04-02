@@ -27,8 +27,8 @@ my_system.run(&world, 123.0).unwrap();
 ```
 */
 pub trait System<P> {
-    fn run(self, world: &World, delta_time: f32) -> Result<(), GetError>;
-    fn run_fixed(self, world: &World, fixed_update: f32) -> Result<(), GetError>;
+    fn run(&mut self, world: &World, delta_time: f32) -> Result<(), GetError>;
+    fn run_fixed(&mut self, world: &World, fixed_update: f32) -> Result<(), GetError>;
 
 }
 
@@ -47,7 +47,7 @@ type InnerItem<'a, 'b, A> =
     <<<A as SystemParameter>::Get as Get<'a>>::Item as GetItem<'b>>::InnerItem;
 
 impl<P, S: System<P> + Sync + Send + 'static + Copy> IntoSystem<P> for S {
-    fn system(self,) -> Box<dyn FnMut(&World, f32) -> Result<(), GetError> + Send + Sync> {
+    fn system(mut self,) -> Box<dyn FnMut(&World, f32) -> Result<(), GetError> + Send + Sync> {
         Box::new(move |world, delta_time| self.run(world, delta_time))
     }
 }
@@ -60,14 +60,14 @@ macro_rules! system_def {
         {
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn run<'world_borrow>(mut self, world: &'world_borrow World, delta_time: f32) -> Result<(), GetError> {
+            fn run<'world>(&mut self, world: &'world World, delta_time: f32) -> Result<(), GetError> {
                 $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* delta_time);
                 Ok(())
             }
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn run_fixed<'world_borrow>(mut self, world: &'world_borrow World, fixed_update: f32) -> Result<(), GetError> {
+            fn run_fixed<'world>(&mut self, world: &'world World, fixed_update: f32) -> Result<(), GetError> {
                 $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* fixed_update);
                 Ok(())

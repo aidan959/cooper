@@ -1,26 +1,24 @@
 use frost::obb::CollisionPoint;
 use frost::physics::math::physics_system;
-use frost::{Input, RigidBody, Search, SearchIter, Transform, World};
+use frost::{Input, RigidBody, SearchIter, World};
 use glam::{Mat4, Vec3};
-use imgui::{Condition, DragRange, FontConfig, FontGlyphRanges, FontSource, ImString, Ui, UiBuffer};
+use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use log::{debug, info};
 use lynch::render_graph::RenderGraph;
 
 use lynch::vulkan::renderer::RenderStatistics;
-use lynch::{CameraBuilder, WindowBuilder};
+
 use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window::Window, Camera};
 
 
-use crate::engine_callbacks::{EngineCallbacks, GameCallbacks};
 use crate::{
-    engine_settings, EngineSettings, EngineSettingsBuilder, DEFAULT_MAX_FPS,
+    EngineSettings, EngineSettingsBuilder,
     DEFAULT_UPDATE_RATE,
 };
 use frost::System;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -41,6 +39,7 @@ pub struct CooperApplication {
     ui: CooperUI,
     systems: HashMap<Schedule, Vec<Box<dyn System<World>>>>
 }
+
 struct UIContext<'a> {
     pub ui_frame: Option<Mutex<Box<&'a mut Ui>>>,
 }
@@ -269,8 +268,10 @@ impl CooperApplication {
 
         if let Some(onstart_systems) = self.systems.get_mut(&Schedule::OnStart) {
             for onstart_system in onstart_systems.iter_mut() {
-                //System::run_fixed(onstart_system.as_mut(), &mut world, self.engine_settings.fixed_update_rate.as_secs_f32()).unwrap()
-                
+                onstart_system
+                    .as_mut()
+                    .run_fixed( &mut world, self.engine_settings.fixed_update_rate.as_secs_f32())
+                    .unwrap();
             }
         }
 
@@ -313,6 +314,14 @@ impl CooperApplication {
                                     new_location;
                             });
                         }
+                        if let Some(onfixed_update_system) = self.systems.get_mut(&Schedule::OnFixedUpdate) {
+                            for onfixed_update_system in onfixed_update_system.iter_mut() {
+                                onfixed_update_system
+                                    .as_mut()
+                                    .run_fixed( &mut world, self.engine_settings.fixed_update_rate.as_secs_f32())
+                                    .unwrap();
+                            }
+                        }
 
                         fixed_update(
                             &fixed_update_transmitter,
@@ -320,16 +329,7 @@ impl CooperApplication {
                             &mut world,
                         );
                         lag -= self.engine_settings.fixed_update_rate.as_secs_f32();
-                        if interval_start.elapsed() >= Duration::new(1, 0) {
-                            // Check if one second has passed
-                            println!(
-                                "Function executed {} times in the last second. ({})",
-                                count,
-                                self.engine_settings.fixed_update_rate.as_secs_f32()
-                            );
-                            count = 0; // Reset the count for the next second
-                            interval_start = Instant::now(); // Reset the timer for the next second
-                        }
+
                         let mut search = world.search::<(&RigidBody,)>().unwrap();
                         for (i, rb) in search.iter().enumerate() {
                             if i == rigidbody_list.len() {
@@ -365,6 +365,14 @@ impl CooperApplication {
                     lag += elapsed.as_secs_f32();
                     // user update call
                     update(&update_transmitter, render_statistics.full_render_time);
+                    if let Some(on_update_system) = self.systems.get_mut(&Schedule::OnUpdate) {
+                        for on_update_system in on_update_system.iter_mut() {
+                            on_update_system
+                                .as_mut()
+                                .run_fixed(&mut world, render_statistics.full_render_time)
+                                .unwrap();
+                        }
+                    }
                     // submit input data to camera
                     self.camera
                         .update(&input, render_statistics.full_render_time);

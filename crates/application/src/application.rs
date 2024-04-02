@@ -18,13 +18,19 @@ use crate::{
     DEFAULT_UPDATE_RATE,
 };
 use frost::System;
+use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 pub struct GfxLocation(pub usize);
-
+#[derive(PartialEq, Eq, Hash)]
+pub enum Schedule {
+    OnStart,
+    OnUpdate,
+    OnFixedUpdate
+}
 pub struct CooperApplication {
     window: Window,
     pub renderer: VulkanRenderer,
@@ -33,6 +39,7 @@ pub struct CooperApplication {
     event_loop: EventLoop<()>,
     engine_settings: EngineSettings,
     ui: CooperUI,
+    systems: HashMap<Schedule, Vec<Box<dyn System<World>>>>
 }
 struct UIContext<'a> {
     pub ui_frame: Option<Mutex<Box<&'a mut Ui>>>,
@@ -86,7 +93,6 @@ impl CooperUI {
         let (gui, platform) = {
             let mut g = imgui::Context::create();
             let mut platform = WinitPlatform::init(&mut g);
-
             let hidpi_factor = platform.hidpi_factor();
             let font_size = (13.0 * hidpi_factor) as f32;
             g.fonts().add_font(&[
@@ -206,6 +212,7 @@ impl CooperApplication {
             event_loop,
             engine_settings,
             ui,
+            systems:HashMap::new()
         }
     }
 
@@ -259,6 +266,11 @@ impl CooperApplication {
         let mut run = true;
         let mut rigidbody_list: Vec<RigidBody> = vec![];
         let mut render_statistics = RenderStatistics::default();
+
+        for onstart in self.systems[&Schedule::OnStart] {
+            
+        }
+
         self.event_loop.run(move |event, _elwt, control_flow| {
             self.ui
                 .platform
@@ -443,7 +455,6 @@ impl CooperApplication {
         world: &mut World,
     ) {
         if input.key_pressed(winit::event::VirtualKeyCode::M) {
-            println!("M was pressed");
             debug_info.opened = !debug_info.opened;
         }
         if !debug_info.opened {return};
@@ -451,7 +462,7 @@ impl CooperApplication {
             .window("Debug Menu")
             .opened(&mut debug_info.opened)
             .position([1000.0, 20.0], Condition::Appearing)
-            .size([200.0, 100.0], Condition::Appearing);
+            .size([300.0, 100.0], Condition::Appearing);
 
         w.build(|| {
             gui_frame.text(format!("FPS: {}", debug_info.frame_rate));
@@ -525,34 +536,49 @@ impl CooperApplication {
         self.build_scene();
     }
     fn build_scene(&mut self) {
-        let mut sphere = self.renderer.load_model("models/sphere.gltf");
+        let sphere = self.renderer.load_model("models/sphere.gltf");
         let translation = Mat4::from_translation(Vec3::new(0., 0., 0.));
         self.renderer.add_model(sphere, translation);
     }
-    fn builder() -> CooperApplicationBuilder {
+    pub fn builder() -> CooperApplicationBuilder {
         CooperApplicationBuilder::new()
     }
 }
 
 
-struct Vec3Control {
-    vec: Vec3,
-    x_input: ImString,
-    y_input: ImString,
-    z_input: ImString,
-}
 pub struct CooperApplicationBuilder {
     window: Option<Window>,
     camera: Option<Camera>,
-    engine_settings: Option<EngineSettings>
+    engine_settings: Option<EngineSettings>,
+    systems: HashMap<Schedule, Vec<Box<dyn System<World>>>>
 }
 impl CooperApplicationBuilder {
     pub fn new() -> Self {
+        let systems = HashMap::new();
+        for schedule in Schedule {
+            
+        }
         Self {
             window: None,
             camera: None,
-            engine_settings: None
+            engine_settings: None,
+            systems: HashMap::new()
         }
+    }
+    pub fn schedule_system(mut self, schedule: Schedule, system: Box<dyn System<World>>){
+        self.systems[&schedule].push(system);
+    }
+    pub fn window(mut self, window:Window) -> Self{
+        self.window = Some(window);
+        self
+    }
+    pub fn camera(mut self, camera:Camera)-> Self{
+        self.camera = Some(camera);
+        self
+    }
+    pub fn engine_settings(mut self, engine_settings: EngineSettings) -> Self {
+        self.engine_settings = Some(engine_settings);
+        self
     }
     pub fn build(self) -> CooperApplication {
         let engine_settings = match self.engine_settings {
@@ -583,7 +609,7 @@ impl CooperApplicationBuilder {
             &renderer.camera_uniform_buffer,
             renderer.image_count,
         );
-
+        let systems = self.systems;
         CooperApplication {
             window,
             event_loop,
@@ -591,7 +617,8 @@ impl CooperApplicationBuilder {
             camera,
             graph,
             engine_settings,
-            ui
+            ui,
+            systems
         }
     }
 }

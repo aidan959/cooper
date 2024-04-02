@@ -1,8 +1,8 @@
 pub mod bounding_box;
 pub mod entity;
+pub mod math;
 pub mod obb;
 pub mod shapes;
-pub mod math;
 
 mod mass;
 
@@ -20,7 +20,7 @@ use std::{
     any::{Any, TypeId},
     borrow::BorrowMut,
     collections::HashMap,
-    sync:: RwLock,
+    sync::RwLock,
 };
 
 pub use crate::{Get, GetError, SearchGet, SearchParameters, Single, SingleMut};
@@ -82,7 +82,7 @@ impl Archetype {
         self.mutable_component_store(component_index).push(t)
     }
 
-    fn get_component_mut<T: 'static>(
+    pub fn get_component_mut<T: 'static>(
         &mut self,
         index: EntityId,
     ) -> Result<&mut T, ComponentNotInEntity> {
@@ -219,10 +219,10 @@ impl<T: Component> ComponentVec for RwLock<Vec<T>> {
     }
 }
 pub struct World {
-    archetypes: Vec<Archetype>,
-    pack_id_to_archetype: HashMap<u64, usize>,
     pub(crate) entities: Vec<EntityMeta>,
     available_entities: Vec<EntityId>,
+    archetypes: Vec<Archetype>,
+    pack_id_to_archetype: HashMap<u64, usize>,
 }
 
 impl World {
@@ -271,9 +271,10 @@ impl World {
     let search = world.search<(&bool, &String)>();
     ```
     */
-    pub fn search<'world_borrow, T: SearchParameters>(
-        &'world_borrow self,
-    ) -> Result<Search<T>, GetError> {
+    pub fn search<'world, T>(&'world self) -> Result<Search<T>, GetError>
+    where
+        T: SearchParameters,
+    {
         let get = SearchGet::<T>::get(self);
 
         match get {
@@ -281,11 +282,10 @@ impl World {
             Err(e) => Err(e),
         }
     }
-    pub fn add_component<T: 'static + Send + Sync>(
-        &mut self,
-        entity: Entity,
-        t: T,
-    ) -> Result<(), EntityNotFound> {
+    pub fn add_component<T>(&mut self, entity: Entity, t: T) -> Result<(), EntityNotFound>
+    where
+        T: 'static + Send + Sync,
+    {
         let entity_meta = self.entities[entity.index as usize];
 
         if entity_meta.generation != entity.generation {
@@ -303,85 +303,77 @@ impl World {
 
         let type_index = type_ids.binary_search(&type_id);
 
-        match type_index {
-            Ok(insert_index) => {
-                let archetype = &mut self.archetypes[entity_meta.archetype_index() as usize];
+        if let Ok(insert_index) = type_index {
+            let archetype = &mut self.archetypes[entity_meta.archetype_index() as usize];
 
-                archetype.replace_component(insert_index, entity_meta.index_in_archetype(), t);
-            }
-            Err(_) => {
-                let insert_index = type_index.unwrap_or_else(|err| err);
-                type_ids.insert(insert_index, type_id);
-                let pack_id = calculate_pack_id(&type_ids);
+            archetype.replace_component(insert_index, entity_meta.index_in_archetype(), t);
+        } else {
+            let insert_index = type_index.unwrap_or_else(|err| err);
+            type_ids.insert(insert_index, type_id);
+            let pack_id = calculate_pack_id(&type_ids);
 
-                let new_archetype_index = match self.pack_id_to_archetype.get(&pack_id) {
-                    Some(index) => *index,
-                    None => {
-                        let mut archetype = Archetype::new();
-                        current_archetype
-                            .components
-                            .iter()
-                            .for_each(|c| archetype.components.push(c.new_same_type()));
+            let new_archetype_index: usize = match self.pack_id_to_archetype.get(&pack_id) {
+                Some(index) => *index,
+                None => {
+                    let mut archetype = Archetype::new();
+                    current_archetype
+                        .components
+                        .iter()
+                        .for_each(|c| archetype.components.push(c.new_same_type()));
 
-                        let new_index = self.archetypes.len();
-                        self.pack_id_to_archetype.insert(pack_id, new_index);
+                    let new_index = self.archetypes.len();
+                    self.pack_id_to_archetype.insert(pack_id, new_index);
 
-                        self.archetypes.push(archetype);
+                    self.archetypes.push(archetype);
 
-                        new_index
-                    }
-                };
-
-                let (old_archetype, new_archetype) = get_two_mutable(
-                    &mut self.archetypes,
-                    entity_meta.archetype_index() as usize,
-                    new_archetype_index,
-                );
-                if let Some(last) = old_archetype.entities.last() {
-                    self.entities[*last as usize].location = entity_meta.location;
+                    new_index
                 }
-                self.entities[entity.index as usize].location = EntityLocation::new(
-                    new_archetype_index as EntityId,
-                    new_archetype.len() as EntityId,
-                );
+            };
 
-                (0..insert_index).into_iter().for_each(|i| {
+            let (old_archetype, new_archetype) = get_two_mutable(
+                &mut self.archetypes,
+                entity_meta.archetype_index() as usize,
+                new_archetype_index,
+            );
+            if let Some(last) = old_archetype.entities.last() {
+                self.entities[*last as usize].location = entity_meta.location;
+            }
+            self.entities[entity.index as usize].location = EntityLocation::new(
+                new_archetype_index as EntityId,
+                new_archetype.len() as EntityId,
+            );
+
+            (0..insert_index).into_iter().for_each(|i| {
+                old_archetype.migrate_component(
+                    i,
+                    entity_meta.index_in_archetype(),
+                    new_archetype,
+                    i,
+                )
+            });
+
+            new_archetype.push(insert_index, t);
+
+            let components_in_archetype = old_archetype.components.len();
+
+            (insert_index..components_in_archetype)
+                .for_each(|i| {
                     old_archetype.migrate_component(
                         i,
                         entity_meta.index_in_archetype(),
                         new_archetype,
-                        i,
+                        i.overflowing_add(1).0,
                     )
                 });
 
-                new_archetype.push(insert_index, t);
-
-                let components_in_archetype = old_archetype.components.len();
-
-                (insert_index..components_in_archetype)
-                    .into_iter()
-                    .for_each(|i| {
-                        old_archetype.migrate_component(
-                            i,
-                            entity_meta.index_in_archetype(),
-                            new_archetype,
-                            i.overflowing_add(1).0,
-                        )
-                    });
-
-                old_archetype
-                    .entities
-                    .swap_remove(entity_meta.index_in_archetype() as usize);
-                new_archetype.entities.push(entity.index);
-            }
+            old_archetype
+                .entities
+                .swap_remove(entity_meta.index_in_archetype() as usize);
+            new_archetype.entities.push(entity.index);
         }
 
         Ok(())
     }
-
-    
-
-
 }
 macro_rules! component_pack {
     ($count: expr, $(($name: ident, $index: tt)),*) => {
@@ -431,7 +423,6 @@ macro_rules! component_pack {
     }
 }
 
-
 component_pack! {1, (A, 0)}
 component_pack! {2, (A, 0), (B, 1)}
 component_pack! {3, (A, 0), (B, 1), (C, 2)}
@@ -480,7 +471,6 @@ pub mod tests {
                     restitution: 0.0,
                     is_static: true,
                     angular_drag: 0.01,
-
                 },
                 obb::DynamicOBB::new(
                     Vec3::new(0.0, 0.0, 0.0),
@@ -492,7 +482,6 @@ pub mod tests {
         world
             .new_entity((
                 Name("B".to_string()),
-
                 RigidBody {
                     inverse_mass: 1.0,
                     transform: Transform {
@@ -532,8 +521,4 @@ pub mod tests {
             println!("{} {:?} {:?}", name.0, rb.transform.position, rb.velocity);
         }
     }
-    
-
-
-    
 }

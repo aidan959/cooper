@@ -1,14 +1,28 @@
 use std::sync::mpsc::Sender;
 
-use application::application::{CooperApplication, GameEvent, GfxLocation};
+use application::{application::{CooperApplication, GameEvent, GfxLocation}, EngineSettings, EngineSettingsBuilder};
 use frost::{obb, physics::math::physics_system, RigidBody, SearchIter, System, Transform};
-use glam::{Mat4, Quat, Vec3};
+use glam::{const_vec3, Mat4, Quat, Vec3};
+use lynch::{Camera, WindowSize};
 
- 
+const WINDOW_SIZE: WindowSize = (1280., 1080.);
 fn main() { 
     env_logger::init();
-
-    CooperApplication::create().run(   
+    CooperApplication::builder()
+        .engine_settings(
+            EngineSettings::builder()
+                .set_window_name("Cooper")
+                .fps_max(512).unwrap()
+                .window_size(WINDOW_SIZE)
+                .build()
+        )
+        .camera(
+            Camera::builder()
+                .fov_degrees(45.)
+                .position(const_vec3!([0.0, 0.0, 0.0]))
+                .aspect_ratio_from_window(WINDOW_SIZE)
+                .build()            
+        ).build().run(   
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>, world| {
             (0..13).into_iter().for_each(|_| {

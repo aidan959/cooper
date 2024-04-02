@@ -64,6 +64,10 @@ impl EngineSettingsBuilder {
         self.window_name = name.to_string();
         self
     }
+    pub fn window_size(mut self, window_size: WindowSize) -> Self {
+        self.window_size = window_size;
+        self
+    }
     pub fn set_window_size<T>(mut self, width: T, height: T) -> Result<Self, EngineSettingsError<<T as TryInto<f64>>::Error>>
     where
         T: TryInto<f64> + Display + Copy,

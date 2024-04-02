@@ -267,8 +267,11 @@ impl CooperApplication {
         let mut rigidbody_list: Vec<RigidBody> = vec![];
         let mut render_statistics = RenderStatistics::default();
 
-        for onstart in self.systems[&Schedule::OnStart] {
-            
+        if let Some(onstart_systems) = self.systems.get_mut(&Schedule::OnStart) {
+            for onstart_system in onstart_systems.iter_mut() {
+                //System::run_fixed(onstart_system.as_mut(), &mut world, self.engine_settings.fixed_update_rate.as_secs_f32()).unwrap()
+                
+            }
         }
 
         self.event_loop.run(move |event, _elwt, control_flow| {
@@ -554,20 +557,22 @@ pub struct CooperApplicationBuilder {
 }
 impl CooperApplicationBuilder {
     pub fn new() -> Self {
-        let systems = HashMap::new();
-        for schedule in Schedule {
-            
-        }
+        let mut systems : HashMap<Schedule, Vec<Box<dyn System<World>>>> = HashMap::new();
         Self {
             window: None,
             camera: None,
             engine_settings: None,
-            systems: HashMap::new()
+            systems
         }
     }
     pub fn schedule_system(mut self, schedule: Schedule, system: Box<dyn System<World>>){
-        self.systems[&schedule].push(system);
-    }
+        match self.systems.get_mut(&schedule){
+            Some(system_list) =>{ system_list.push(system) },
+            None => {
+                self.systems.insert(schedule, vec![system]);
+            }
+        }
+    }   
     pub fn window(mut self, window:Window) -> Self{
         self.window = Some(window);
         self

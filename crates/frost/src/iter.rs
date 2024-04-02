@@ -1,28 +1,40 @@
 use std::iter::Zip;
 
-// This first iterator wraps the standard library `Zip` iterator and flattens nested tuples
-// of values returned to a flat list.
 macro_rules! impl_zip {
-    ($name: ident, $zip_type: ty, $m_stuff: expr, $($T: ident),*) => {
-        pub struct $name<A: Iterator, $($T: Iterator,)*> {
-            inner: $zip_type,
+    // The macro takes a variable number of arguments, specified by the pattern.
+    // $struct_name: The name of the struct to be defined.
+    // $zip_t: The type of the inner iterator, typically a chain of `.zip()` calls.
+    // $tuple_to_flat: An expression used to map the nested tuple structure to a flat tuple.
+    // $($T: ident),*: A variadic list of generic type parameters representing the iterator types.
+    ($struct_name: ident, $zip_t: ty, $tuple_to_flat: expr, $($T: ident),*) => {
+         // Define a new struct with the name provided in $struct_name.
+        pub struct $struct_name<A: Iterator, $($T: Iterator,)*> {
+            // The struct contains a single field `inner` which holds the iterator.
+            inner: $zip_t,
         }
-
-        impl<A: Iterator, $($T: Iterator,)*> $name<A, $($T,)*> {
+        // Define a constructor method `new` for the struct.
+        // This method takes an iterator for each type parameter and constructs the `inner` iterator.
+        // Implement methods for the newly defined struct.
+        impl<A: Iterator, $($T: Iterator,)*> $struct_name<A, $($T,)*> {
             #[allow(non_snake_case)]
             pub fn new (A: A, $($T: $T,)*) -> Self {
                 Self {
+                    // Construct the `inner` iterator by chaining `.zip()` calls on the provided iterators.
                     inner: A$(.zip($T))*
                 }
             }
         }
 
-        impl<A: Iterator, $($T: Iterator,)*> Iterator for $name<A, $($T,)*> {
+        impl<A: Iterator, $($T: Iterator,)*> Iterator for $struct_name<A, $($T,)*> {
+            // Specify the type of elements the iterator will yield.
+            // This is a flat tuple containing an item from each of the wrapped iterators.
             type Item = (A::Item, $($T::Item,)*);
 
             #[inline(always)]
             fn next(&mut self) -> Option<Self::Item> {
-                self.inner.next().map($m_stuff)
+                // Call `next` on the inner iterator and use `map` with $tuple_to_flat to transform
+                // the nested tuple structure into a flat tuple.
+                self.inner.next().map($tuple_to_flat)
             }
             #[inline]
             fn size_hint(&self) -> (usize, Option<usize>) {
@@ -33,17 +45,32 @@ macro_rules! impl_zip {
     };
 }
 
-// I am not good at writing recursive macros.
-// So instead just the parts that would need recursion are passed in. :)
 impl_zip! {Zip3, Zip<Zip<A, B>, C>, |((a, b), c)| {(a, b, c)}, B, C}
 impl_zip! {Zip4, Zip<Zip<Zip<A, B>, C>, D>, |(((a, b), c), d)| {(a, b, c, d)}, B, C, D}
 impl_zip! {Zip5, Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, |((((a, b), c), d), e)| {(a, b, c, d, e)}, B, C, D, E}
 impl_zip! {Zip6, Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, |(((((a, b), c), d), e), f)| {(a, b, c, d, e, f)}, B, C, D, E, F}
 impl_zip! {Zip7, Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, |((((((a, b), c), d), e), f), g)| {(a, b, c, d, e, f, g)}, B, C, D, E, F, G}
 impl_zip! {Zip8, Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, |(((((((a, b), c), d), e), f), g), h)| {(a, b, c, d, e, f, g, h)}, B, C, D, E, F, G, H}
+impl_zip! {Zip9, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, |((((((((a, b), c), d), e), f), g), h), i)| {(a, b, c, d, e, f, g, h, i)}, B, C, D, E, F, G, H, I}
+impl_zip! {Zip10, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, |(((((((((a, b), c), d), e), f), g), h), i), j)| {(a, b, c, d, e, f, g, h, i ,j)}, B, C, D, E, F, G, H, I, J}
+impl_zip! {Zip11, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, |((((((((((a, b), c), d), e), f), g), h), i), j), k)| {(a, b, c, d, e, f, g, h, i ,j, k)}, B, C, D, E, F, G, H, I, J, K}
+impl_zip! {Zip12, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, |(((((((((((a, b), c), d), e), f), g), h), i), j), k), l)| {(a, b, c, d, e, f, g, h, i ,j, k, l)}, B, C, D, E, F, G, H, I, J, K, L}
+impl_zip! {Zip13, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, |((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m )}, B, C, D, E, F, G, H, I, J, K, L, M}
+impl_zip! {Zip14, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, |(((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n )}, B, C, D, E, F, G, H, I, J, K, L, M, N}
+impl_zip! {Zip15, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, |((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O}
+impl_zip! {Zip16, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, |(((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
+impl_zip! {Zip17, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, |((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q}
+impl_zip! {Zip18, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, |(((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R}
+impl_zip! {Zip19, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, |((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S}
+impl_zip! {Zip20, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, |(((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T}
+impl_zip! {Zip21, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>,  |((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U}
+impl_zip! {Zip22, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>, V>, |(((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u), v)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u, v)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V}
+impl_zip! {Zip23, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>, V>, W>, |((((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u), v), w)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u, v, w)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W}
+impl_zip! {Zip24, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>, V>, W>, X>, |(((((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u), v), w), x)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u, v, w, x)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X}
+impl_zip! {Zip25, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>, V>, W>, X>, Y>,|((((((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u), v), w), x), y)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y}
+impl_zip! {Zip26, Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, F>, G>, H>, I>, J>, K>, L>, M>, N>, O>, P>, Q>, R>, S>, T>, U>, V>, W>, X>, Y>, Z>, |(((((((((((((((((((((((((a, b), c), d), e), f), g), h), i), j), k), l), m), n), o), p), q), r), s), t), u), v), w), x), y), z)| {(a, b, c, d, e, f, g, h, i ,j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)}, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
 
 #[doc(hidden)]
-/// A series of iterators of the same type that are traversed in a row.
 pub struct ChainedIterator<I: Iterator> {
     current_iter: Option<I>,
     iterators: Vec<I>,

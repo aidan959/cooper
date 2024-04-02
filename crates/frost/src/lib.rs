@@ -221,8 +221,8 @@ impl<T: Component> ComponentVec for RwLock<Vec<T>> {
 pub struct World {
     pub(crate) entities: Vec<EntityMeta>,
     available_entities: Vec<EntityId>,
-    archetypes: Vec<Archetype>,
     pack_id_to_archetype: HashMap<u64, usize>,
+    archetypes: Vec<Archetype>,
 }
 
 impl World {
@@ -241,8 +241,9 @@ impl World {
         } else {
             self.entities.push(EntityMeta::null());
 
-            if self.entities.len() >= EntityId::MAX as usize {
-                return Err(WorldFull::new());
+            match self.entities.len() >= EntityId::MAX as usize {
+                true => return Err(WorldFull::new()),
+                false => (),
             }
             ((self.entities.len() - 1) as EntityId, 0)
         };

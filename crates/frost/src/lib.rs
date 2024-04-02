@@ -12,7 +12,7 @@ pub mod physics;
 use component_utils::{calculate_pack_id, component_vec_to_mut};
 mod iter;
 mod utils;
-use utils::get_two_mutable;
+use utils::retrieve_two_mutable;
 mod errors;
 mod search;
 mod system;
@@ -23,7 +23,7 @@ use std::{
     sync::RwLock,
 };
 
-pub use crate::{Get, GetError, SearchGet, SearchParameters, Single, SingleMut};
+pub use crate::{Retrieve, RetrieveError, SearchRetrieve, SearchParameters, Single, SingleMut};
 pub use input::Input;
 pub(crate) type EntityId = u32;
 pub(crate) type Generation = u32;
@@ -38,7 +38,7 @@ pub use system::*;
 
 pub trait ComponentPack: 'static + Send + Sync {
     fn new_archetype(&self) -> Archetype;
-    fn spawn_in_world(self, world: &mut World, entity_index: EntityId) -> EntityLocation;
+    fn spawn(self, world: &mut World, entity_index: EntityId) -> EntityLocation;
 }
 
 pub struct Archetype {
@@ -53,11 +53,12 @@ impl Archetype {
             components: Vec::new(),
         }
     }
-    pub(crate) fn get<T: 'static>(&self, index: usize) -> &RwLock<Vec<T>> {
-        self.components[index]
+    pub(crate) fn retrieve<T: 'static>(&self, index: usize) -> &RwLock<Vec<T>> {
+        let downcast_ref = self.components[index]
             .data
             .to_any()
-            .downcast_ref::<RwLock<Vec<T>>>()
+            .downcast_ref::<RwLock<Vec<T>>>();
+        downcast_ref
             .unwrap()
     }
 
@@ -82,7 +83,7 @@ impl Archetype {
         self.mutable_component_store(component_index).push(t)
     }
 
-    pub fn get_component_mut<T: 'static>(
+    pub fn retrieve_component_mut<T: 'static>(
         &mut self,
         index: EntityId,
     ) -> Result<&mut T, ComponentNotInEntity> {
@@ -249,38 +250,39 @@ impl World {
         };
 
         self.entities[index as usize] = EntityMeta {
-            location: b.spawn_in_world(self, index),
+            location: b.spawn(self, index),
             generation: generation,
         };
         Ok(Entity { index, generation })
     }
     #[inline]
-    pub fn get_single<T: 'static>(&self) -> Result<Single<T>, GetError> {
-        <&T>::get(self)
+    pub fn retrieve_single<T: 'static>(&self) -> Result<Single<T>, RetrieveError> {
+        <&T>::retrieve(self)
     }
     #[inline]
-    pub fn get_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, GetError> {
-        <&mut T>::get(self)
+    pub fn retrieve_single_mut<T: 'static>(&self) -> Result<SingleMut<T>, RetrieveError> {
+        <&mut T>::retrieve(self)
     }
 
-    /**
-    Search from the world.
-    # EX
-    ```
-    use frost::*;
-    let mut world = World::new();
-    let search = world.search<(&bool, &String)>();
-    ```
-    */
-    pub fn search<'world, T>(&'world self) -> Result<Search<T>, GetError>
+    #[doc = "Search from the world.
+```
+use frost::*;
+let mut world = World::new();
+let search = world.search<(&bool, &String)>();
+```"]
+    pub fn search<'world, T>(&'world self) -> Result<Search<T>, RetrieveError>
     where
         T: SearchParameters,
     {
-        let get = SearchGet::<T>::get(self);
+        let get = SearchRetrieve::<T>::retrieve(self);
 
         match get {
-            Ok(mut search_get) => Ok(search_get.take().unwrap()),
-            Err(e) => Err(e),
+            Ok(mut search_get) => {
+                Ok(search_get.take().unwrap())
+            },
+            Err(e) => {
+                Err(e)
+            },
         }
     }
     pub fn add_component<T>(&mut self, entity: Entity, t: T) -> Result<(), EntityNotFound>
@@ -331,41 +333,44 @@ impl World {
                 }
             };
 
-            let (old_archetype, new_archetype) = get_two_mutable(
+            let (old_archetype, new_archetype): (&mut Archetype, &mut Archetype) = retrieve_two_mutable(
                 &mut self.archetypes,
                 entity_meta.archetype_index() as usize,
                 new_archetype_index,
             );
-            if let Some(last) = old_archetype.entities.last() {
-                self.entities[*last as usize].location = entity_meta.location;
+            match old_archetype.entities.last() {
+                Some(last) => {
+                    self.entities[*last as usize].location = entity_meta.location;
+                }
+                _ => (),
             }
             self.entities[entity.index as usize].location = EntityLocation::new(
                 new_archetype_index as EntityId,
                 new_archetype.len() as EntityId,
             );
 
-            (0..insert_index).into_iter().for_each(|i| {
+            for i in 0..insert_index{
                 old_archetype.migrate_component(
                     i,
                     entity_meta.index_in_archetype(),
                     new_archetype,
                     i,
-                )
-            });
+                );
+            }
 
             new_archetype.push(insert_index, t);
 
             let components_in_archetype = old_archetype.components.len();
 
-            (insert_index..components_in_archetype)
-                .for_each(|i| {
+            for i in insert_index..components_in_archetype{
+                
                     old_archetype.migrate_component(
                         i,
                         entity_meta.index_in_archetype(),
                         new_archetype,
                         i.overflowing_add(1).0,
-                    )
-                });
+                    );
+                }
 
             old_archetype
                 .entities
@@ -385,7 +390,7 @@ macro_rules! component_pack {
                 Archetype { components, entities: Vec::new() }
             }
 
-            fn spawn_in_world(self, world: &mut World, entity_index: EntityId) -> EntityLocation {
+            fn spawn(self, world: &mut World, entity_index: EntityId) -> EntityLocation {
                 let mut types = [$(($index, TypeId::of::<$name>())), *];
                 types.sort_unstable_by(|a, b| a.1.cmp(&b.1));
                 debug_assert!(

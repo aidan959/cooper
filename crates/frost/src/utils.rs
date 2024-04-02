@@ -1,4 +1,4 @@
-pub fn get_two_mutable<T>(slice: &mut [T], first: usize, second: usize) -> (&mut T, &mut T) {
+pub fn retrieve_two_mutable<T>(slice: &mut [T], first: usize, second: usize) -> (&mut T, &mut T) {
     if first < second {
         let (a, b) = slice.split_at_mut(second);
         let f = &mut a[first];

@@ -34,7 +34,7 @@ impl SwapchainSupportDetails {
         }
     }
 
-    pub fn get_ideal_swapchain_properties(
+    pub fn retrieve_ideal_swapchain_properties(
         &self,
         preferred_dimensions: [u32; 2],
     ) -> SwapchainProperties {

@@ -53,8 +53,8 @@ pub trait OBB {
             center + rot_mat * Vec3::new(-he.x, he.y, he.z),
         ]
     }
-    fn get_faces(&self) -> [PolygonPrimitive; 6];
-    fn get_edges(&self) -> [(Vec3, Vec3); 12];
+    fn retrieve_faces(&self) -> [PolygonPrimitive; 6];
+    fn retrieve_edges(&self) -> [(Vec3, Vec3); 12];
     fn initialize_faces() -> [PolygonPrimitive; 6];
 
     fn check_overlap(&self, axis: Vec3, obb2: &DynamicOBB) -> bool {
@@ -105,7 +105,7 @@ pub trait OBB {
         let pen_depth = depth1.min(depth2);
         (true, pen_depth)
     }
-    fn get_support_point(&self, norm: Vec3) -> Vec3 {
+    fn retrieve_support_point(&self, norm: Vec3) -> Vec3 {
         // TODO MAKE THIS MUCH BETTER :)
         let mut support_point = self.get_vertices()[0];
         let mut max_proj = support_point.dot(norm);
@@ -119,12 +119,12 @@ pub trait OBB {
         }
         support_point
     }
-    fn get_support_primitive(&self, direction: Vec3) -> WrappedPrimitiveId;
-    fn get_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId;
+    fn retrieve_support_primitive(&self, direction: Vec3) -> WrappedPrimitiveId;
+    fn retrieve_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId;
 
-    fn get_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId;
+    fn retrieve_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId;
 
-    fn get_support_face(&self, direction: Vec3) -> WrappedPrimitiveId;
+    fn retrieve_support_face(&self, direction: Vec3) -> WrappedPrimitiveId;
 }
 
 pub struct DynamicOBB {
@@ -169,10 +169,10 @@ impl CollisionPoint {
         }
     }
 
-    pub fn get_primitive_a(&self) -> WrappedPrimitiveId {
+    pub fn retrieve_primitive_a(&self) -> WrappedPrimitiveId {
         return self.primitive_a;
     }
-    pub fn get_primitive_b(&self) -> WrappedPrimitiveId {
+    pub fn retrieve_primitive_b(&self) -> WrappedPrimitiveId {
         return self.primitive_b;
     }
 }
@@ -245,7 +245,7 @@ impl DynamicOBB {
     fn orientation(&self) -> Quat {
         self.orientation
     }
-    fn get_faces(&self) -> [PolygonPrimitive; 6] {
+    fn retrieve_faces(&self) -> [PolygonPrimitive; 6] {
         self.faces
     }
     fn initialize_corners(&mut self) {
@@ -366,7 +366,7 @@ impl DynamicOBB {
             _ => None,
         }
     }
-    // fn get_support_primitive(&self, direction: Vec3) -> PrimitiveId {
+    // fn retrieve_support_primitive(&self, direction: Vec3) -> PrimitiveId {
     //     let vertex_id = self.get_support_vertex(direction);
     //     let edge = self.get_support_edge(direction);
     //     let face = self.get_support_face(direction);
@@ -386,7 +386,7 @@ impl DynamicOBB {
 
     //     PrimitiveId::Vertex(vertex_id)
     // }
-    // fn get_edges(&self) -> [(Vec3, Vec3); 12] {
+    // fn retrieve_edges(&self) -> [(Vec3, Vec3); 12] {
     //     let corners = self.vertices;
     //     [
     //         (corners[0], corners[1]),
@@ -403,10 +403,10 @@ impl DynamicOBB {
     //         (corners[3], corners[7]),
     //     ]
     // }
-    fn get_face(&self, face_id: WrappedPrimitiveId) -> PolygonPrimitive {
+    fn retrieve_face(&self, face_id: WrappedPrimitiveId) -> PolygonPrimitive {
         self.faces[face_id.unpack().face().unwrap() as usize]
     }
-    fn get_vertex(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
+    fn retrieve_vertex(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
         &self.vertices[vertex_id.unpack().vertex().unwrap() as usize]
     }
     fn initialize_faces() -> [PolygonPrimitive; 6] {
@@ -502,7 +502,7 @@ impl DynamicOBB {
                 collision_point.normal = norm;
             }
         }
-        fn get_face_name (face_id: PrimitiveId) -> &'static str {
+        fn retrieve_face_name (face_id: PrimitiveId) -> &'static str {
             match face_id {
                 PrimitiveId::Face(0) => "Front",
                 PrimitiveId::Face(1) => "Back",
@@ -534,7 +534,7 @@ impl DynamicOBB {
 
         Some(collision_point)
     }
-    fn get_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn retrieve_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId {
         WrappedPrimitiveId::vertex(
             self.get_vertices()
                 .iter()
@@ -544,7 +544,7 @@ impl DynamicOBB {
                 .unwrap_or(0),
         ) // Fallback to the first vertex if none found, should not happen
     }
-    fn get_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn retrieve_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId {
         todo!();
         // self.get_edges()
         //     .iter()
@@ -555,7 +555,7 @@ impl DynamicOBB {
         //     })
         //     .copied();
     }
-    fn get_support_face(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn retrieve_support_face(&self, direction: Vec3) -> WrappedPrimitiveId {
         todo!();
 
         // self.faces.iter()
@@ -575,7 +575,7 @@ impl DynamicOBB {
         todo!()
     }
 
-    fn get_edge_vertices(&self, edge_id: WrappedPrimitiveId) -> (&Vec3, &Vec3) {
+    fn retrieve_edge_vertices(&self, edge_id: WrappedPrimitiveId) -> (&Vec3, &Vec3) {
         let edge_id = edge_id.unpack().edge().unwrap();
         let edge = EDGE_VERTEX_INDICES[edge_id as usize];
         (
@@ -586,7 +586,7 @@ impl DynamicOBB {
     fn get_transformed_vertex(&self, index: usize) -> Vec3 {
         self.orientation * (self.vertices[index] - self.center) + self.center
     }
-    fn get_vertex_pos(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
+    fn retrieve_vertex_pos(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
         &self.vertices[vertex_id.unpack().vertex().unwrap() as usize]
     }
 
@@ -603,7 +603,7 @@ impl DynamicOBB {
             dot_a.partial_cmp(&dot_b).unwrap()
         })
     }
-    fn get_support_primitive(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn retrieve_support_primitive(&self, direction: Vec3) -> WrappedPrimitiveId {
         todo!()
     }
 
@@ -681,7 +681,7 @@ impl DynamicOBB {
         (true, pen_depth)
     }
 
-    fn get_support_point(&self, norm: Vec3) -> Vec3 {
+    fn retrieve_support_point(&self, norm: Vec3) -> Vec3 {
         // TODO MAKE THIS MUCH BETTER :)
         let mut support_point = self.get_vertices()[0];
         let mut max_proj = support_point.dot(norm);
@@ -726,7 +726,7 @@ mod test {
             None => {}
         }
     }
-    fn get_face_name (face_id: PrimitiveId) -> &'static str {
+    fn retrieve_face_name (face_id: PrimitiveId) -> &'static str {
         match face_id {
             PrimitiveId::Face(0) => "Front",
             PrimitiveId::Face(1) => "Back",

@@ -74,7 +74,7 @@ pub enum ComponentError {
 }
 
 #[derive(Debug)]
-pub enum GetError {
+pub enum RetrieveError {
     ComponentAlreadyBorrowed(ComponentAlreadyBorrowed),
     ComponentDoesNotExist(ComponentDoesNotExist),
 }

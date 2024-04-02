@@ -27,7 +27,7 @@ fn main() {
                 .aspect_ratio_from_window(WINDOW_SIZE)
                 .build(),
         )
-        .schedule_system(application::application::Schedule::OnFixedUpdate, Box::new(physics_system))
+        //.schedule_system(application::application::Schedule::OnFixedUpdate, Box::new(physics_system))
         .build()
         .run(
             // creates 3 cubes

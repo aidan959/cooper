@@ -1,6 +1,6 @@
 use frost::obb::CollisionPoint;
 use frost::physics::math::physics_system;
-use frost::{Input, RigidBody, SearchIter, World};
+use frost::{Input, RigidBody, SearchIter, SearchParameters, World};
 use glam::{Mat4, Vec3};
 use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};

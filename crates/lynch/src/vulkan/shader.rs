@@ -76,7 +76,7 @@ impl ShaderReflect {
             }
         }
 
-        // Retrieve binding and set mappings
+        // get binding and set mappings
         let binding_mappings: HashMap<String, Binding> = descriptor_sets_combined
             .iter()
             .flat_map(|(set_key, set_val)| {

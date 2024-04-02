@@ -78,7 +78,6 @@ macro_rules! system_defr {
     ($x: ident, $($y: ident),*) => {
         system_def!{$x, $($y),*}
         system_defr!{$($y),*}
-
     };
 }
 
@@ -86,19 +85,4 @@ macro_rules! system_defr {
 system_defr!{
     A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z
 }
-/* 
-impl <FUNC,ABC:SysParam>System<(ABC,)>for FUNC where FUNC:FnMut(ABC,f32)+for<'a,'b>FnMut(InnerComponent<'a,'b,ABC>,f32){
-    #[allow(non_snake_case)]
-    fn run<'world>(&mut self,world: &'world World,delta_time:f32) -> Result<(),RetrieveError>{
-        let mut ABC = ABC::Retrieve::retrieve(world)?;
-        self(ABC.inner(), delta_time);
-        Ok(())
-    }
-    #[allow(non_snake_case)]
-    fn run_fixed<'world>(&mut self,world: &'world World,fixed_update:f32) -> Result<(),RetrieveError>{
-        let mut ABC = ABC::Retrieve::retrieve(world)?;
 
-        self(ABC.inner(),fixed_update);
-        Ok(())
-    }
-} */

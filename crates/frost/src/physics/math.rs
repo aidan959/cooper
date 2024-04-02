@@ -234,6 +234,7 @@ impl Default for RigidBody {
 }
 impl Default for Transform {
     fn default() -> Self {
+
         Self {
             position: Default::default(),
             rotation: Default::default(),

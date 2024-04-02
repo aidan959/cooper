@@ -59,14 +59,12 @@ macro_rules! system_def {
             FUNC: FnMut($($name,)* f32) + for<'a, 'b> FnMut($(InnerItem<'a, 'b, $name>,)* f32),
         {
             #[allow(non_snake_case)]
-            #[allow(unused_variables)]
             fn run<'world>(&mut self, world: &'world World, delta_time: f32) -> Result<(), GetError> {
                 $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* delta_time);
                 Ok(())
             }
             #[allow(non_snake_case)]
-            #[allow(unused_variables)]
             fn run_fixed<'world>(&mut self, world: &'world World, fixed_update: f32) -> Result<(), GetError> {
                 $(let mut $name = $name::Get::get(world)?;)*
                 self($($name.inner(),)* fixed_update);

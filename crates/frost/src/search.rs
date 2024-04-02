@@ -334,7 +334,7 @@ macro_rules! search_params {
             #[allow(unused_parens)]
             type RetrieveItem = Vec<($(<$name::SearchParameterGet as SearchParameterGet<'world>>::RetrieveItem),*)>;
 
-            fn retrieve(world: &'world World, _archetype: usize) -> Result<Self::RetrieveItem, RetrieveError> {
+            fn retrieve(world: &'world World, _: usize) -> Result<Self::RetrieveItem, RetrieveError> {
                 let mut archetype_indices = Vec::new();
                 for (i, archetype) in world.archetypes.iter().enumerate() {
                     let matches = $($name::matches_archetype(&archetype))&&*;
@@ -366,7 +366,7 @@ macro_rules! search_paramsr{
     };
 }
 
-search_paramsr! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
+search_paramsr!{ A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
 
 search_iter! {Zip3, A, B, C}
 search_iter! {Zip4, A, B, C, D}

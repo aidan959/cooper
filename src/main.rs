@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::{mpsc::Sender, Mutex};
 
 use application::{
     application::{CooperApplication, GameEvent, GfxLocation},
@@ -15,14 +15,13 @@ fn main() {
         .engine_settings(
             EngineSettings::builder()
                 .set_window_name("Cooper")
-                .fps_max(512)
-                .unwrap()
+                .fps_max(512).unwrap()
                 .window_size(WINDOW_SIZE)
                 .build(),
         )
         .camera(
             Camera::builder()
-                .fov_degrees(45.)
+                .fov_degrees(90.)
                 .position(const_vec3!([0.0, 0.0, 0.0]))
                 .aspect_ratio_from_window(WINDOW_SIZE)
                 .build(),
@@ -296,6 +295,7 @@ mod tests {
         obb, physics::math::physics_system, RigidBody, Search, SearchIter, System, Transform,
     };
     use glam::{Mat4, Quat, Vec3};
+
     struct GfxLocation(usize);
 
     #[test]
@@ -374,6 +374,4 @@ mod tests {
             move |_, _ui| {},
         );
     }
-    #[test]
-    fn test_window() {}
 }

@@ -225,8 +225,8 @@ impl RenderPass {
         unsafe {
             self.device
                 .device()
+                
                 .cmd_begin_rendering(*command_buffer, &rendering_info);
-
             self.device.device().cmd_bind_pipeline(
                 *command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,

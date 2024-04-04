@@ -44,7 +44,7 @@ pub trait Retrieve<'world> {
 }
 
 pub struct Search<'world, T: SearchParameters> {
-    pub(crate) data: <T as SearchParameterGet<'world>>::RetrieveItem,
+    pub(crate) data: <T as SearchParameterRetrieve<'world>>::RetrieveItem,
 }
 
 impl<'a, 'world, T: SearchParameters> RetrieveItem<'a> for Option<Search<'world, T>> {
@@ -126,18 +126,18 @@ impl<'world, T: 'static> Retrieve<'world> for &mut T {
     }
 }
 
-pub trait SearchParameterGet<'nw> {
+pub trait SearchParameterRetrieve<'nw> {
     type RetrieveItem;
 
     fn retrieve(world: &'nw World, archetype: usize) -> Result<Self::RetrieveItem, RetrieveError>;
 }
 
 #[doc(hidden)]
-pub struct ReadSearchParameterGet<T> {
+pub struct ReadSearchParameterRetrieve<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: 'static> SearchParameterGet<'a> for ReadSearchParameterGet<T> {
+impl<'a, T: 'static> SearchParameterRetrieve<'a> for ReadSearchParameterRetrieve<T> {
     type RetrieveItem = RwLockReadGuard<'a, Vec<T>>;
     fn retrieve(world: &'a World, archetype: usize) -> Result<Self::RetrieveItem, RetrieveError> {
         let archetype: &Archetype = &world.archetypes[archetype];
@@ -157,23 +157,23 @@ impl<'a, T: 'static> SearchParameterGet<'a> for ReadSearchParameterGet<T> {
 }
 
 pub trait SearchParameter {
-    type SearchParameterGet: for<'a> SearchParameterGet<'a>;
-    fn matches_archetype(archetype: &Archetype) -> bool;
+    type SearchParameterRetrieve: for<'a> SearchParameterRetrieve<'a>;
+    fn matches(archetype: &Archetype) -> bool;
 }
 
 impl<T: 'static> SearchParameter for &T {
-    type SearchParameterGet = ReadSearchParameterGet<T>;
+    type SearchParameterRetrieve = ReadSearchParameterRetrieve<T>;
 
-    fn matches_archetype(archetype: &Archetype) -> bool {
+    fn matches(archetype: &Archetype) -> bool {
         let type_id = TypeId::of::<T>();
         archetype.components.iter().any(|c| c.type_id == type_id)
     }
 }
 
 impl<T: 'static> SearchParameter for &mut T {
-    type SearchParameterGet = WriteSearchParameterGet<T>;
+    type SearchParameterRetrieve = WriteSearchParameterRetrieve<T>;
 
-    fn matches_archetype(archetype: &Archetype) -> bool {
+    fn matches(archetype: &Archetype) -> bool {
         let type_id = TypeId::of::<T>();
         archetype.components.iter().any(|c| c.type_id == type_id)
     }
@@ -184,7 +184,7 @@ pub struct Has<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'world, T: 'static> SearchParameterGet<'world> for Has<T> {
+impl<'world, T: 'static> SearchParameterRetrieve<'world> for Has<T> {
     type RetrieveItem = bool;
     fn retrieve(
         world: &'world World,
@@ -206,19 +206,19 @@ impl<'a, 'world> SearchIter<'a> for bool {
 }
 
 impl<T: 'static> SearchParameter for Has<T> {
-    type SearchParameterGet = Self;
+    type SearchParameterRetrieve = Self;
 
-    fn matches_archetype(_: &Archetype) -> bool {
+    fn matches(_: &Archetype) -> bool {
         true
     }
 }
 
 #[doc(hidden)]
-pub struct WriteSearchParameterGet<T> {
+pub struct WriteSearchParameterRetrieve<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'world, T: 'static> SearchParameterGet<'world> for WriteSearchParameterGet<T> {
+impl<'world, T: 'static> SearchParameterRetrieve<'world> for WriteSearchParameterRetrieve<T> {
     type RetrieveItem = RwLockWriteGuard<'world, Vec<T>>;
     fn retrieve(
         world: &'world World,
@@ -243,7 +243,7 @@ impl<'world, T: 'static> SearchParameterGet<'world> for WriteSearchParameterGet<
 }
 
 type SearchParameterItem<'world, S> =
-    <<S as SearchParameter>::SearchParameterGet as SearchParameterGet<'world>>::RetrieveItem;
+    <<S as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::RetrieveItem;
 
 pub trait SearchIter<'a> {
     type Iter: Iterator;
@@ -289,10 +289,10 @@ where
                 .iter_mut()
                 .map(
                     |(a, b): &mut (
-                        <<A as SearchParameter>::SearchParameterGet as SearchParameterGet<
+                        <<A as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<
                             'world,
                         >>::RetrieveItem,
-                        <<B as SearchParameter>::SearchParameterGet as SearchParameterGet<
+                        <<B as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<
                             'world,
                         >>::RetrieveItem,
                     )| a.iter().zip(b.iter()),
@@ -322,30 +322,23 @@ macro_rules! search_iter {
     }
 }
 
-pub trait SearchParameters: for<'a> SearchParameterGet<'a> {}
+pub trait SearchParameters: for<'a> SearchParameterRetrieve<'a> {}
 
 macro_rules! search_params {
     ($($name: ident),*) => {
-        impl<'world, $($name: SearchParameter,)*> SearchParameters
-            for ($($name,)*)
-        {}
+        impl<'world, $($name: SearchParameter,)*> SearchParameters for ($($name,)*){}
 
-        impl<'world, $($name: SearchParameter,)*> SearchParameterGet<'world> for ($($name,)*) {
+        impl<'world, $($name: SearchParameter,)*> SearchParameterRetrieve<'world> for ($($name,)*) {
             #[allow(unused_parens)]
-            type RetrieveItem = Vec<($(<$name::SearchParameterGet as SearchParameterGet<'world>>::RetrieveItem),*)>;
+            type RetrieveItem = Vec<($(<$name::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::RetrieveItem),*)>;
 
             fn retrieve(world: &'world World, _: usize) -> Result<Self::RetrieveItem, RetrieveError> {
                 let mut archetype_indices = Vec::new();
-                for (i, archetype) in world.archetypes.iter().enumerate() {
-                    let matches = $($name::matches_archetype(&archetype))&&*;
-                    if matches {
-                        archetype_indices.push(i);
-                    }
-                }
+                world.archetypes.iter().enumerate() .for_each(|(i, archetype)| { if $($name::matches(&archetype))&&* {archetype_indices.push(i) } });
 
                 let mut result = Vec::with_capacity(archetype_indices.len());
                 for index in archetype_indices {
-                    result.push(($(<$name::SearchParameterGet as SearchParameterGet<'world>>::retrieve(world, index)?),*));
+                    result.push(($(<$name::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::retrieve(world, index)?),*));
                 }
 
                 Ok(result)
@@ -366,20 +359,20 @@ macro_rules! search_paramsr{
     };
 }
 
-search_paramsr!{ A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
+search_paramsr!{A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
 
-search_iter! {Zip3, A, B, C}
-search_iter! {Zip4, A, B, C, D}
-search_iter! {Zip5, A, B, C, D, E}
-search_iter! {Zip6, A, B, C, D, E, F}
-search_iter! {Zip7, A, B, C, D, E, F, G}
-search_iter! {Zip8, A, B, C, D, E, F, G, H}
-search_iter! {Zip9, A, B, C, D, E, F, G, H, I}
-search_iter! {Zip10, A, B, C, D, E, F, G, H, I, J}
-search_iter! {Zip11, A, B, C, D, E, F, G, H, I, J, K}
-search_iter! {Zip12, A, B, C, D, E, F, G, H, I, J, K, L}
-search_iter! {Zip13, A, B, C, D, E, F, G, H, I, J, K, L, M}
-search_iter! {Zip14, A, B, C, D, E, F, G, H, I, J, K, L, M, N}
-search_iter! {Zip15, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O}
-search_iter! {Zip16, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
-search_iter! {Zip17, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q}
+search_iter! {Zip3Items, A, B, C}
+search_iter! {Zip4Items, A, B, C, D}
+search_iter! {Zip5Items, A, B, C, D, E}
+search_iter! {Zip6Items, A, B, C, D, E, F}
+search_iter! {Zip7Items, A, B, C, D, E, F, G}
+search_iter! {Zip8Items, A, B, C, D, E, F, G, H}
+search_iter! {Zip9Items, A, B, C, D, E, F, G, H, I}
+search_iter! {Zip10Items, A, B, C, D, E, F, G, H, I, J}
+search_iter! {Zip11Items, A, B, C, D, E, F, G, H, I, J, K}
+search_iter! {Zip12Items, A, B, C, D, E, F, G, H, I, J, K, L}
+search_iter! {Zip13Items, A, B, C, D, E, F, G, H, I, J, K, L, M}
+search_iter! {Zip14Items, A, B, C, D, E, F, G, H, I, J, K, L, M, N}
+search_iter! {Zip15Items, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O}
+search_iter! {Zip16Items, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
+search_iter! {Zip17Items, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q}

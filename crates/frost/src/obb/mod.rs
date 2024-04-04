@@ -53,8 +53,8 @@ pub trait OBB {
             center + rot_mat * Vec3::new(-he.x, he.y, he.z),
         ]
     }
-    fn retrieve_faces(&self) -> [PolygonPrimitive; 6];
-    fn retrieve_edges(&self) -> [(Vec3, Vec3); 12];
+    fn get_faces(&self) -> [PolygonPrimitive; 6];
+    fn get_edges(&self) -> [(Vec3, Vec3); 12];
     fn initialize_faces() -> [PolygonPrimitive; 6];
 
     fn check_overlap(&self, axis: Vec3, obb2: &DynamicOBB) -> bool {
@@ -502,7 +502,7 @@ impl DynamicOBB {
                 collision_point.normal = norm;
             }
         }
-        fn retrieve_face_name (face_id: PrimitiveId) -> &'static str {
+        fn get_face_name (face_id: PrimitiveId) -> &'static str {
             match face_id {
                 PrimitiveId::Face(0) => "Front",
                 PrimitiveId::Face(1) => "Back",
@@ -534,7 +534,7 @@ impl DynamicOBB {
 
         Some(collision_point)
     }
-    fn retrieve_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn get_support_vertex(&self, direction: Vec3) -> WrappedPrimitiveId {
         WrappedPrimitiveId::vertex(
             self.get_vertices()
                 .iter()
@@ -544,7 +544,7 @@ impl DynamicOBB {
                 .unwrap_or(0),
         ) // Fallback to the first vertex if none found, should not happen
     }
-    fn retrieve_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn get_support_edge(&self, direction: Vec3) -> WrappedPrimitiveId {
         todo!();
         // self.get_edges()
         //     .iter()
@@ -555,7 +555,7 @@ impl DynamicOBB {
         //     })
         //     .copied();
     }
-    fn retrieve_support_face(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn get_support_face(&self, direction: Vec3) -> WrappedPrimitiveId {
         todo!();
 
         // self.faces.iter()
@@ -575,7 +575,7 @@ impl DynamicOBB {
         todo!()
     }
 
-    fn retrieve_edge_vertices(&self, edge_id: WrappedPrimitiveId) -> (&Vec3, &Vec3) {
+    fn get_edge_vertices(&self, edge_id: WrappedPrimitiveId) -> (&Vec3, &Vec3) {
         let edge_id = edge_id.unpack().edge().unwrap();
         let edge = EDGE_VERTEX_INDICES[edge_id as usize];
         (
@@ -586,7 +586,7 @@ impl DynamicOBB {
     fn get_transformed_vertex(&self, index: usize) -> Vec3 {
         self.orientation * (self.vertices[index] - self.center) + self.center
     }
-    fn retrieve_vertex_pos(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
+    fn get_vertex_pos(&self, vertex_id: WrappedPrimitiveId) -> &Vec3 {
         &self.vertices[vertex_id.unpack().vertex().unwrap() as usize]
     }
 
@@ -603,7 +603,7 @@ impl DynamicOBB {
             dot_a.partial_cmp(&dot_b).unwrap()
         })
     }
-    fn retrieve_support_primitive(&self, direction: Vec3) -> WrappedPrimitiveId {
+    fn get_support_primitive(&self, _direction: Vec3) -> WrappedPrimitiveId {
         todo!()
     }
 

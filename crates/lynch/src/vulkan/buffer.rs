@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use super::{device::Device, Image};
 use ash::vk;
-use gpu_allocator::vulkan::*;
+use gpu_allocator::{vulkan::*, MemoryLocation};
 use log::info;
 pub struct Buffer {
     pub vk_buffer: vk::Buffer,
     pub allocation: Allocation,
     pub memory_req: vk::MemoryRequirements,
-    pub memory_location: gpu_allocator::MemoryLocation,
+    pub memory_location: MemoryLocation,
     pub size: u64,
     pub debug_name: String,
     device: Arc<Device>,
@@ -17,23 +17,22 @@ pub struct Buffer {
 impl Buffer {
     pub fn create_buffer(
         device: Arc<Device>,
-        // TODO: infer
-        size: u64,
+        size: u64, // TODO: infer size from data
         usage_flags: vk::BufferUsageFlags,
-        memory_location: gpu_allocator::MemoryLocation,
+        memory_location: MemoryLocation,
         debug_name: Option<String>,
     ) -> Buffer {
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(size)
+            .usage(usage_flags)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        
         unsafe {
-            let buffer_info = vk::BufferCreateInfo::builder()
-                .size(size)
-                .usage(usage_flags)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
             let buffer = device
-                .ash_device
-                .create_buffer(&buffer_info, None)
-                .expect("Failed to create buffer");
-
+            .ash_device
+            .create_buffer(&buffer_info, None)
+            .expect("Failed to create buffer");
+    
             let buffer_memory_req = device.ash_device.get_buffer_memory_requirements(buffer);
 
             let allocation = device
@@ -71,7 +70,7 @@ impl Buffer {
         initial_data: Option<&[T]>,
         size: u64,
         usage_flags: vk::BufferUsageFlags,
-        location: gpu_allocator::MemoryLocation,
+        location: MemoryLocation,
         debug_name: Option<String>,
     ) -> Buffer {
         let mut buffer = Buffer::create_buffer(
@@ -98,7 +97,7 @@ impl Buffer {
             let src = data.as_ptr() as *const u8;
             let src_bytes = data.len() * std::mem::size_of::<T>();
 
-            if self.memory_location != gpu_allocator::MemoryLocation::GpuOnly {
+            if self.memory_location != MemoryLocation::GpuOnly {
                 let dst = self.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                 let dst_bytes = self.allocation.size() as usize;
                 std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
@@ -111,7 +110,7 @@ impl Buffer {
                     self.device.clone(),
                     self.size,
                     vk::BufferUsageFlags::TRANSFER_SRC,
-                    gpu_allocator::MemoryLocation::CpuToGpu,
+                    MemoryLocation::CpuToGpu,
                     Some(String::from(format!("staging_buffer_{:?}", src))),
                 );
                 let dst = staging_buffer.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;

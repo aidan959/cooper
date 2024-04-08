@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-use ash::vk::{self};
+use ash::vk::{self, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, ShaderStageFlags};
+use gpu_allocator::MemoryLocation;
+use rspirv_reflect::{BindingCount, DescriptorInfo};
+use vk_sync::AccessType;
 
 use crate::renderer::Renderer;
 use crate::vulkan::render_pass::RenderPassBuilder;
@@ -10,9 +13,9 @@ use crate::vulkan::renderer::{
     VulkanRenderer, DESCRIPTOR_SET_INDEX_BINDLESS, DESCRIPTOR_SET_INDEX_INPUT_TEXTURES,
     DESCRIPTOR_SET_INDEX_VIEW,
 };
+use crate::vulkan::shader::Binding;
 use crate::vulkan::{
-    Buffer, DescriptorSet, Device, Image, ImageDesc, Pipeline, PipelineDesc, PipelineDescBuilder,
-    PipelineType, RenderPass,
+    image_pipeline_barrier, Buffer, DescriptorSet, Device, Image, ImageDesc, Pipeline, PipelineDesc, PipelineDescBuilder, PipelineType, RenderPass
 };
 use crate::{vulkan, Texture};
 
@@ -23,17 +26,17 @@ pub type PipelineId = usize;
 
 pub struct GraphTexture {
     pub texture: Texture,
-    pub prev_access: vk_sync::AccessType,
+    pub prev_access: AccessType,
 }
 pub struct GraphBuffer {
     pub buffer: Buffer,
-    pub prev_access: vk_sync::AccessType,
+    pub prev_access: AccessType,
 }
 impl GraphBuffer {
     pub fn nothing(buffer: Buffer) -> Self {
         Self {
             buffer,
-            prev_access:vk_sync::AccessType::Nothing
+            prev_access:AccessType::Nothing
         }
     }
 }
@@ -73,13 +76,13 @@ pub enum TextureResourceType {
 pub struct TextureResource {
     pub texture: TextureId,
     pub input_type: TextureResourceType,
-    pub access_type: vk_sync::AccessType,
+    pub access_type: AccessType,
 }
 
 #[derive(Copy, Clone)]
 pub struct BufferResource {
     pub buffer: BufferId,
-    pub access_type: vk_sync::AccessType,
+    pub access_type: AccessType,
 }
 
 #[derive(Copy, Clone)]
@@ -198,14 +201,14 @@ impl RenderGraph {
         device: Arc<Device>,
         camera_uniform_buffer: &Buffer,
     ) -> DescriptorSet {
-        let descriptor_set_layout_binding = vk::DescriptorSetLayoutBinding::builder()
+        let descriptor_set_layout_binding = DescriptorSetLayoutBinding::builder()
             .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_type(DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::ALL)
+            .stage_flags(ShaderStageFlags::ALL)
             .build();
 
-        let descriptor_sets_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+        let descriptor_sets_layout_info = DescriptorSetLayoutCreateInfo::builder()
             .bindings(&[descriptor_set_layout_binding])
             .build();
 
@@ -219,12 +222,12 @@ impl RenderGraph {
         let mut binding_map: vulkan::shader::BindingMap = std::collections::BTreeMap::new();
         binding_map.insert(
             "view".to_string(),
-            vulkan::shader::Binding {
+            Binding {
                 set: DESCRIPTOR_SET_INDEX_VIEW,
                 binding: 0,
-                info: rspirv_reflect::DescriptorInfo {
+                info: DescriptorInfo {
                     ty: rspirv_reflect::DescriptorType::UNIFORM_BUFFER,
-                    binding_count: rspirv_reflect::BindingCount::One,
+                    binding_count: BindingCount::One,
                     name: "view".to_string(),
                 },
             },
@@ -275,11 +278,11 @@ impl RenderGraph {
             .iter()
             .position(|iter| iter.texture.image.debug_name == debug_name)
             .unwrap_or_else(|| {
-                let texture = crate::Texture::create(device, None, image_desc, debug_name);
+                let texture = Texture::create(device, None, image_desc, debug_name);
 
                 self.resources.textures.push(GraphTexture {
                     texture,
-                    prev_access: vk_sync::AccessType::Nothing,
+                    prev_access: AccessType::Nothing,
                 });
 
                 self.resources.textures.len() - 1
@@ -291,7 +294,7 @@ impl RenderGraph {
         debug_name: &str,
         size: u64,
         usage: vk::BufferUsageFlags,
-        memory_location: gpu_allocator::MemoryLocation,
+        memory_location: MemoryLocation,
     ) -> BufferId {
         self.resources
             .buffers
@@ -394,7 +397,7 @@ impl RenderGraph {
             for read in &pass.reads {
                 match read {
                     Resource::Texture(read) => {
-                        let next_access = vulkan::image_pipeline_barrier(
+                        let next_access = image_pipeline_barrier(
                             device,
                             *command_buffer,
                             &self.resources.textures[read.texture].texture.image,
@@ -455,7 +458,7 @@ impl RenderGraph {
             }
 
             for write in &writes_for_synch {
-                let next_access = vulkan::image_pipeline_barrier(
+                let next_access = image_pipeline_barrier(
                     device,
                     *command_buffer,
                     &self.resources.textures[write.texture].texture.image,
@@ -467,9 +470,9 @@ impl RenderGraph {
                             .desc
                             .format,
                     ) {
-                        vk_sync::AccessType::DepthStencilAttachmentWrite
+                        AccessType::DepthStencilAttachmentWrite
                     } else {
-                        vk_sync::AccessType::ColorAttachmentWrite
+                        AccessType::ColorAttachmentWrite
                     },
                     false,
                 );
@@ -482,12 +485,12 @@ impl RenderGraph {
             }
 
             if pass.is_pres_pass {
-                vulkan::image_pipeline_barrier(
+                image_pipeline_barrier(
                     device,
                     *command_buffer,
                     present_image,
-                    vk_sync::AccessType::Present,
-                    vk_sync::AccessType::ColorAttachmentWrite,
+                    AccessType::Present,
+                    AccessType::ColorAttachmentWrite,
                     false,
                 );
             }
@@ -640,22 +643,22 @@ impl RenderGraph {
                 let src = copy_command.src;
                 let dst = copy_command.dst;
 
-                let next_access = vulkan::image_pipeline_barrier(
+                let next_access = image_pipeline_barrier(
                     device,
                     *command_buffer,
                     &self.resources.textures[src].texture.image,
                     self.resources.textures[src].prev_access,
-                    vk_sync::AccessType::TransferRead,
+                    AccessType::TransferRead,
                     false,
                 );
                 self.resources.textures.get_mut(src).unwrap().prev_access = next_access;
 
-                let next_access = vulkan::image_pipeline_barrier(
+                let next_access = image_pipeline_barrier(
                     device,
                     *command_buffer,
                     &self.resources.textures[dst].texture.image,
                     self.resources.textures[dst].prev_access,
-                    vk_sync::AccessType::TransferWrite,
+                    AccessType::TransferWrite,
                     false,
                 );
                 self.resources.textures.get_mut(dst).unwrap().prev_access = next_access;

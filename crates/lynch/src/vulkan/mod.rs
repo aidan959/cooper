@@ -5,7 +5,7 @@ mod descriptor;
 mod device;
 mod image;
 mod pipeline;
-mod render_pass;
+pub(crate) mod render_pass;
 pub mod shader;
 mod surface;
 mod swapchain;

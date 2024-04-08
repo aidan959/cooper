@@ -48,12 +48,12 @@ impl RenderPass {
     ) -> RenderPass {
         RenderPass {
             name,
+            is_pres_pass: presentation_pass,
             pipeline_handle,
             render_func,
             reads: Vec::new(),
             writes: Vec::new(),
             depth_attachment,
-            is_pres_pass: presentation_pass,
             read_resources_descriptor_set: None,
             uniforms,
             uniform_buffer: None,

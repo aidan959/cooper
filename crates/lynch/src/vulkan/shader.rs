@@ -292,7 +292,7 @@ pub fn create_layouts_from_reflection(
         push_constant_ranges,
     )
 }
-// TODO the receiver who takes ownersgip of this must clean this up vulkan side
+// TODO the receiver who takes ownership of this must clean this up vulkan side
 // TODO We must cache this to improve launch times
 #[must_use]
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {

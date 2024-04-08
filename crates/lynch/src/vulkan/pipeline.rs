@@ -105,20 +105,20 @@ impl Pipeline {
     }
 
     fn create_pipeline(
-        pipeline: &mut Pipeline,
+        &mut self,
         device: &Device,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> Result<(), ()> {
-        let desc = &pipeline.pipeline_desc;
+        let desc = &self.pipeline_desc;
         let (shader_stage_create_infos, reflection, pipeline_layout, descriptor_set_layouts) =
-            match pipeline.pipeline_type {
-                PipelineType::Graphics => Pipeline::create_graphics_shader_modules(
+            match self.pipeline_type {
+                PipelineType::Graphics => Self::create_graphics_shader_modules(
                     &device.device(),
                     desc.vertex_path.unwrap(),
                     desc.fragment_path.unwrap(),
                     bindless_descriptor_set_layout,
                 ),
-                PipelineType::Compute => Pipeline::create_compute_shader_modules(
+                PipelineType::Compute => Self::create_compute_shader_modules(
                     &device.device(),
                     desc.compute_path.unwrap(),
                     bindless_descriptor_set_layout,
@@ -128,14 +128,14 @@ impl Pipeline {
                 println!("Failed to compile shader: {:#?}", error);
             })?;
 
-        let new_handle = match pipeline.pipeline_type {
+        let new_handle = match self.pipeline_type {
             PipelineType::Graphics => Pipeline::create_graphics_pipeline(
                 &device.ash_device,
                 shader_stage_create_infos,
                 desc.color_attachment_formats.as_slice(),
                 desc.depth_stencil_attachment_format,
                 pipeline_layout,
-                &pipeline.pipeline_desc,
+                &self.pipeline_desc,
             ),
             PipelineType::Compute => Pipeline::create_compute_pipeline(
                 &device.ash_device,
@@ -143,10 +143,10 @@ impl Pipeline {
                 pipeline_layout,
             ),
         };
-        pipeline.handle = new_handle;
-        pipeline.pipeline_layout = pipeline_layout;
-        pipeline.descriptor_set_layouts = descriptor_set_layouts;
-        pipeline.reflection = reflection;
+        self.handle = new_handle;
+        self.pipeline_layout = pipeline_layout;
+        self.descriptor_set_layouts = descriptor_set_layouts;
+        self.reflection = reflection;
 
         Ok(())
     }

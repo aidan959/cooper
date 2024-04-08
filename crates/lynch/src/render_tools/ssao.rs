@@ -3,7 +3,7 @@ use crate::{
     vulkan::PipelineDesc,
 };
 
-const SSAO_BIAS : glam::Vec2 = glam::const_vec2!([0.1, 0.0]);
+const SSAO_BIAS : glam::Vec2 = glam::const_vec2!([0.35, 0.3]);
 pub fn setup_ssao_pass(
     graph: &mut RenderGraph,
     gbuffer_position: TextureId,

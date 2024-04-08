@@ -105,7 +105,7 @@ pub fn build_render_graph(
         gbuffer_position,
         gbuffer_normal,
         ssao_output,
-        view_data.ssao_enabled,
+        true,
     );
     setup_deferred_pass(
         graph,

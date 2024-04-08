@@ -55,10 +55,7 @@ pub struct VulkanRenderer {
     pub camera_uniform_buffer: Vec<Buffer>,
     pub view_data: ViewUniformData,
     pub last_frame_end: Instant,
-
     pub gui_renderer: imgui_rs_vulkan_renderer::Renderer,
-
-
 }
 pub struct RendererInternal {
     pub bindless_descriptor_set_layout: vk::DescriptorSetLayout,

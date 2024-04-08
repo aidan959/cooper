@@ -3,10 +3,12 @@ use log::info;
 use std::ffi::CStr;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
-use vulkan::shader::{create_layouts_from_reflection, create_shader_module};
+use vulkan::shader::{self, create_layouts_from_reflection, create_shader_module, ShaderReflect};
 
+use crate::mesh::Primitive;
 use crate::*;
 
+use super::shader::compile_glsl_shader;
 use super::Device;
 
 #[derive(Clone)]
@@ -28,7 +30,7 @@ pub struct Pipeline {
     pub handle: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub reflection: vulkan::shader::ShaderReflect,
+    pub reflection: ShaderReflect,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
 }
@@ -77,7 +79,7 @@ impl Pipeline {
             handle: vk::Pipeline::null(),
             pipeline_layout: vk::PipelineLayout::null(),
             descriptor_set_layouts: vec![],
-            reflection: vulkan::shader::ShaderReflect::default(),
+            reflection: ShaderReflect::default(),
             pipeline_desc,
             pipeline_type,
         };
@@ -157,19 +159,19 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::ShaderReflect,
+            ShaderReflect,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
         shaderc::Error,
     > {
-        let vertex_spv_file = vulkan::shader::compile_glsl_shader(vertex_shader_path)?;
-        let fragment_spv_file = vulkan::shader::compile_glsl_shader(fragment_shader_path)?;
+        let vertex_spv_file = compile_glsl_shader(vertex_shader_path)?;
+        let fragment_spv_file = compile_glsl_shader(fragment_shader_path)?;
 
         let vertex_spv_file = vertex_spv_file.as_binary_u8();
         let fragment_spv_file = fragment_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::ShaderReflect::new(&[vertex_spv_file, fragment_spv_file]);
+        let reflection = ShaderReflect::new(&[vertex_spv_file, fragment_spv_file]);
 
         let (pipeline_layout, descriptor_set_layouts, _) =
             create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);
@@ -317,16 +319,16 @@ impl Pipeline {
     ) -> Result<
         (
             Vec<vk::PipelineShaderStageCreateInfo>,
-            vulkan::shader::ShaderReflect,
+            ShaderReflect,
             vk::PipelineLayout,
             Vec<vk::DescriptorSetLayout>,
         ),
         shaderc::Error,
     > {
-        let compute_spv_file = vulkan::shader::compile_glsl_shader(compute_shader_path)?;
+        let compute_spv_file = compile_glsl_shader(compute_shader_path)?;
         let compute_spv_file = compute_spv_file.as_binary_u8();
 
-        let reflection = vulkan::shader::ShaderReflect::new(&[compute_spv_file]);
+        let reflection = ShaderReflect::new(&[compute_spv_file]);
 
         let (pipeline_layout, descriptor_set_layouts, _) =
             create_layouts_from_reflection(device, &reflection, bindless_descriptor_set_layout);
@@ -425,13 +427,13 @@ impl PipelineDescBuilder {
 
     pub fn default_primitive_vertex_bindings(mut self) -> Self {
         self.descriptor.vertex_input_binding_descriptions =
-            crate::mesh::Primitive::get_vertex_input_binding_descriptions();
+            Primitive::get_vertex_input_binding_descriptions();
         self
     }
 
     pub fn default_primitive_vertex_attributes(mut self) -> Self {
         self.descriptor.vertex_input_attribute_descriptions =
-            crate::mesh::Primitive::get_vertex_input_attribute_descriptions();
+            Primitive::get_vertex_input_attribute_descriptions();
         self
     }
 

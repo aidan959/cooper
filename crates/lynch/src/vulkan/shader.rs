@@ -1,9 +1,19 @@
 use ash::util::*;
 use ash::vk;
+use log::debug;
+use rspirv_reflect::DescriptorInfo;
+use rspirv_reflect::DescriptorType;
+use rspirv_reflect::PushConstantInfo;
+use rspirv_reflect::Reflection;
+use shaderc::CompilationArtifact;
 use shaderc::EnvVersion;
+use shaderc::Error;
+use shaderc::IncludeCallbackResult;
+use shaderc::ResolvedInclude;
 use shaderc::ShaderKind;
 use shaderc::TargetEnv;
 
+use std::fs::read_to_string;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
@@ -14,33 +24,42 @@ use std::{
 use rspirv_reflect;
 use shaderc;
 
-type DescriptorSetMap = BTreeMap<u32, BTreeMap<u32, rspirv_reflect::DescriptorInfo>>;
-pub type BindingMap = BTreeMap<String, Binding>;
-
 #[derive(Debug, Clone)]
 pub struct Binding {
     pub set: u32,
     pub binding: u32,
-    pub info: rspirv_reflect::DescriptorInfo,
+    pub info: DescriptorInfo,
 }
+
+impl std::ops::Deref for Binding {
+    type Target = DescriptorInfo;
+
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
+}
+
+type DescriptorSetMap = BTreeMap<u32, BTreeMap<u32, DescriptorInfo>>;
+pub type BindingMap = BTreeMap<String, Binding>;
+
+
 
 #[derive(Default)]
 pub struct ShaderReflect {
     pub descriptor_set_reflections: DescriptorSetMap,
-    pub push_constant_reflections: Vec<rspirv_reflect::PushConstantInfo>,
+    pub push_constant_reflections: Vec<PushConstantInfo>,
     pub binding_mappings: HashMap<String, Binding>,
 }
 
-const MAIN_ENTRY_POINT: &'static str = "main";
+const MAIN_ENTRY_POINT: &'static str = r#"main"#;
 
 impl ShaderReflect {
     pub fn new(shader_stages: &[&[u8]]) -> ShaderReflect {
         let mut descriptor_sets_combined: DescriptorSetMap = BTreeMap::new();
-        let mut push_constant_ranges: Vec<rspirv_reflect::PushConstantInfo> = vec![];
+        let mut push_constant_ranges: Vec<PushConstantInfo> = vec![];
 
-        // Combine reflection information from all shader stages
         for shader_stage in shader_stages {
-            let stage_reflection = rspirv_reflect::Reflection::new_from_spirv(shader_stage)
+            let stage_reflection = Reflection::new_from_spirv(shader_stage)
                 .expect("Shader reflection failed!");
 
             let descriptor_sets = stage_reflection.get_descriptor_sets().unwrap();
@@ -49,8 +68,6 @@ impl ShaderReflect {
                 if let Some(existing_descriptor_set) = descriptor_sets_combined.get_mut(&set) {
                     for (binding, descriptor) in descriptor_set {
                         if let Some(existing_descriptor) = existing_descriptor_set.get(&binding) {
-                            // Note: would like to compare binding_count as well but it does not
-                            // seem reliable
                             assert!(
                                 (descriptor.ty == existing_descriptor.ty && descriptor.name == existing_descriptor.name),
                                 "Set: {} binding: {} inconsistent between shader stages:\n{:#?} {:#?}",
@@ -76,7 +93,6 @@ impl ShaderReflect {
             }
         }
 
-        // get binding and set mappings
         let binding_mappings: HashMap<String, Binding> = descriptor_sets_combined
             .iter()
             .flat_map(|(set_key, set_val)| {
@@ -127,12 +143,12 @@ impl ShaderReflect {
 }
 
 #[must_use]
-pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, shaderc::Error> {
-    let binding = fs::read_to_string(path);
+pub fn compile_glsl_shader(path: &str) -> Result<CompilationArtifact, Error> {
+    let binding = read_to_string(path);
     let source = match &binding {
         Ok(source) => source,
         Err(err) => panic!(
-            "Error reading shader: Cannot find path: {}.\nOs Error:({})",
+            "Error compiling shader: Cannot find path: {}.\nOs Error:({})",
             path, err
         ),
     };
@@ -149,7 +165,7 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
     options.add_macro_definition("EP", Some(MAIN_ENTRY_POINT));
     options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_2 as u32);
     options.set_generate_debug_info();
-    options.set_include_callback(|include_request, _include_type, _source, _size| {
+    options.set_include_callback(|include_request, _include_type, _source, _size| -> Result<ResolvedInclude, String> {
         let include_path = Path::new(path).parent().unwrap();
         let mut include_path = include_path.join(include_request);
         if !Path::new(&include_path).exists() {
@@ -157,9 +173,9 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
         }
 
         let include_source =
-            &fs::read_to_string(include_path).expect("Error reading included file")[..];
+            &read_to_string(include_path).expect("Error reading included file")[..];
 
-        shaderc::IncludeCallbackResult::Ok(shaderc::ResolvedInclude {
+        IncludeCallbackResult::Ok(ResolvedInclude {
             resolved_name: include_request.to_string(),
             content: include_source.to_string(),
         })
@@ -168,13 +184,13 @@ pub fn compile_glsl_shader(path: &str) -> Result<shaderc::CompilationArtifact, s
     let binary_result =
         compiler.compile_into_spirv(source, shader_kind, path, MAIN_ENTRY_POINT, Some(&options))?;
 
-    assert_eq!(Some(&119734787), binary_result.as_binary().first());
+    debug_assert_eq!(Some(&119734787), binary_result.as_binary().first());
 
     let text_result = compiler
         .compile_into_spirv_assembly(source, shader_kind, path, MAIN_ENTRY_POINT, Some(&options))
         .unwrap();
 
-    assert!(text_result.as_text().starts_with("; SPIR-V\n"));
+    debug_assert!(text_result.as_text().starts_with("; SPIR-V\n"));
 
     Ok(binary_result)
 }
@@ -198,19 +214,19 @@ pub fn create_layouts_from_reflection(
                     .iter()
                     .map(|(binding, descriptor_info)| {
                         let descriptor_type = match descriptor_info.ty {
-                            rspirv_reflect::DescriptorType::COMBINED_IMAGE_SAMPLER => {
+                            DescriptorType::COMBINED_IMAGE_SAMPLER => {
                                 vk::DescriptorType::COMBINED_IMAGE_SAMPLER
                             }
-                            rspirv_reflect::DescriptorType::SAMPLED_IMAGE => {
+                            DescriptorType::SAMPLED_IMAGE => {
                                 vk::DescriptorType::SAMPLED_IMAGE
                             }
-                            rspirv_reflect::DescriptorType::STORAGE_IMAGE => {
+                            DescriptorType::STORAGE_IMAGE => {
                                 vk::DescriptorType::STORAGE_IMAGE
                             }
-                            rspirv_reflect::DescriptorType::UNIFORM_BUFFER => {
+                            DescriptorType::UNIFORM_BUFFER => {
                                 vk::DescriptorType::UNIFORM_BUFFER
                             }
-                            rspirv_reflect::DescriptorType::STORAGE_BUFFER => {
+                            DescriptorType::STORAGE_BUFFER => {
                                 vk::DescriptorType::STORAGE_BUFFER
                             }
                             _ => panic!("Unsupported descriptor type"),
@@ -277,11 +293,11 @@ pub fn create_layouts_from_reflection(
     )
 }
 // TODO the receiver who takes ownersgip of this must clean this up vulkan side
+// TODO We must cache this to improve launch times
 #[must_use]
 pub fn create_shader_module(mut spv_file: Cursor<&[u8]>, device: &ash::Device) -> vk::ShaderModule {
     let shader_code = read_spv(&mut spv_file).expect("Failed to read shader SPIR-V shader mod.");
     let shader_info = vk::ShaderModuleCreateInfo::builder().code(&shader_code);
-
     unsafe {
         device
             .create_shader_module(&shader_info, None)

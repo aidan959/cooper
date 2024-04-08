@@ -12,9 +12,6 @@ use crate::{
 
 pub const DEFAULT_TEXTURE_MAP: u32 = u32::MAX;
 
-
-// Note: indexes into the Model specific texture array,
-// not bindless indexes.
 pub struct Material {
     pub diffuse_map: u32,
     pub normal_map: u32,

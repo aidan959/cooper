@@ -5,7 +5,6 @@ use crate::{
 
 pub fn setup_present_pass(graph: &mut RenderGraph, color_output: TextureId) {
     let fxaa_threshold = 0.45;
-
     graph
         .add_pass_from_desc(
             "present_pass",

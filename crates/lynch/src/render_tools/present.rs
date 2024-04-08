@@ -10,7 +10,8 @@ pub fn setup_present_pass(graph: &mut RenderGraph, color_output: TextureId) {
             "present_pass",
             PipelineDesc::builder()
                 .vertex_path("assets/shaders/fullscreen.vert")
-                .fragment_path("assets/shaders/present.frag"),
+                .fragment_path("assets/shaders/present.frag")
+                .build(),
         )
         .layout_in(color_output)
         .uniforms(

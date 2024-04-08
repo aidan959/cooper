@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ash::vk::{self};
 
 use crate::renderer::Renderer;
+use crate::vulkan::render_pass::RenderPassBuilder;
 use crate::vulkan::renderer::{
     VulkanRenderer, DESCRIPTOR_SET_INDEX_BINDLESS, DESCRIPTOR_SET_INDEX_INPUT_TEXTURES,
     DESCRIPTOR_SET_INDEX_VIEW,
@@ -109,248 +110,6 @@ pub struct UniformData {
     pub size: u64,
 }
 
-pub struct RenderPassBuilder {
-    pub name: String,
-    pub pipeline_handle: PipelineId,
-    pub reads: Vec<Resource>,
-    pub writes: Vec<Attachment>,
-    pub render_func: Option<
-        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
-    >,
-    pub depth_attachment: Option<DepthAttachment>,
-    pub presentation_pass: bool,
-    pub uniforms: HashMap<String, (String, UniformData)>,
-    pub copy_command: Option<TextureCopy>,
-    pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
-    pub device: Arc<Device>,
-}
-
-impl RenderPassBuilder {
-    pub fn layout_in(mut self, resource_id: TextureId) -> Self {
-        self.reads.push(Resource::Texture(TextureResource {
-            texture: resource_id,
-            input_type: TextureResourceType::CombinedImageSampler,
-            access_type: vk_sync::AccessType::AnyShaderReadSampledImageOrUniformTexelBuffer,
-        }));
-        self
-    }
-
-    pub fn image_write(mut self, resource_id: TextureId) -> Self {
-        self.reads.push(Resource::Texture(TextureResource {
-            texture: resource_id,
-            input_type: TextureResourceType::StorageImage,
-            access_type: vk_sync::AccessType::AnyShaderWrite,
-        }));
-        self
-    }
-
-    pub fn write_buffer(mut self, resource_id: BufferId) -> Self {
-        self.reads.push(Resource::Buffer(BufferResource {
-            buffer: resource_id,
-            access_type: vk_sync::AccessType::AnyShaderWrite,
-        }));
-        self
-    }
-
-    pub fn read_buffer(mut self, resource_id: BufferId) -> Self {
-        self.reads.push(Resource::Buffer(BufferResource {
-            buffer: resource_id,
-            access_type: vk_sync::AccessType::AnyShaderReadOther,
-        }));
-        self
-    }
-
-    pub fn layout_out(mut self, resource_id: TextureId) -> Self {
-        self.writes.push(Attachment {
-            texture: resource_id,
-            view: ViewType::Full(),
-            load_op: vk::AttachmentLoadOp::CLEAR,
-        });
-        self
-    }
-
-    pub fn write_layer(mut self, resource_id: TextureId, layer: u32) -> Self {
-        self.writes.push(Attachment {
-            texture: resource_id,
-            view: ViewType::Layer(layer),
-            load_op: vk::AttachmentLoadOp::CLEAR,
-        });
-        self
-    }
-
-    pub fn load_write(mut self, resource_id: TextureId) -> Self {
-        self.writes.push(Attachment {
-            texture: resource_id,
-            view: ViewType::Full(),
-            load_op: vk::AttachmentLoadOp::LOAD,
-        });
-        self
-    }
-
-    pub fn record_render(
-        mut self,
-        render_func: impl Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)
-            + 'static,
-    ) -> Self {
-        drop(self.render_func.replace(Box::new(render_func)));
-        self
-    }
-
-    pub fn dispatch_compute(
-        mut self,
-        group_count_x: u32,
-        group_count_y: u32,
-        group_count_z: u32,
-    ) -> Self {
-        self.render_func
-            .replace(Box::new(move |device, command_buffer, _, _, _| unsafe {
-                device.device().cmd_dispatch(
-                    *command_buffer,
-                    group_count_x,
-                    group_count_y,
-                    group_count_z,
-                );
-            }));
-        self
-    }
-
-    pub fn copy_image(mut self, src: TextureId, dst: TextureId, copy_desc: vk::ImageCopy) -> Self {
-        self.copy_command.replace(TextureCopy {
-            src,
-            dst,
-            copy_desc,
-        });
-        self
-    }
-
-    pub fn presentation_pass(mut self, is_presentation_pass: bool) -> Self {
-        self.presentation_pass = is_presentation_pass;
-        self
-    }
-    pub fn depth_attachment(mut self, depth_attachment: TextureId) -> Self {
-        self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
-            texture: depth_attachment,
-            view: ViewType::Full(),
-            load_op: vk::AttachmentLoadOp::CLEAR,
-        }));
-        self
-    }
-
-    pub fn depth_attachment_layer(mut self, depth_attachment: TextureId, layer: u32) -> Self {
-        self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
-            texture: depth_attachment,
-            view: ViewType::Layer(layer),
-            load_op: vk::AttachmentLoadOp::CLEAR,
-        }));
-        self
-    }
-
-    pub fn external_depth_attachment(
-        mut self,
-        depth_attachment: Image,
-        load_op: vk::AttachmentLoadOp,
-    ) -> Self {
-        self.depth_attachment = Some(DepthAttachment::External(depth_attachment, load_op));
-        self
-    }
-
-    pub fn uniforms<T: Copy + std::fmt::Debug>(mut self, name: &str, data: &T) -> Self {
-        unsafe {
-            let ptr = data as *const _ as *const MaybeUninit<u8>;
-            let size = std::mem::size_of::<T>();
-            let data_u8 = std::slice::from_raw_parts(ptr, size);
-
-            assert!(data_u8.len() < MAX_UNIFORMS_SIZE);
-
-            let unique_name = self.name.clone() + "_" + name;
-
-            if let Some(entry) = self.uniforms.get_mut(&unique_name) {
-                entry.1.data[..data_u8.len()].copy_from_slice(data_u8);
-                entry.1.size = size as u64;
-            } else {
-                let mut new_entry = UniformData {
-                    data: [MaybeUninit::zeroed(); MAX_UNIFORMS_SIZE],
-                    size: size as u64,
-                };
-                new_entry.data[..data_u8.len()].copy_from_slice(data_u8);
-                self.uniforms
-                    .insert(unique_name.to_string(), (name.to_string(), new_entry));
-            }
-        }
-        self
-    }
-
-    pub fn build(self, graph: &mut RenderGraph) {
-        let mut pass = RenderPass::new(
-            self.name,
-            self.pipeline_handle,
-            self.presentation_pass,
-            self.depth_attachment,
-            self.uniforms.clone(),
-            self.render_func,
-            self.copy_command,
-            self.extra_barriers,
-            self.device.clone(),
-        );
-
-        for read in &self.reads {
-            pass.reads.push(*read);
-        }
-
-        for write in &self.writes {
-            pass.writes.push(*write);
-        }
-
-        graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
-            .writes
-            .iter()
-            .map(|write| {
-                graph
-                    .resources
-                    .texture(write.texture)
-                    .texture
-                    .image
-                    .format()
-            })
-            .collect();
-
-        if let Some(depth) = &pass.depth_attachment {
-            match depth {
-                DepthAttachment::GraphHandle(write) => {
-                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        graph
-                            .resources
-                            .texture(write.texture)
-                            .texture
-                            .image
-                            .format()
-                }
-                DepthAttachment::External(image, _) => {
-                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        image.format()
-                }
-            }
-        }
-
-        if !self.uniforms.is_empty() {
-            pass.uniform_buffer.replace(
-                graph.get_or_create_buffer(
-                    format!(
-                        "{}_frame_{}",
-                        self.uniforms.keys().next().unwrap(),
-                        graph.current_frame
-                    )
-                    .as_str(),
-                    self.uniforms.values().next().unwrap().1.size,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    gpu_allocator::MemoryLocation::CpuToGpu,
-                ),
-            );
-        }
-
-        graph.passes[graph.current_frame].push(pass);
-    }
-}
 
 impl GraphResources {
     fn new() -> GraphResources {
@@ -722,7 +481,7 @@ impl RenderGraph {
                     .prev_access = next_access;
             }
 
-            if pass.presentation_pass {
+            if pass.is_pres_pass {
                 vulkan::image_pipeline_barrier(
                     device,
                     *command_buffer,
@@ -787,7 +546,7 @@ impl RenderGraph {
 
             pass.prepare_render(
                 command_buffer,
-                if !pass.presentation_pass {
+                if !pass.is_pres_pass {
                     write_attachments.as_slice()
                 } else {
                     &present_image
@@ -809,7 +568,7 @@ impl RenderGraph {
                 } else {
                     None
                 },
-                if !pass.presentation_pass {
+                if !pass.is_pres_pass {
                     extent
                 } else {
                     vk::Extent2D {

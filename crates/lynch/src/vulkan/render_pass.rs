@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use ash::vk;
+use vk_sync::AccessType;
 
 use crate::render_graph::{
-    Attachment, BufferId, DepthAttachment, GraphBuffer, GraphResources, GraphTexture, PipelineId,
-    Resource, TextureCopy, TextureResourceType, UniformData, ViewType,
+    Attachment, BufferId, BufferResource, DepthAttachment, GraphBuffer, GraphResources, GraphTexture, PipelineId, RenderGraph, Resource, TextureCopy, TextureId, TextureResource, TextureResourceType, UniformData, ViewType, MAX_UNIFORMS_SIZE
 };
 
 use super::descriptor::{DescriptorIdentifier, DescriptorSet};
@@ -13,21 +14,21 @@ use super::renderer::VulkanRenderer;
 use super::{Device, Image, Pipeline, PipelineType};
 
 pub struct RenderPass {
+    pub name: String,
+    pub is_pres_pass: bool,
     pub pipeline_handle: PipelineId,
     pub render_func: Option<
         Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
-    >,
+        >,
     pub writes: Vec<Attachment>,
-    pub depth_attachment: Option<DepthAttachment>,
-    pub presentation_pass: bool,
     pub reads: Vec<Resource>,
-    pub name: String,
+    pub depth_attachment: Option<DepthAttachment>,
     pub uniforms: HashMap<String, (String, UniformData)>,
     pub read_resources_descriptor_set: Option<DescriptorSet>,
     pub uniform_descriptor_set: Option<DescriptorSet>,
     pub copy_command: Option<TextureCopy>,
     pub uniform_buffer: Option<BufferId>,
-    pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
+    pub extra_barriers: Option<Vec<(BufferId, AccessType)>>,
     device: Arc<Device>,
 }
 
@@ -42,18 +43,18 @@ impl RenderPass {
             Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
         >,
         copy_command: Option<TextureCopy>,
-        extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
+        extra_barriers: Option<Vec<(BufferId, AccessType)>>,
         device: Arc<Device>,
     ) -> RenderPass {
         RenderPass {
+            name,
             pipeline_handle,
             render_func,
             reads: Vec::new(),
             writes: Vec::new(),
             depth_attachment,
-            presentation_pass,
+            is_pres_pass: presentation_pass,
             read_resources_descriptor_set: None,
-            name,
             uniforms,
             uniform_buffer: None,
             uniform_descriptor_set: None,
@@ -254,5 +255,248 @@ impl RenderPass {
                 .device()
                 .cmd_set_scissor(*command_buffer, 0, &scissors);
         }
+    }
+}
+
+pub struct RenderPassBuilder {
+    pub name: String,
+    pub pipeline_handle: PipelineId,
+    pub reads: Vec<Resource>,
+    pub writes: Vec<Attachment>,
+    pub render_func: Option<
+        Box<dyn Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)>,
+    >,
+    pub depth_attachment: Option<DepthAttachment>,
+    pub presentation_pass: bool,
+    pub uniforms: HashMap<String, (String, UniformData)>,
+    pub copy_command: Option<TextureCopy>,
+    pub extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
+    pub device: Arc<Device>,
+}
+
+impl RenderPassBuilder {
+    pub fn layout_in(mut self, resource_id: TextureId) -> Self {
+        self.reads.push(Resource::Texture(TextureResource {
+            texture: resource_id,
+            input_type: TextureResourceType::CombinedImageSampler,
+            access_type: vk_sync::AccessType::AnyShaderReadSampledImageOrUniformTexelBuffer,
+        }));
+        self
+    }
+
+    pub fn image_write(mut self, resource_id: TextureId) -> Self {
+        self.reads.push(Resource::Texture(TextureResource {
+            texture: resource_id,
+            input_type: TextureResourceType::StorageImage,
+            access_type: vk_sync::AccessType::AnyShaderWrite,
+        }));
+        self
+    }
+
+    pub fn write_buffer(mut self, resource_id: BufferId) -> Self {
+        self.reads.push(Resource::Buffer(BufferResource {
+            buffer: resource_id,
+            access_type: vk_sync::AccessType::AnyShaderWrite,
+        }));
+        self
+    }
+
+    pub fn read_buffer(mut self, resource_id: BufferId) -> Self {
+        self.reads.push(Resource::Buffer(BufferResource {
+            buffer: resource_id,
+            access_type: vk_sync::AccessType::AnyShaderReadOther,
+        }));
+        self
+    }
+
+    pub fn layout_out(mut self, resource_id: TextureId) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        });
+        self
+    }
+
+    pub fn write_layer(mut self, resource_id: TextureId, layer: u32) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Layer(layer),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        });
+        self
+    }
+
+    pub fn load_write(mut self, resource_id: TextureId) -> Self {
+        self.writes.push(Attachment {
+            texture: resource_id,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::LOAD,
+        });
+        self
+    }
+
+    pub fn record_render(
+        mut self,
+        render_func: impl Fn(&Device, &vk::CommandBuffer, &VulkanRenderer, &RenderPass, &GraphResources)
+            + 'static,
+    ) -> Self {
+        drop(self.render_func.replace(Box::new(render_func)));
+        self
+    }
+
+    pub fn dispatch_compute(
+        mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    ) -> Self {
+        self.render_func
+            .replace(Box::new(move |device, command_buffer, _, _, _| unsafe {
+                device.device().cmd_dispatch(
+                    *command_buffer,
+                    group_count_x,
+                    group_count_y,
+                    group_count_z,
+                );
+            }));
+        self
+    }
+
+    pub fn copy_image(mut self, src: TextureId, dst: TextureId, copy_desc: vk::ImageCopy) -> Self {
+        self.copy_command.replace(TextureCopy {
+            src,
+            dst,
+            copy_desc,
+        });
+        self
+    }
+
+    pub fn presentation_pass(mut self, is_presentation_pass: bool) -> Self {
+        self.presentation_pass = is_presentation_pass;
+        self
+    }
+    pub fn depth_attachment(mut self, depth_attachment: TextureId) -> Self {
+        self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
+            texture: depth_attachment,
+            view: ViewType::Full(),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        }));
+        self
+    }
+
+    pub fn depth_attachment_layer(mut self, depth_attachment: TextureId, layer: u32) -> Self {
+        self.depth_attachment = Some(DepthAttachment::GraphHandle(Attachment {
+            texture: depth_attachment,
+            view: ViewType::Layer(layer),
+            load_op: vk::AttachmentLoadOp::CLEAR,
+        }));
+        self
+    }
+
+    pub fn external_depth_attachment(
+        mut self,
+        depth_attachment: Image,
+        load_op: vk::AttachmentLoadOp,
+    ) -> Self {
+        self.depth_attachment = Some(DepthAttachment::External(depth_attachment, load_op));
+        self
+    }
+
+    pub fn uniforms<T: Copy + std::fmt::Debug>(mut self, name: &str, data: &T) -> Self {
+        unsafe {
+            let ptr = data as *const _ as *const MaybeUninit<u8>;
+            let size = std::mem::size_of::<T>();
+            let data_u8 = std::slice::from_raw_parts(ptr, size);
+
+            assert!(data_u8.len() < MAX_UNIFORMS_SIZE);
+
+            let unique_name = self.name.clone() + "_" + name;
+
+            if let Some(entry) = self.uniforms.get_mut(&unique_name) {
+                entry.1.data[..data_u8.len()].copy_from_slice(data_u8);
+                entry.1.size = size as u64;
+            } else {
+                let mut new_entry = UniformData {
+                    data: [MaybeUninit::zeroed(); MAX_UNIFORMS_SIZE],
+                    size: size as u64,
+                };
+                new_entry.data[..data_u8.len()].copy_from_slice(data_u8);
+                self.uniforms
+                    .insert(unique_name.to_string(), (name.to_string(), new_entry));
+            }
+        }
+        self
+    }
+
+    pub fn build(self, graph: &mut RenderGraph) {
+        let mut pass = RenderPass::new(
+            self.name,
+            self.pipeline_handle,
+            self.presentation_pass,
+            self.depth_attachment,
+            self.uniforms.clone(),
+            self.render_func,
+            self.copy_command,
+            self.extra_barriers,
+            self.device.clone(),
+        );
+
+        for read in &self.reads {
+            pass.reads.push(*read);
+        }
+
+        for write in &self.writes {
+            pass.writes.push(*write);
+        }
+
+        graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
+            .writes
+            .iter()
+            .map(|write| {
+                graph
+                    .resources
+                    .texture(write.texture)
+                    .texture
+                    .image
+                    .format()
+            })
+            .collect();
+
+        if let Some(depth) = &pass.depth_attachment {
+            match depth {
+                DepthAttachment::GraphHandle(write) => {
+                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
+                        graph
+                            .resources
+                            .texture(write.texture)
+                            .texture
+                            .image
+                            .format()
+                }
+                DepthAttachment::External(image, _) => {
+                    graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
+                        image.format()
+                }
+            }
+        }
+
+        if !self.uniforms.is_empty() {
+            pass.uniform_buffer.replace(
+                graph.get_or_create_buffer(
+                    format!(
+                        "{}_frame_{}",
+                        self.uniforms.keys().next().unwrap(),
+                        graph.current_frame
+                    )
+                    .as_str(),
+                    self.uniforms.values().next().unwrap().1.size,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    gpu_allocator::MemoryLocation::CpuToGpu,
+                ),
+            );
+        }
+
+        graph.passes[graph.current_frame].push(pass);
     }
 }

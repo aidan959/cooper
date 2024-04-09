@@ -1,10 +1,10 @@
-use std::sync::{mpsc::Sender, Mutex};
+use std::sync::mpsc::Sender;
 
 use application::{
     application::{CooperApplication, GameEvent, GfxLocation},
     EngineSettings,
 };
-use frost::{obb, physics::math::physics_system, RigidBody, System, Transform};
+use frost::{obb, RigidBody, System, Transform};
 use glam::{const_vec3, Mat4, Quat, Vec3};
 use lynch::{Camera, WindowSize};
 

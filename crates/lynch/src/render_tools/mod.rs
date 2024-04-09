@@ -9,7 +9,7 @@ use crate::{
 };
 
 use self::{
-    atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass, gui::setup_gui_pass, irradiancebasedlighting::setup_cubemap_pass, present::setup_present_pass, ssao::setup_ssao_pass
+    atmosphere::setup_atmosphere_pass, deferred::setup_deferred_pass, gbuffer::setup_gbuffer_pass, irradiancebasedlighting::setup_cubemap_pass, present::setup_present_pass, ssao::setup_ssao_pass
 };
 
 pub mod atmosphere;

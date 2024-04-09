@@ -2,8 +2,8 @@ use crate::{
     mesh::Vertex, render_graph::{RenderGraph, TextureId}, vulkan::{renderer::VulkanRenderer, PipelineDesc}
 };
 use ash::vk;
-use glam::{Vec2, Vec4};
-use imgui::{sys::cty::c_short, DrawCmdIterator, DrawData};
+
+use imgui::{sys::cty::c_short, DrawData};
 
 pub fn setup_gui_pass(
     graph: &mut RenderGraph,
@@ -33,7 +33,7 @@ pub fn setup_gui_pass(
         )
         .load_write(deferred_frame)
         .external_depth_attachment(renderer.depth_image.clone(), vk::AttachmentLoadOp::CLEAR)
-        .record_render(move |device, command_buffer, renderer, pass, resources| {
+        .record_render(move |_device, _command_buffer, _renderer, _pass, _resources| {
             
 
         })

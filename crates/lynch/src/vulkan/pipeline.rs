@@ -3,7 +3,7 @@ use log::info;
 use std::ffi::CStr;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
-use vulkan::shader::{self, create_layouts_from_reflection, create_shader_module, ShaderReflect};
+use vulkan::shader::{create_layouts_from_reflection, create_shader_module, ShaderReflect};
 
 use crate::mesh::Primitive;
 use crate::*;

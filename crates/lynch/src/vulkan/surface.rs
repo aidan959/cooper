@@ -2,7 +2,7 @@ use ash::extensions::khr::{Surface, Win32Surface};
 use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 use std::{os::raw::c_void, ptr};
-use winapi::{shared::windef::HWND, um::libloaderapi::GetModuleHandleW};
+use winapi::um::libloaderapi::GetModuleHandleW;
 
 use winit::window::Window;
 
@@ -33,7 +33,6 @@ pub unsafe fn create_surface(
             let win32_surface_loader = Win32Surface::new(entry, instance);
             return win32_surface_loader.create_win32_surface(&win32_create_info, None);
         },
-        _ => todo!(),
         // winit::raw_window_handle::RawWindowHandle::Win32(raw_win32) => {
         //     let hwnd = raw_win32.hwnd.get() as HWND;
         //     let hinstance = GetModuleHandleW(ptr::null()) as *const c_void;
@@ -62,7 +61,7 @@ pub unsafe fn create_surface(
         // winit::raw_window_handle::RawWindowHandle::WebOffscreenCanvas(_) => todo!(),
         // winit::raw_window_handle::RawWindowHandle::AndroidNdk(_) => todo!(),
         // winit::raw_window_handle::RawWindowHandle::Haiku(_) => todo!(),
-        _ => panic!("Unsupported operating system used to create window."),
+        _ => todo!("Unsupported operating system used to create window."),
     };
     //
 }

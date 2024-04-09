@@ -11,9 +11,8 @@ use ash::{
 };
 use ash::{vk, Entry, Instance};
 use gpu_allocator::vulkan::AllocatorCreateDesc;
-use image::DynamicImage::ImageBgr8;
-use imgui::{DrawData, FontConfig, FontGlyphRanges, FontSource, Ui};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
+
+use imgui::DrawData;
 
 use super::{descriptor::DescriptorSet, Buffer, Device, Image, ImageDesc};
 use glam::{self, Mat4, Vec3, Vec4};
@@ -468,7 +467,7 @@ impl VulkanRenderer {
         self.vk_context.ash_device()
     }
 
-    pub fn render(&mut self, graph: &mut RenderGraph,  camera: &Camera, draw_data: &DrawData, render_statistics: &RenderStatistics) -> f32 
+    pub fn render(&mut self, graph: &mut RenderGraph,  camera: &Camera, draw_data: &DrawData, _render_statistics: &RenderStatistics) -> f32 
 
     {
         self.update_view_to_camera(&camera);
@@ -815,14 +814,10 @@ impl RendererInternal {
     }
 
     pub fn initialize(&mut self, device: Arc<Device>) {
-        let default_diffuse_map =
-            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
-        let default_normal_map =
-            Texture::load(device.clone(), "assets/textures/def/flat_normal_map.png");
-        let default_occlusion_map =
-            Texture::load(device.clone(), "assets/textures/def/white_texture.png");
-        let default_metallic_roughness_map =
-            Texture::load(device.clone(), "assets/textures/def/metallic_roughness.png");
+        let default_diffuse_map = Texture::load(device.clone(), "assets/textures/def/white_texture.png");
+        let default_normal_map = Texture::load(device.clone(), "assets/textures/def/flat_normal_map.png");
+        let default_occlusion_map = Texture::load(device.clone(), "assets/textures/def/white_texture.png");
+        let default_metallic_roughness_map = Texture::load(device.clone(), "assets/textures/def/metallic_roughness.png");
 
         self.default_diffuse_map_index = self.add_bindless_texture(&device, &default_diffuse_map);
         self.default_normal_map_index = self.add_bindless_texture(&device, &default_normal_map);
@@ -986,9 +981,6 @@ impl RendererInternal {
         self.gpu_meshes.push(gpu_mesh);
         println!("{}", self.gpu_meshes.len());
         gpu_index
-    }
-    fn get_instance(&mut self, _instance_index: u32) {
-        //self.instances.get(instance_index).unwrap()
     }
     pub fn draw_meshes(
         &self,

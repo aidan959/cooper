@@ -1,10 +1,10 @@
 use ash::extensions::khr::Surface;
 use ash::extensions::khr::Swapchain;
 use ash::vk;
-use ash::vk::Buffer;
+
 use gpu_allocator::vulkan::*;
 use gpu_allocator::AllocatorDebugSettings;
-use std::collections::VecDeque;
+
 use std::sync::{Arc, Mutex};
 
 use super::swapchain::SwapchainSupportDetails;
@@ -395,14 +395,4 @@ pub fn image_pipeline_barrier(
 
     next_access
 }
-pub struct CleanupResources {
-    buffer_queue: VecDeque<Buffer>,
-}
-impl CleanupResources {
-    pub fn add_buffer(&mut self, buffer: Buffer) {
-        self.buffer_queue.push_back(buffer);
-    }
-    pub fn buffer_queue_pop_front(&mut self) -> Option<ash::vk::Buffer> {
-        return self.buffer_queue.pop_front();
-    }
-}
+

@@ -1,5 +1,5 @@
 use std::{fmt::{Display, Formatter}, time::Duration};
-use log::{debug,error,info,warn};
+use log::error;
 use std::fmt::Debug;
 
 use lynch::window::window::WindowSize;

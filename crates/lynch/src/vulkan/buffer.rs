@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{mem, ptr::copy_nonoverlapping, sync::Arc};
 
 use super::{device::Device, Image};
-use ash::vk;
+use ash::vk::{self, BufferCopy};
 use gpu_allocator::{vulkan::*, MemoryLocation};
 use log::info;
 pub struct Buffer {
@@ -95,12 +95,12 @@ impl Buffer {
     pub fn update_memory<T: Copy>(&mut self, data: &[T]) {
         unsafe {
             let src = data.as_ptr() as *const u8;
-            let src_bytes = data.len() * std::mem::size_of::<T>();
+            let src_bytes = data.len() * mem::size_of::<T>();
 
             if self.memory_location != MemoryLocation::GpuOnly {
                 let dst = self.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                 let dst_bytes = self.allocation.size() as usize;
-                std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
+                copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
             } else {
                 info!(
                     "Creating staging buffer {}",
@@ -115,10 +115,10 @@ impl Buffer {
                 );
                 let dst = staging_buffer.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                 let dst_bytes = staging_buffer.allocation.size() as usize;
-                std::ptr::copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
+                copy_nonoverlapping(src, dst, std::cmp::min(src_bytes, dst_bytes));
 
                 self.device.execute_and_submit(|cb| {
-                    let regions = vk::BufferCopy::builder()
+                    let regions = BufferCopy::builder()
                         .size(self.size)
                         .dst_offset(0)
                         .src_offset(0)
@@ -145,7 +145,7 @@ impl Buffer {
         }
     }
     pub fn copy_to_buffer(&self, cb: vk::CommandBuffer, dst: &Buffer) {
-        let buffer_copy_regions = vk::BufferCopy::builder()
+        let buffer_copy_regions = BufferCopy::builder()
             .size(self.size)
             .src_offset(0)
             .dst_offset(0)

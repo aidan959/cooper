@@ -1,6 +1,5 @@
 use ash::util::*;
 use ash::vk;
-use log::debug;
 use rspirv_reflect::DescriptorInfo;
 use rspirv_reflect::DescriptorType;
 use rspirv_reflect::PushConstantInfo;
@@ -16,7 +15,6 @@ use shaderc::TargetEnv;
 use std::fs::read_to_string;
 use std::{
     collections::{BTreeMap, HashMap},
-    fs,
     io::Cursor,
     path::Path,
 };

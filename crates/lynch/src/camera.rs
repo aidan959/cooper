@@ -14,7 +14,7 @@ pub struct Camera {
     speed: f32,
 }
 impl Camera {
-    pub(crate) fn new(
+    pub fn new(
         pos: Vec3,
         target: Vec3,
         fov_degrees: f32,

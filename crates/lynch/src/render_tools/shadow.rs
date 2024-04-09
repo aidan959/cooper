@@ -129,7 +129,7 @@ pub fn setup_shadow_pass(
 }
 
 
-fn calculate_cascade_splits(near_clip: f32, far_clip: f32) -> [f32; SHADOW_TEXTURE_CASCADE_NO] {
+pub fn calculate_cascade_splits(near_clip: f32, far_clip: f32) -> [f32; SHADOW_TEXTURE_CASCADE_NO] {
     let mut cascade_splits = [0.0; SHADOW_TEXTURE_CASCADE_NO];
     let clip_range = far_clip - near_clip;
     let cascade_split_lambda = 0.927;

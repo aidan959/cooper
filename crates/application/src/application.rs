@@ -1,6 +1,6 @@
 use frost::obb::CollisionPoint;
 use frost::physics::math::physics_system;
-use frost::{Input, RigidBody, SearchIter, SearchParameters, World};
+use frost::{Input, RigidBody, SearchIter, World};
 use glam::{Mat4, Vec3};
 use imgui::{Condition, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
@@ -18,7 +18,7 @@ use crate::{
 use frost::System;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
-use std::sync::Mutex;
+
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -40,18 +40,17 @@ pub struct CooperApplication {
     systems: HashMap<Schedule, Vec<Box<dyn System<World>>>>
 }
 
-struct UIContext<'a> {
-    pub ui_frame: Option<Mutex<Box<&'a mut Ui>>>,
-}
+
 struct CooperUI {
     pub gui: imgui::Context,
     pub platform: imgui_winit_support::WinitPlatform,
 }
 
-struct PhysicsControl {
+pub struct PhysicsControl {
     paused: bool,
     step: bool,
 }
+
 impl PhysicsControl {
     fn new() -> Self {
         PhysicsControl {
@@ -60,21 +59,21 @@ impl PhysicsControl {
         }
     }
 
-    fn pause(&mut self) {
+    pub fn pause(&mut self) {
         self.paused = true;
     }
 
-    fn resume(&mut self) {
+    pub fn resume(&mut self) {
         self.paused = false;
     }
 
-    fn step(&mut self) {
+    pub fn step(&mut self) {
         if self.paused {
             self.step = true;
         }
     }
 
-    fn should_update_physics(&mut self) -> bool {
+    pub fn should_update_physics(&mut self) -> bool {
         if self.paused {
             if self.step {
                 self.step = false; // Reset step to wait for the next manual step trigger
@@ -122,7 +121,6 @@ impl CooperUI {
     fn mut_ui(&mut self) -> &mut imgui::Context {
         &mut self.gui
     }
-    fn update_ui(&self, guiframe: &mut Ui) {}
 }
 
 pub enum GameEvent {
@@ -243,10 +241,7 @@ impl CooperApplication {
         let fixed_update_transmitter = event_trasmitter.clone();
         let finally_transmitter = event_trasmitter.clone();
 
-        let mut physics_control = PhysicsControl {
-            paused: false,
-            step: false,
-        };
+        let mut physics_control = PhysicsControl::new();
 
         let mut debug_info = DebugInfo::new(
             self.camera.get_position(),
@@ -260,7 +255,6 @@ impl CooperApplication {
         let mut last_fixed_update = Instant::now();
         let mut lag = 0.0;
         let mut count = 0;
-        let mut interval_start = Instant::now();
         let mut last_frame = Instant::now();
         let mut run = true;
         let mut rigidbody_list: Vec<RigidBody> = vec![];
@@ -565,7 +559,7 @@ pub struct CooperApplicationBuilder {
 }
 impl CooperApplicationBuilder {
     pub fn new() -> Self {
-        let mut systems : HashMap<Schedule, Vec<Box<dyn System<World>>>> = HashMap::new();
+        let systems : HashMap<Schedule, Vec<Box<dyn System<World>>>> = HashMap::new();
         Self {
             window: None,
             camera: None,

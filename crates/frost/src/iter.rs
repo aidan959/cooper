@@ -44,7 +44,7 @@ macro_rules! impl_zip {
 
     };
 }
-
+ // TODO Procedural macros needed for this
 impl_zip! {Zip3Items, Zip<Zip<A, B>, C>, |((a, b), c)| {(a, b, c)}, B, C}
 impl_zip! {Zip4Items, Zip<Zip<Zip<A, B>, C>, D>, |(((a, b), c), d)| {(a, b, c, d)}, B, C, D}
 impl_zip! {Zip5Items, Zip<Zip<Zip<Zip<A, B>, C>, D>, E>, |((((a, b), c), d), e)| {(a, b, c, d, e)}, B, C, D, E}

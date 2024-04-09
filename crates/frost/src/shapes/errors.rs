@@ -1,7 +1,4 @@
 use std::fmt;
-
-type Result<T> = std::result::Result<T, IsNotVertexErr>;
-
 #[derive(Debug, Clone)]
 pub struct IsNotVertexErr;
 

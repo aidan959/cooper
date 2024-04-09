@@ -1,12 +1,9 @@
-pub mod bounding_box;
 pub mod entity;
 pub mod math;
 pub mod obb;
 pub mod shapes;
 
-mod mass;
 
-mod component_utils;
 mod input;
 mod iter;
 pub mod physics;
@@ -19,9 +16,10 @@ use std::{
     any::{Any, TypeId},
     borrow::BorrowMut,
     collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     sync::RwLock,
 };
+use std::collections::hash_map::DefaultHasher;
 
 pub use crate::{Retrieve, RetrieveError, SearchParameters, SearchRetrieve, Single, SingleMut};
 pub use input::Input;

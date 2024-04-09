@@ -23,6 +23,18 @@ fn calculate_relative_velocity(
         - rigid_body2.velocity
         - rigid_body2.angular_velocity.cross(relative_p2)
 }
+/// .
+///
+/// # Examples
+///
+/// ```
+/// use frost::physics::math::handle_collision;
+///
+/// let mut rigid_body = RigidBody::default();
+/// let mut rigid_body2 = RigidBody::default();
+/// handle_collision(&mut rigid_body, &mut rigid_body2, collision_point);
+/// assert_eq!(rigid_body, );assert_eq!(rigid_body2, );
+/// ```
 pub fn handle_collision(
     rigid_body: &mut RigidBody,
     rigid_body2: &mut RigidBody,
@@ -248,7 +260,7 @@ pub fn physics_system<'a>(
     fixed_update: f32,
 ) where
     'a: 'static,
-{
+{ 
     let bodies_and_boxes = search.iter().collect::<Vec<_>>();
 
     let mut collision_details = Vec::new();
@@ -294,7 +306,7 @@ pub trait InertiaTensor {
     fn get_inverse_cube_inertia_tensor(half_extents: Vec3, mass: f32) -> Mat3;
 }
 
-impl InertiaTensor for Mat3 {
+impl InertiaTensor for Mat3 {  
     fn get_inverse_cube_inertia_tensor(half_extents: Vec3, mass: f32) -> Mat3 {
         let x = half_extents.x;
         let y = half_extents.y;

@@ -470,7 +470,17 @@ impl DynamicOBB {
 
         true
     }
-
+    pub fn get_face_name (face_id: PrimitiveId) -> &'static str {
+        match face_id {
+            PrimitiveId::Face(0) => "Front",
+            PrimitiveId::Face(1) => "Back",
+            PrimitiveId::Face(2) => "Top",
+            PrimitiveId::Face(3) => "Bottom",
+            PrimitiveId::Face(4) => "Left",
+            PrimitiveId::Face(5) => "Right",
+            _ => "Unknown"
+        }
+    }
     pub fn sutherland_hodgman_clip(&self, obb2: &DynamicOBB) -> () {}
     pub fn get_collision_point_normal(&self, obb2: &DynamicOBB) -> Option<CollisionPoint> {
         if !self.is_colliding(obb2) {
@@ -502,17 +512,7 @@ impl DynamicOBB {
                 collision_point.normal = norm;
             }
         }
-        fn get_face_name (face_id: PrimitiveId) -> &'static str {
-            match face_id {
-                PrimitiveId::Face(0) => "Front",
-                PrimitiveId::Face(1) => "Back",
-                PrimitiveId::Face(2) => "Top",
-                PrimitiveId::Face(3) => "Bottom",
-                PrimitiveId::Face(4) => "Left",
-                PrimitiveId::Face(5) => "Right",
-                _ => "Unknown"
-            }
-        }
+        
         let colliding_face_obb1 = self.find_face_with_normal(&collision_point.normal).unwrap();
         let obb2_collision_normal = -collision_point.normal;
         let colliding_face_obb2 = obb2.find_face_with_normal(&-collision_point.normal).unwrap();
@@ -774,7 +774,7 @@ mod test {
             println!("Rotation: ({}, {}, {})", euler.0 * 180.0 / std::f32::consts::PI, euler.1 * 180.0 / std::f32::consts::PI, euler.2 * 180.0 / std::f32::consts::PI);
             for (face_id, &rotated_normal) in face_map.iter() {
                 let face = box1.find_face_with_normal(&rotated_normal).unwrap();
-                println!("Face: {:?} -> normal ({}) ", get_face_name(face_id.unpack()), rotated_normal);
+                println!("Face: {:?} -> normal ({}) ", DynamicOBB::get_face_name(face_id.unpack()), rotated_normal);
                 assert_eq!(face_id, &face.face_id);
             }
         }
@@ -816,7 +816,7 @@ mod test {
             println!("Rotation: ({}, {}, {})", euler.0 * 180.0 / std::f32::consts::PI, euler.1 * 180.0 / std::f32::consts::PI, euler.2 * 180.0 / std::f32::consts::PI);
             for (face_id, &rotated_normal) in face_map.iter() {
                 let face = box1.find_face_with_normal(&rotated_normal).unwrap();
-                println!("Face: {:?} -> normal ({}) ", get_face_name(face_id.unpack()), rotated_normal);
+                println!("Face: {:?} -> normal ({}) ", DynamicOBB::get_face_name(face_id.unpack()), rotated_normal);
                 assert_eq!(face_id, &face.face_id);
             }
         }

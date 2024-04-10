@@ -8,7 +8,7 @@ use frost::{obb, RigidBody, System, Transform};
 use glam::{const_vec3, Mat4, Quat, Vec3};
 use lynch::{Camera, WindowSize};
 
-const WINDOW_SIZE: WindowSize = (1280., 1080.);
+const WINDOW_SIZE: WindowSize = (1280., 720.);
 fn main() {
     env_logger::init();
     CooperApplication::builder()
@@ -290,11 +290,14 @@ fn main() {
 mod tests {
     use std::sync::mpsc::Sender;
 
-    use application::application::{CooperApplication, GameEvent};
+    use application::{application::{CooperApplication, GameEvent}, EngineSettings};
     use frost::{
         obb, physics::math::physics_system, RigidBody, Search, SearchIter, System, Transform,
     };
-    use glam::{Mat4, Quat, Vec3};
+    use glam::{Mat4, Quat, Vec3,const_vec3};
+    use lynch::Camera;
+
+    use crate::WINDOW_SIZE;
 
     struct GfxLocation(usize);
 
@@ -367,6 +370,281 @@ mod tests {
             |_renderer_event_stream, _delta| {},
             |_renderer_event_stream, delta, world| {
                 rotate_system.run(world, delta).unwrap();
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
+    fn graphic_scene_10_cubes() {
+        CooperApplication::builder()
+            .engine_settings(
+                EngineSettings::builder()
+                    .set_window_name("Cooper")
+                    .fps_max(512).unwrap()
+                    .window_size(WINDOW_SIZE)
+                    .build(),
+            ).camera(
+                Camera::builder()
+                    .fov_degrees(90.)
+                    .position(const_vec3!([0.0, 0.0, 0.0]))
+                    .aspect_ratio_from_window(WINDOW_SIZE)
+                    .build(),
+            )
+            .build()
+            .run(
+            |event_stream: &Sender<GameEvent>, world| {
+                const MAX_CUBES_PER_DIM: usize = 20;
+                const MAX_CUBES: usize = 10;
+                let mut num_cubes:usize = 0;
+                for x in 0..MAX_CUBES_PER_DIM {
+                    for y in 0..MAX_CUBES_PER_DIM {
+                        for z in 0.. {
+                            if num_cubes >= MAX_CUBES {
+                                break;
+                            }
+                            event_stream
+                            .send(GameEvent::Spawn(
+                                "models/cube.gltf".to_string(),
+                            ))
+                            .unwrap();
+                            event_stream
+                                .send(GameEvent::MoveEvent(num_cubes + 1, Mat4::from_translation(Vec3::new(
+                                    x as f32 * 1.5,
+                                    y as f32 * 1.5,
+                                    z as f32 * 1.5,
+                                )))).unwrap();
+                            num_cubes += 1;
+                        }
+                    }
+                }
+                
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, _delta, _world| {
+
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
+    fn graphic_scene_100_cubes() {
+        CooperApplication::builder()
+            .engine_settings(
+                EngineSettings::builder()
+                    .set_window_name("Cooper")
+                    .fps_max(512).unwrap()
+                    .window_size(WINDOW_SIZE)
+                    .build(),
+            ).camera(
+                Camera::builder()
+                    .fov_degrees(90.)
+                    .position(const_vec3!([0.0, 0.0, 0.0]))
+                    .aspect_ratio_from_window(WINDOW_SIZE)
+                    .build(),
+            )
+            .build()
+            .run(
+            |event_stream: &Sender<GameEvent>, world| {
+                const MAX_CUBES_PER_DIM: usize = 20;
+                const MAX_CUBES: usize = 100;
+                let mut num_cubes:usize = 0;
+                for x in 0..MAX_CUBES_PER_DIM {
+                    for y in 0..MAX_CUBES_PER_DIM {
+                        for z in 0..MAX_CUBES_PER_DIM {
+                            if num_cubes >= MAX_CUBES {
+                                break;
+                            }
+                            event_stream
+                            .send(GameEvent::Spawn(
+                                "models/cube.gltf".to_string(),
+                            ))
+                            .unwrap();
+                            event_stream
+                                .send(GameEvent::MoveEvent(num_cubes + 1, Mat4::from_translation(Vec3::new(
+                                    x as f32 * 1.5,
+                                    y as f32 * 1.5,
+                                    z as f32 * 1.5,
+                                )))).unwrap();
+                            num_cubes += 1;
+                        }
+                    }
+                }
+                
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, _delta, _world| {
+
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
+    fn graphic_scene_200_cubes() {
+        CooperApplication::builder()
+            .engine_settings(
+                EngineSettings::builder()
+                    .set_window_name("Cooper")
+                    .fps_max(512).unwrap()
+                    .window_size(WINDOW_SIZE)
+                    .build(),
+            ).camera(
+                Camera::builder()
+                    .fov_degrees(90.)
+                    .position(const_vec3!([0.0, 0.0, 0.0]))
+                    .aspect_ratio_from_window(WINDOW_SIZE)
+                    .build(),
+            )
+            .build()
+            .run(
+            |event_stream: &Sender<GameEvent>, world| {
+                const MAX_CUBES_PER_DIM: usize = 20;
+                const MAX_CUBES: usize = 200;
+                let mut num_cubes:usize = 0;
+                for x in 0..MAX_CUBES_PER_DIM {
+                    for y in 0..MAX_CUBES_PER_DIM {
+                        for z in 0..MAX_CUBES_PER_DIM {
+                            if num_cubes >= MAX_CUBES {
+                                break;
+                            }
+                            event_stream
+                            .send(GameEvent::Spawn(
+                                "models/cube.gltf".to_string(),
+                            ))
+                            .unwrap();
+                            event_stream
+                                .send(GameEvent::MoveEvent(num_cubes + 1, Mat4::from_translation(Vec3::new(
+                                    x as f32 * 1.5,
+                                    y as f32 * 1.5,
+                                    z as f32 * 1.5,
+                                )))).unwrap();
+                            num_cubes += 1;
+                        }
+                    }
+                }
+                
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, _delta, _world| {
+
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
+    fn graphic_scene_500_cubes() {
+        CooperApplication::builder()
+            .engine_settings(
+                EngineSettings::builder()
+                    .set_window_name("Cooper")
+                    .fps_max(512).unwrap()
+                    .window_size(WINDOW_SIZE)
+                    .build(),
+            ).camera(
+                Camera::builder()
+                    .fov_degrees(90.)
+                    .position(const_vec3!([0.0, 0.0, 0.0]))
+                    .aspect_ratio_from_window(WINDOW_SIZE)
+                    .build(),
+            )
+            .build()
+            .run(
+            |event_stream: &Sender<GameEvent>, world| {
+                const MAX_CUBES_PER_DIM: usize = 20;
+                const MAX_CUBES: usize = 500;
+                let mut num_cubes:usize = 0;
+                for x in 0..MAX_CUBES_PER_DIM {
+                    for y in 0..MAX_CUBES_PER_DIM {
+                        for z in 0..MAX_CUBES_PER_DIM {
+                            if num_cubes >= MAX_CUBES {
+                                break;
+                            }
+                            event_stream
+                            .send(GameEvent::Spawn(
+                                "models/cube.gltf".to_string(),
+                            ))
+                            .unwrap();
+                            event_stream
+                                .send(GameEvent::MoveEvent(num_cubes + 1, Mat4::from_translation(Vec3::new(
+                                    x as f32 * 1.5,
+                                    y as f32 * 1.5,
+                                    z as f32 * 1.5,
+                                )))).unwrap();
+                            num_cubes += 1;
+                        }
+                    }
+                }
+                
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, _delta, _world| {
+
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
+    fn graphic_scene_1000_cubes() {
+        CooperApplication::builder()
+            .engine_settings(
+                EngineSettings::builder()
+                    .set_window_name("Cooper")
+                    .fps_max(512).unwrap()
+                    .window_size(WINDOW_SIZE)
+                    .build(),
+            ).camera(
+                Camera::builder()
+                    .fov_degrees(90.)
+                    .position(const_vec3!([0.0, 0.0, 0.0]))
+                    .aspect_ratio_from_window(WINDOW_SIZE)
+                    .build(),
+            )
+            .build()
+            .run(
+            |event_stream: &Sender<GameEvent>, world| {
+                const MAX_CUBES_PER_DIM: usize = 10;
+                const MAX_CUBES: usize = 1000;
+                let mut num_cubes:usize = 0;
+                for x in 0..MAX_CUBES_PER_DIM {
+                    for y in 0..MAX_CUBES_PER_DIM {
+                        for z in 0..MAX_CUBES_PER_DIM {
+                            if num_cubes >= MAX_CUBES {
+                                break;
+                            }
+                            event_stream
+                            .send(GameEvent::Spawn(
+                                "models/cube.gltf".to_string(),
+                            ))
+                            .unwrap();
+                            event_stream
+                                .send(GameEvent::MoveEvent(num_cubes + 1, Mat4::from_translation(Vec3::new(
+                                    x as f32 * 1.5,
+                                    y as f32 * 1.5,
+                                    z as f32 * 1.5,
+                                )))).unwrap();
+                            num_cubes += 1;
+                        }
+                    }
+                }
+                
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, _delta, _world| {
+
             },
             |event_stream| {
                 event_stream.send(GameEvent::NextFrame).unwrap();

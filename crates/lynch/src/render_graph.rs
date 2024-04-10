@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use ash::vk::{self, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, ShaderStageFlags};
 use gpu_allocator::MemoryLocation;
@@ -394,6 +395,7 @@ impl RenderGraph {
         let device = renderer.device();
         
         for pass in &self.passes[self.current_frame] {
+            
             let pass_pipeline = &self.resources.pipelines[pass.pipeline_handle];
             for read in &pass.reads {
                 match read {

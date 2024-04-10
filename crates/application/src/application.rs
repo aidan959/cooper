@@ -19,6 +19,7 @@ use frost::System;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
 
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -181,8 +182,10 @@ impl DebugInfo {
     }
 }
 
+static mut INSTANT: Option<Instant> = None;
 impl CooperApplication {
     pub fn create() -> Self {
+        unsafe { INSTANT = Some(Instant::now()).into()};
         let engine_settings = EngineSettingsBuilder::new().build();
         let (window, event_loop) = Window::create(&engine_settings.window_name, engine_settings.window_size);
 
@@ -286,6 +289,10 @@ impl CooperApplication {
                     last_frame = now;
                 }
                 Event::MainEventsCleared => {
+                    unsafe {
+                        println!("Time To start first frame: {:?}", INSTANT.unwrap().elapsed());
+                    };
+
                     // call fixed_update fixed_update_rate times per second
                     while lag >= self.engine_settings.fixed_update_rate.as_secs_f32()
                         || physics_control.step
@@ -429,6 +436,10 @@ impl CooperApplication {
                         self.renderer.internal_renderer.instances.len(),
                     );
                     input.end_frame();
+                    unsafe {
+                        println!("Time To complete first frame: {:?}", INSTANT.unwrap().elapsed());
+                    };
+                    panic!("A");
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
@@ -588,6 +599,8 @@ impl CooperApplicationBuilder {
         self
     }
     pub fn build(self) -> CooperApplication {
+        unsafe { INSTANT = Some(Instant::now()).into()};
+
         let engine_settings = match self.engine_settings {
             Some(engine_settings) => engine_settings,
             None => {

@@ -112,7 +112,7 @@ impl ViewUniformData {
             eye_pos: camera.get_position(),
             viewport_width: surface_resolution.width,
             viewport_height: surface_resolution.height,
-            sun_dir: Vec3::new(0.0, 1.0, 0.15).normalize(),
+            sun_dir: Vec3::new(-1.0, 1.0, 0.15).normalize(),
             shadows_enabled: true,
             ssao_enabled: true,
             fxaa_enabled: true,
@@ -560,16 +560,12 @@ impl VulkanRenderer {
                 })
                 .layer_count(1)
                 .color_attachments(std::slice::from_ref(&color_attachment_info))
-                
                 .build();
             
             self.ash_device().cmd_begin_rendering(command_buffer, &rendering_info);
-            
-
-            
             self.gui_renderer.cmd_draw(command_buffer, draw_data).unwrap();
-            
             self.ash_device().cmd_end_rendering(command_buffer);
+
             self.ash_device()
                 .end_command_buffer(command_buffer)
                 .expect("End commandbuffer failed.");

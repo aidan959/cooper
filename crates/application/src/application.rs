@@ -182,10 +182,8 @@ impl DebugInfo {
     }
 }
 
-static mut INSTANT: Option<Instant> = None;
 impl CooperApplication {
     pub fn create() -> Self {
-        unsafe { INSTANT = Some(Instant::now()).into()};
         let engine_settings = EngineSettingsBuilder::new().build();
         let (window, event_loop) = Window::create(&engine_settings.window_name, engine_settings.window_size);
 
@@ -289,9 +287,6 @@ impl CooperApplication {
                     last_frame = now;
                 }
                 Event::MainEventsCleared => {
-                    unsafe {
-                        println!("Time To start first frame: {:?}", INSTANT.unwrap().elapsed());
-                    };
 
                     // call fixed_update fixed_update_rate times per second
                     while lag >= self.engine_settings.fixed_update_rate.as_secs_f32()
@@ -436,10 +431,6 @@ impl CooperApplication {
                         self.renderer.internal_renderer.instances.len(),
                     );
                     input.end_frame();
-                    unsafe {
-                        println!("Time To complete first frame: {:?}", INSTANT.unwrap().elapsed());
-                    };
-                    panic!("A");
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
@@ -553,7 +544,7 @@ impl CooperApplication {
     }
     fn build_scene(&mut self) {
         let sphere = self.renderer.load_model("models/sphere.gltf");
-        let translation = Mat4::from_translation(Vec3::new(0., 0., 0.));
+        let translation = Mat4::from_translation(Vec3::new(-100000000., -100000000., -100000000.));
         self.renderer.add_model(sphere, translation);
     }
     pub fn builder() -> CooperApplicationBuilder {
@@ -599,8 +590,6 @@ impl CooperApplicationBuilder {
         self
     }
     pub fn build(self) -> CooperApplication {
-        unsafe { INSTANT = Some(Instant::now()).into()};
-
         let engine_settings = match self.engine_settings {
             Some(engine_settings) => engine_settings,
             None => {

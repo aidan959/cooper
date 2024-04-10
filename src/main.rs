@@ -378,6 +378,45 @@ mod tests {
         );
     }
     #[test]
+    fn graphic_scene_metal_balls() {
+        env_logger::init();
+        fn rotate_system(mut rbs: Search<(&mut RigidBody,)>, _fixed_delta: f32) {
+            for rb in rbs.iter() {
+                rb.apply_torque(Vec3::new(100.0, 0.0, 0.0));
+            }
+        }
+        CooperApplication::create().run(
+            |event_stream: &Sender<GameEvent>, world| {
+                event_stream
+                    .send(GameEvent::Spawn(
+                        "models/MetalRoughSpheres.gltf".to_string(),
+                    ))
+                    .unwrap();
+                world
+                    .new_entity((
+                        GfxLocation(1),
+                        RigidBody::new(
+                            100.0,
+                            Transform {
+                                position: Vec3::new(0.0, 0.0, 0.0),
+                                rotation: Quat::IDENTITY,
+                                scale: Vec3::new(1.0, 1.0, 1.0),
+                            },
+                        ),
+                    ))
+                    .unwrap();
+            },
+            |_renderer_event_stream, _delta| {},
+            |_renderer_event_stream, delta, world| {
+                rotate_system.run(world, delta).unwrap();
+            },
+            |event_stream| {
+                event_stream.send(GameEvent::NextFrame).unwrap();
+            },
+            move |_, _ui| {},
+        );
+    }
+    #[test]
     fn graphic_scene_10_cubes() {
         CooperApplication::builder()
             .engine_settings(

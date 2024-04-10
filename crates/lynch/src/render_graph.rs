@@ -392,6 +392,7 @@ impl RenderGraph {
         present_image: &Image,
     ) {
         let device = renderer.device();
+        
         for pass in &self.passes[self.current_frame] {
             let pass_pipeline = &self.resources.pipelines[pass.pipeline_handle];
             for read in &pass.reads {

@@ -183,36 +183,6 @@ impl DebugInfo {
 }
 
 impl CooperApplication {
-    pub fn create() -> Self {
-        let engine_settings = EngineSettingsBuilder::new().build();
-        let (window, event_loop) = Window::create(&engine_settings.window_name, engine_settings.window_size);
-
-        let camera = Camera::builder()
-            .aspect_ratio_from_window(engine_settings.window_size)
-            .position(Vec3::new(10.0, 0.0, 10.0))
-            .target(Vec3::new(10.0, 0.9, 0.0))
-            .build();
-
-
-        let mut ui = CooperUI::new(&window);
-        let renderer = VulkanRenderer::create(&window, &camera, ui.mut_ui());
-        let graph = RenderGraph::new(
-            renderer.vk_context.arc_device(),
-            &renderer.camera_uniform_buffer,
-            renderer.image_count,
-        );
-
-        CooperApplication {
-            window,
-            renderer,
-            graph,
-            camera,
-            event_loop,
-            engine_settings,
-            ui,
-            systems:HashMap::new()
-        }
-    }
 
     pub fn run<E, F, G, H, J>(
         mut self: Self,

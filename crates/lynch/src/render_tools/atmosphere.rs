@@ -29,7 +29,7 @@ pub fn setup_atmosphere_pass(
         .external_depth_attachment(renderer.depth_image.clone(), vk::AttachmentLoadOp::LOAD)
         .record_render(
             move |device, command_buffer, renderer, _pass, _resources| unsafe {
-                if  renderer.internal_renderer.instances.len() > 0 { // we should not rely on an instance existing for this
+                if renderer.internal_renderer.instances.len() > 0 { // we should not rely on an instance existing for this
                     device.device().cmd_bind_vertex_buffers(
                         *command_buffer,
                         0,

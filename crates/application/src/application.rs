@@ -544,7 +544,7 @@ impl CooperApplication {
     }
     fn build_scene(&mut self) {
         let sphere = self.renderer.load_model("models/sphere.gltf");
-        let translation = Mat4::from_translation(Vec3::new(-100000000., -100000000., -100000000.));
+        let translation = Mat4::from_translation(Vec3::new(-100., -100., -100.));
         self.renderer.add_model(sphere, translation);
     }
     pub fn builder() -> CooperApplicationBuilder {

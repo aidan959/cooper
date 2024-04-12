@@ -360,10 +360,9 @@ macro_rules! search_paramsr{
         search_params!{$x}
     };
 
-    ($x: ident, $($y: ident),+) => {
-        search_params!{$x, $($y),+}
-        search_paramsr!{$($y),+}
-
+    ($x: ident, $($y: ident),*) => {
+        search_params!{$x, $($y),*}
+        search_paramsr!{$($y),*}
     };
 }
 

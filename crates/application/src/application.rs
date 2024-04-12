@@ -1,4 +1,4 @@
-use frost::Input;
+use frost::{Input, RigidBody, Transform, World};
 use lynch::render_graph::RenderGraph;
 use lynch::{window::window::Window, renderer::Renderer, vulkan::renderer::VulkanRenderer, Camera};
 use glam::{Vec3, Mat4};
@@ -68,6 +68,7 @@ impl CooperApplication
         G: FnMut( &Sender<GameEvent>, f32),
         H: FnMut( &Sender<GameEvent>),
     {
+        let mut world = World::new();
         let mut frame_count = 0;
         let mut last_fps_time = Instant::now();
         let fps_update_interval = Duration::new(1, 0); // 1 second
@@ -83,7 +84,14 @@ impl CooperApplication
         //let cube_hash_map : HashMap<str, usize>  = HashMap::default();  
         let mut last_fixed_update = Instant::now();
         let mut lag = 0.0;
-
+        struct Name(String);
+        world.new_entity(
+            (
+                Name("Entity1".into()),
+                RigidBody::default(),
+                Transform::default()
+            )
+        ).unwrap();
         self.event_loop.run( 
             |event, _elwt|{
                 match event{
@@ -123,6 +131,12 @@ impl CooperApplication
                                             },
                                             GameEvent::Spawn(_path) =>{
                                                 // TODO handle spawn event
+                                                let sphere = self.renderer.load_model(&_path);
+                                                let translation = Mat4::default();
+                                                self.renderer.add_model(
+                                                    sphere,
+                                                    translation
+                                                );
                                             }
                                             GameEvent::NextFrame=>{
                                                 // MARK FRAME COMPLETE
@@ -180,7 +194,7 @@ impl CooperApplication
     fn build_scene(&mut self ) {
         
         let sphere = self.renderer.load_model("models/cube.gltf");
-        let translation = Mat4::default();
+        let translation = Mat4::from_translation(Vec3::new(10.,10.,10.));
         self.renderer.add_model(
             sphere,
             translation
@@ -191,5 +205,19 @@ impl CooperApplication
             sphere,
             translation
         );
+        let sphere = self.renderer.load_model("models/cube.gltf");
+        let translation = Mat4::from_translation(Vec3::new(10.,10.,10.));
+        self.renderer.add_model(
+            sphere,
+            translation
+        );
+        let sphere = self.renderer.load_model("models/MetalRoughSpheres.gltf");
+        let translation = Mat4::from_translation(-Vec3::new(10.,10.,10.));
+        self.renderer.add_model(
+            sphere,
+            translation
+        );
+
+        
     }
 }

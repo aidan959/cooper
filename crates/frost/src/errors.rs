@@ -3,12 +3,12 @@ use crate::EntityId;
 pub trait FrostError: std::error::Error + std::fmt::Display {
     fn new() -> Self;
 }
-
 #[derive(Debug)]
 pub struct WorldFull {}
 impl FrostError for WorldFull {
     fn new() -> Self { WorldFull{} }
 }
+
 impl std::error::Error for WorldFull{}
 
 impl std::fmt::Display for WorldFull {
@@ -74,11 +74,12 @@ pub enum ComponentError {
 }
 
 #[derive(Debug)]
-pub enum RetrieveError {
+pub enum GetError {
     ComponentAlreadyBorrowed(ComponentAlreadyBorrowed),
     ComponentDoesNotExist(ComponentDoesNotExist),
 }
-[derive(Debug)]
+
+#[derive(Debug)]
 pub struct ComponentAlreadyBorrowed(&'static str);
 
 impl ComponentAlreadyBorrowed {
@@ -99,6 +100,7 @@ impl std::fmt::Display for ComponentAlreadyBorrowed {
 }
 
 impl std::error::Error for ComponentAlreadyBorrowed {}
+
 #[derive(Debug)]
 pub struct ComponentDoesNotExist(&'static str);
 

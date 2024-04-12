@@ -1,4 +1,7 @@
-use crate::{vulkan::PipelineDesc, render_graph::{RenderGraph, TextureId}};
+use crate::{
+    render_graph::{RenderGraph, TextureId},
+    vulkan::PipelineDesc,
+};
 
 pub fn setup_ssao_pass(
     graph: &mut RenderGraph,
@@ -8,6 +11,7 @@ pub fn setup_ssao_pass(
     enabled: bool,
 ) {
     let radius_bias = glam::Vec4::new(0.1, 0.0, 0.0, 0.0);
+    // TODO additional blur pass
     graph
         .add_pass_from_desc(
             "ssao_pass",
@@ -21,11 +25,11 @@ pub fn setup_ssao_pass(
         .uniforms("settings_ubo", &(radius_bias))
         .record_render(
             move |device, command_buffer, _renderer, _pass, _resources| unsafe {
+                // Todo: This is a hack to get around the fact that we can't properly disable a pass
                 if enabled {
                     device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
                 }
             },
         )
         .build(graph);
-
 }

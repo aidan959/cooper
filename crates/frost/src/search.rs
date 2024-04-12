@@ -1,69 +1,74 @@
-use crate::iter::*;
-use crate::{Archetype, ChainedIterator, ComponentAlreadyBorrowed, RetrieveError, World};
+use crate::{iter::*, EntityId, Generation};
+use crate::{
+    Archetype, ChainedIterator, ComponentAlreadyBorrowed, ComponentDoesNotExist, GetError, World,
+};
 use std::iter::Zip;
 use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 use std::{any::TypeId, usize};
 
-pub trait SysParam {
-    type Retrieve: for<'a> Retrieve<'a>;
+pub trait SystemParameter {
+    type Get: for<'a> Get<'a>;
 }
 
-impl<'a, T: SearchParameters> SysParam for Search<'a, T> {
-    type Retrieve = SearchRetrieve<T>;
+impl<'a, T: SearchParameters> SystemParameter for Search<'a, T> {
+    type Get = SearchGet<T>;
 }
 
-impl<T: 'static> SysParam for &T {
-    type Retrieve = Self;
+impl<T: 'static> SystemParameter for &T {
+    type Get = Self;
 }
 
-impl<T: 'static> SysParam for &mut T {
-    type Retrieve = Self;
+impl<T: 'static> SystemParameter for &mut T {
+    type Get = Self;
 }
 
-pub struct SearchRetrieve<T> {
+pub struct SearchGet<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'world, T: SearchParameters> Retrieve<'world> for SearchRetrieve<T> {
+impl<'world, T: SearchParameters> Get<'world> for SearchGet<T> {
     type Item = Option<Search<'world, T>>;
-    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError> {
+    fn get(world: &'world World) -> Result<Self::Item, GetError> {
+        
         Ok(Some(Search {
-            data: T::retrieve(world, 0)?
+            data: T::get(world, 0)?,
+            _world: world,
         }))
     }
 }
 
-pub trait RetrieveItem<'a> {
-    type InnerComponent;
-    fn inner(&'a mut self) -> Self::InnerComponent;
+pub trait GetItem<'a> {
+    type InnerItem;
+    fn inner(&'a mut self) -> Self::InnerItem;
 }
 
-pub trait Retrieve<'world> {
-    type Item: for<'a> RetrieveItem<'a>;
-    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError>;
+pub trait Get<'world> {
+    type Item: for<'a> GetItem<'a>;
+    fn get(world: &'world World) -> Result<Self::Item, GetError>;
 }
 
 pub struct Search<'world, T: SearchParameters> {
-    pub(crate) data: <T as SearchParameterRetrieve<'world>>::RetrieveItem,
+    data: <T as SearchParameterGet<'world>>::GetItem,
+    _world: &'world World,
 }
 
-impl<'a, 'world, T: SearchParameters> RetrieveItem<'a> for Option<Search<'world, T>> {
-    type InnerComponent = Search<'world, T>;
-    fn inner(&'a mut self) -> Self::InnerComponent {
+impl<'a, 'world, T: SearchParameters> GetItem<'a> for Option<Search<'world, T>> {
+    type InnerItem = Search<'world, T>;
+    fn inner(&'a mut self) -> Self::InnerItem {
         self.take().unwrap()
     }
 }
 
-impl<'a, 'world, T: 'a> RetrieveItem<'a> for RwLockReadGuard<'world, T> {
-    type InnerComponent = &'a T;
-    fn inner(&'a mut self) -> Self::InnerComponent {
+impl<'a, 'world, T: 'a> GetItem<'a> for RwLockReadGuard<'world, T> {
+    type InnerItem = &'a T;
+    fn inner(&'a mut self) -> Self::InnerItem {
         self
     }
 }
 
-impl<'a, 'world, T: 'a> RetrieveItem<'a> for RwLockWriteGuard<'world, T> {
-    type InnerComponent = &'a mut T;
-    fn inner(&'a mut self) -> Self::InnerComponent {
+impl<'a, 'world, T: 'a> GetItem<'a> for RwLockWriteGuard<'world, T> {
+    type InnerItem = &'a mut T;
+    fn inner(&'a mut self) -> Self::InnerItem {
         &mut *self
     }
 }
@@ -72,9 +77,9 @@ pub struct Single<'world, T> {
     borrow: RwLockReadGuard<'world, Vec<T>>,
 }
 
-impl<'a, 'world, T: 'a> RetrieveItem<'a> for Single<'world, T> {
-    type InnerComponent = &'a T;
-    fn inner(&'a mut self) -> Self::InnerComponent {
+impl<'a, 'world, T: 'a> GetItem<'a> for Single<'world, T> {
+    type InnerItem = &'a T;
+    fn inner(&'a mut self) -> Self::InnerItem {
         &self.borrow[0]
     }
 }
@@ -83,64 +88,64 @@ pub struct SingleMut<'world, T> {
     borrow: RwLockWriteGuard<'world, Vec<T>>,
 }
 
-impl<'a, 'world, T: 'a> RetrieveItem<'a> for SingleMut<'world, T> {
-    type InnerComponent = &'a mut T;
-    fn inner(&'a mut self) -> Self::InnerComponent {
+impl<'a, 'world, T: 'a> GetItem<'a> for SingleMut<'world, T> {
+    type InnerItem = &'a mut T;
+    fn inner(&'a mut self) -> Self::InnerItem {
         &mut self.borrow[0]
     }
 }
 
-impl<'world, T: 'static> Retrieve<'world> for &T {
+impl<'world, T: 'static> Get<'world> for &T {
     type Item = Single<'world, T>;
-    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError> {
+    fn get(world: &'world World) -> Result<Self::Item, GetError> {
         let type_id = TypeId::of::<T>();
         for archetype in world.archetypes.iter() {
             for (i, c) in archetype.components.iter().enumerate() {
-                if c.type_id == type_id {
-                    return Ok(Single {
-                        borrow: archetype.retrieve(i).try_read().unwrap(),
-                    });
+                if c.type_id.eq(&type_id) {
+                    let borrow = archetype.get(i).try_read().unwrap();
+                    return Ok(Single { borrow });
                 }
             }
         }
 
-        Err(RetrieveError::ComponentDoesNotExist(Default::default()))
+        Err(GetError::ComponentDoesNotExist(Default::default()))
     }
 }
 
-impl<'world, T: 'static> Retrieve<'world> for &mut T {
+impl<'world, T: 'static> Get<'world> for &mut T {
     type Item = SingleMut<'world, T>;
-    fn retrieve(world: &'world World) -> Result<Self::Item, RetrieveError> {
+    fn get(world: &'world World) -> Result<Self::Item, GetError> {
         let type_id = TypeId::of::<T>();
         for archetype in world.archetypes.iter() {
             for (i, c) in archetype.components.iter().enumerate() {
                 if c.type_id == type_id {
-                    return Ok(SingleMut {
-                        borrow: archetype.retrieve(i).try_write().unwrap(),
-                    });
+                    let borrow = archetype.get(i).try_write().unwrap();
+                    return Ok(SingleMut { borrow });
                 }
             }
         }
 
-        Err(RetrieveError::ComponentDoesNotExist(Default::default()))
+        Err(GetError::ComponentDoesNotExist(
+            Default::default(),
+        ))
     }
 }
 
-pub trait SearchParameterRetrieve<'nw> {
-    type RetrieveItem;
-
-    fn retrieve(world: &'nw World, archetype: usize) -> Result<Self::RetrieveItem, RetrieveError>;
+pub trait SearchParameterGet<'nw> {
+    type GetItem;
+    
+    fn get(world: &'nw World, archetype: usize) -> Result<Self::GetItem, GetError>;
 }
 
 #[doc(hidden)]
-pub struct ReadSearchParameterRetrieve<T> {
+pub struct ReadSearchParameterGet<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: 'static> SearchParameterRetrieve<'a> for ReadSearchParameterRetrieve<T> {
-    type RetrieveItem = RwLockReadGuard<'a, Vec<T>>;
-    fn retrieve(world: &'a World, archetype: usize) -> Result<Self::RetrieveItem, RetrieveError> {
-        let archetype: &Archetype = &world.archetypes[archetype];
+impl<'a, T: 'static> SearchParameterGet<'a> for ReadSearchParameterGet<T> {
+    type GetItem = RwLockReadGuard<'a, Vec<T>>;
+    fn get(world: &'a World, archetype: usize) -> Result<Self::GetItem, GetError> {
+        let archetype = &world.archetypes[archetype];
         let type_id = TypeId::of::<T>();
 
         let index = archetype
@@ -148,32 +153,39 @@ impl<'a, T: 'static> SearchParameterRetrieve<'a> for ReadSearchParameterRetrieve
             .iter()
             .position(|c| c.type_id == type_id)
             .unwrap();
-        if let Ok(read_guard) = archetype.retrieve(index).try_read() {
+        if let Ok(read_guard) = archetype.get(index).try_read() {
+            let id =  index;
             Ok(read_guard)
         } else {
-            Err(RetrieveError::ComponentAlreadyBorrowed(Default::default()))
+            Err(GetError::ComponentAlreadyBorrowed(
+                Default::default(),
+            ))
         }
     }
 }
 
+// SearchParameter should get its own data, but the data must be requested for any lifetime
+// so an inner trait must be used instead.
+// 'SearchParameter' specifies the nature of the data requested, but not the lifetime.
+// In the future this can (hopefully) be made better with Generic Associated Types.
 pub trait SearchParameter {
-    type SearchParameterRetrieve: for<'a> SearchParameterRetrieve<'a>;
-    fn matches(archetype: &Archetype) -> bool;
+    type SearchParameterGet: for<'a> SearchParameterGet<'a>;
+    fn matches_archetype(archetype: &Archetype) -> bool;
 }
 
 impl<T: 'static> SearchParameter for &T {
-    type SearchParameterRetrieve = ReadSearchParameterRetrieve<T>;
+    type SearchParameterGet = ReadSearchParameterGet<T>;
 
-    fn matches(archetype: &Archetype) -> bool {
+    fn matches_archetype(archetype: &Archetype) -> bool {
         let type_id = TypeId::of::<T>();
         archetype.components.iter().any(|c| c.type_id == type_id)
     }
 }
 
 impl<T: 'static> SearchParameter for &mut T {
-    type SearchParameterRetrieve = WriteSearchParameterRetrieve<T>;
+    type SearchParameterGet = WriteSearchParameterGet<T>;
 
-    fn matches(archetype: &Archetype) -> bool {
+    fn matches_archetype(archetype: &Archetype) -> bool {
         let type_id = TypeId::of::<T>();
         archetype.components.iter().any(|c| c.type_id == type_id)
     }
@@ -184,12 +196,9 @@ pub struct Has<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'world, T: 'static> SearchParameterRetrieve<'world> for Has<T> {
-    type RetrieveItem = bool;
-    fn retrieve(
-        world: &'world World,
-        archetype: usize,
-    ) -> Result<Self::RetrieveItem, RetrieveError> {
+impl<'world, T: 'static> SearchParameterGet<'world> for Has<T> {
+    type GetItem = bool;
+    fn get(world: &'world World, archetype: usize) -> Result<Self::GetItem, GetError> {
         let archetype = &world.archetypes[archetype];
         let type_id = TypeId::of::<T>();
 
@@ -201,49 +210,47 @@ impl<'world, T: 'static> SearchParameterRetrieve<'world> for Has<T> {
 impl<'a, 'world> SearchIter<'a> for bool {
     type Iter = std::iter::Repeat<bool>;
     fn iter(&'a mut self) -> Self::Iter {
-        std::iter::repeat::<_>(*self)
+        std::iter::repeat(*self)
     }
 }
 
 impl<T: 'static> SearchParameter for Has<T> {
-    type SearchParameterRetrieve = Self;
+    type SearchParameterGet = Self;
 
-    fn matches(_: &Archetype) -> bool {
+    fn matches_archetype(_archetype: &Archetype) -> bool {
         true
     }
 }
 
 #[doc(hidden)]
-pub struct WriteSearchParameterRetrieve<T> {
+pub struct WriteSearchParameterGet<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'world, T: 'static> SearchParameterRetrieve<'world> for WriteSearchParameterRetrieve<T> {
-    type RetrieveItem = RwLockWriteGuard<'world, Vec<T>>;
-    fn retrieve(
-        world: &'world World,
-        archetype: usize,
-    ) -> Result<Self::RetrieveItem, RetrieveError> {
+impl<'world, T: 'static> SearchParameterGet<'world> for WriteSearchParameterGet<T> {
+    type GetItem = RwLockWriteGuard<'world, Vec<T>>;
+    fn get(world: &'world World, archetype: usize) -> Result<Self::GetItem, GetError> {
         let archetype = &world.archetypes[archetype];
-        let type_id: TypeId = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>();
 
-        let index: usize = archetype
+        let index = archetype
             .components
             .iter()
             .position(|c| c.type_id == type_id)
             .unwrap();
-        if let Ok(write_guard) = archetype.retrieve(index).try_write() {
+        if let Ok(write_guard) = archetype.get(index).try_write() {
             Ok(write_guard)
         } else {
-            Err(RetrieveError::ComponentAlreadyBorrowed(
+            Err(GetError::ComponentAlreadyBorrowed(
                 ComponentAlreadyBorrowed::new::<T>(),
             ))
         }
     }
 }
 
+
 type SearchParameterItem<'world, S> =
-    <<S as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::RetrieveItem;
+    <<S as SearchParameter>::SearchParameterGet as SearchParameterGet<'world>>::GetItem;
 
 pub trait SearchIter<'a> {
     type Iter: Iterator;
@@ -274,8 +281,10 @@ where
     }
 }
 
-type SearchParameterIter<'a, 'world, A> = <SearchParameterItem<'world, A> as SearchIter<'a>>::Iter;
-impl<'a, 'world, A: SearchParameter, B: SearchParameter> SearchIter<'a> for Search<'world, (A, B)>
+type SearchParameterIter<'a, 'world, A> =
+    <SearchParameterItem<'world, A> as SearchIter<'a>>::Iter;
+impl<'a, 'world, A: SearchParameter, B: SearchParameter> SearchIter<'a>
+    for Search<'world, (A, B)>
 where
     SearchParameterItem<'world, A>: SearchIter<'a>,
     SearchParameterItem<'world, B>: SearchIter<'a>,
@@ -287,16 +296,7 @@ where
         ChainedIterator::new(
             self.data
                 .iter_mut()
-                .map(
-                    |(a, b): &mut (
-                        <<A as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<
-                            'world,
-                        >>::RetrieveItem,
-                        <<B as SearchParameter>::SearchParameterRetrieve as SearchParameterRetrieve<
-                            'world,
-                        >>::RetrieveItem,
-                    )| a.iter().zip(b.iter()),
-                )
+                .map(|(a, b)| a.iter().zip(b.iter()))
                 .collect(),
         )
     }
@@ -322,23 +322,30 @@ macro_rules! search_iter {
     }
 }
 
-pub trait SearchParameters: for<'a> SearchParameterRetrieve<'a> {}
+pub trait SearchParameters: for<'a> SearchParameterGet<'a> {}
 
 macro_rules! search_params {
     ($($name: ident),*) => {
-        impl<'world, $($name: SearchParameter,)*> SearchParameters for ($($name,)*){}
+        impl<'world, $($name: SearchParameter,)*> SearchParameters
+            for ($($name,)*)
+        {}
 
-        impl<'world, $($name: SearchParameter,)*> SearchParameterRetrieve<'world> for ($($name,)*) {
+        impl<'world, $($name: SearchParameter,)*> SearchParameterGet<'world> for ($($name,)*) {
             #[allow(unused_parens)]
-            type RetrieveItem = Vec<($(<$name::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::RetrieveItem),*)>;
+            type GetItem = Vec<($(<$name::SearchParameterGet as SearchParameterGet<'world>>::GetItem),*)>;
 
-            fn retrieve(world: &'world World, _: usize) -> Result<Self::RetrieveItem, RetrieveError> {
+            fn get(world: &'world World, _archetype: usize) -> Result<Self::GetItem, GetError> {
                 let mut archetype_indices = Vec::new();
-                world.archetypes.iter().enumerate() .for_each(|(i, archetype)| { if $($name::matches(&archetype))&&* {archetype_indices.push(i) } });
+                for (i, archetype) in world.archetypes.iter().enumerate() {
+                    let matches = $($name::matches_archetype(&archetype))&&*;
+                    if matches {
+                        archetype_indices.push(i);
+                    }
+                }
 
                 let mut result = Vec::with_capacity(archetype_indices.len());
                 for index in archetype_indices {
-                    result.push(($(<$name::SearchParameterRetrieve as SearchParameterRetrieve<'world>>::retrieve(world, index)?),*));
+                    result.push(($(<$name::SearchParameterGet as SearchParameterGet<'world>>::get(world, index)?),*));
                 }
 
                 Ok(result)
@@ -353,13 +360,21 @@ macro_rules! search_paramsr{
         search_params!{$x}
     };
 
-    ($x: ident, $($y: ident),*) => {
-        search_params!{$x, $($y),*}
-        search_paramsr!{$($y),*}
+    ($x: ident, $($y: ident),+) => {
+        search_params!{$x, $($y),+}
+        search_paramsr!{$($y),+}
+
     };
 }
 
-search_paramsr!{A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
 
-search_iter! {Zip3Items, A, B, C}
+// TODO - this could be a little cleaner
+search_paramsr! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
 
+// TODO - I am doing this alot - switch to procedural macro?
+search_iter! {Zip3, A, B, C}
+search_iter! {Zip4, A, B, C, D}
+search_iter! {Zip5, A, B, C, D, E}
+search_iter! {Zip6, A, B, C, D, E, F}
+search_iter! {Zip7, A, B, C, D, E, F, G}
+search_iter! {Zip8, A, B, C, D, E, F, G, H}

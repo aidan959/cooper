@@ -1,50 +1,55 @@
 use std::sync::mpsc::Sender;
 
 use application::application::{CooperApplication, GameEvent};
-use glam::{Mat4, Quat, Vec3, Vec4, const_vec3};
+use glam::{const_vec3, Mat4, Quat, Vec3};
 
-const CENTRE :Vec3 =  const_vec3!([0.,0.,0.]);
+const CENTRE: Vec3 = const_vec3!([0., 0., 0.]);
 
 fn main() {
     env_logger::init();
-    let mut amount : Mat4 = Mat4::default();
+    let mut amount: Mat4 = Mat4::default();
 
-    let mut counter : f32 = 0.;
-    let mut fixed_counter : f32 = 0.;
-    let mut fixed_amount : Mat4 = Mat4::default();
-    
+    let mut counter: f32 = 0.;
+    let mut fixed_counter: f32 = 0.;
+    let mut fixed_amount: Mat4 = Mat4::default();
+
     CooperApplication::create().run(
         // creates 3 cubes
         |event_stream: &Sender<GameEvent>| {
-            (0..3).into_iter().for_each(|_|{
-                event_stream.send(GameEvent::Spawn("models/cube.gltf".to_string())).unwrap();
+            (0..1).into_iter().for_each(|_| {
+                event_stream
+                    .send(GameEvent::Spawn("models/cube.gltf".to_string()))
+                    .unwrap();
             })
         },
-        |renderer_event_stream, delta|
-        {
-            let (s,mut r,mut t) = amount.to_scale_rotation_translation();
+        |renderer_event_stream, delta| {
+            let (s, mut r, mut t) = amount.to_scale_rotation_translation();
             t.x = 5. * f32::cos(f32::to_radians(counter));
             t.z = 5. * f32::sin(f32::to_radians(counter));
 
             r = look_at(t, CENTRE);
-            amount = Mat4::from_scale_rotation_translation(s,r, t);
-            renderer_event_stream.send(GameEvent::MoveEvent(0,amount)).unwrap();
+            amount = Mat4::from_scale_rotation_translation(s, r, t);
+            renderer_event_stream
+                .send(GameEvent::MoveEvent(0, amount))
+                .unwrap();
+
             counter += 20. * delta;
         },
-        |renderer_event_stream, _delta|
-        {
-            let (s,mut r,mut t) = fixed_amount.to_scale_rotation_translation();
+        |renderer_event_stream, _delta| {
+            let (s, mut r, mut t) = fixed_amount.to_scale_rotation_translation();
             t.x = 5.;
             t.z = 5.;
             t.y = 1. * f32::sin(f32::to_radians(fixed_counter));
             r = look_at(t, CENTRE);
-            fixed_amount = Mat4::from_scale_rotation_translation(s,r, t);
-            renderer_event_stream.send(GameEvent::MoveEvent(3,fixed_amount)).unwrap();
+            fixed_amount = Mat4::from_scale_rotation_translation(s, r, t);
+            renderer_event_stream
+                .send(GameEvent::MoveEvent(1, fixed_amount))
+                .unwrap();
             fixed_counter += 50. * _delta;
         },
         |event_stream| {
             event_stream.send(GameEvent::NextFrame).unwrap();
-        }
+        },
     );
 }
 

@@ -12,14 +12,14 @@ use lynch::{renderer::Renderer, vulkan::renderer::VulkanRenderer, window::window
 
 
 use crate::{
-    EngineSettings, EngineSettingsBuilder,
+    EngineSettings,
     DEFAULT_UPDATE_RATE,
 };
 use frost::System;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
 
-use std::sync::Mutex;
+
 use std::time::{Duration, Instant};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};

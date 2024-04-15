@@ -28,5 +28,5 @@ rspirv-reflect = { git = "https://github.com/simplerr/rspirv-reflect.git" } # "0
 libloading = "0.8"
 phf = { version = "0.11.2", features = ["macros"] }
 imgui = "0.11.0"
-imgui-rs-vulkan-renderer = { version = "1.12.0" , features = ["gpu-allocator","dynamic-rendering"] }
+imgui-rs-vulkan-renderer = { version = "1.12.0" , features = ["gpu-allocator", "dynamic-rendering"] }
 imgui-winit-support = "^0.11"

@@ -4,8 +4,8 @@ use application::application::{CooperApplication, GameEvent};
 use frost::{obb, physics::math::physics_system, RigidBody, System,SearchIter,Transform};
 use glam::{Mat4, Quat, Vec3};
 
-struct GfxLocation(usize);   
-fn main() {    
+struct GfxLocation(usize);
+fn main() {  
     env_logger::init();
 
     CooperApplication::create().run(
@@ -275,11 +275,11 @@ mod tests {
     use application::application::{CooperApplication, GameEvent};
     use frost::{obb, physics::math::physics_system, RigidBody, Search, SearchIter, System, Transform};
     use glam::{Mat4, Quat, Vec3};
-    struct GfxLocation(usize); 
+    struct GfxLocation(usize);
 
     #[test]
-    fn graphic_scene_engine() { 
-
+    fn graphic_scene_engine() {
+        env_logger::init();
         fn rotate_system (
             mut rbs: Search<(&mut RigidBody,)>,
             _fixed_delta: f32,
@@ -311,9 +311,9 @@ mod tests {
         |event_stream| {
             event_stream.send(GameEvent::NextFrame).unwrap();
         },);
-    } 
+    }
     #[test]  
-    fn graphic_scene_sponza() {
+    fn graphic_scene_sponza() { 
         env_logger::init();
         fn rotate_system (
             mut rbs: Search<(&mut RigidBody,)>,

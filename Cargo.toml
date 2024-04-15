@@ -23,3 +23,4 @@ tobj = "0.1.6"
 memoffset = "0.5.1"
 glam = "0.20.2"
 phf = { version = "0.11.2", features = ["macros"] }
+imgui = "0.11"

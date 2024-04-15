@@ -42,6 +42,8 @@ dependencies = [
  "env_logger",
  "frost",
  "glam",
+ "imgui",
+ "imgui-winit-support",
  "log",
  "lynch",
  "rand 0.8.5",

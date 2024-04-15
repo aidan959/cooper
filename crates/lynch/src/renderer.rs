@@ -1,6 +1,6 @@
 use crate::{vulkan::Device, window::window::Window, Camera};
 pub trait Renderer {
-    fn create(window: &Window, camera: &Camera) -> Self
+    fn create(window: &Window, camera: &Camera, gui: &mut imgui::Context) -> Self
     where
         Self: Sized;
     fn begin_frame(self: &mut Self) -> usize;

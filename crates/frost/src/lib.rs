@@ -378,6 +378,10 @@ impl World {
 
         Ok(())
     }
+
+    
+
+
 }
 macro_rules! component_pack {
     ($count: expr, $(($name: ident, $index: tt)),*) => {
@@ -426,6 +430,7 @@ macro_rules! component_pack {
         }
     }
 }
+
 
 component_pack! {1, (A, 0)}
 component_pack! {2, (A, 0), (B, 1)}

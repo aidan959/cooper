@@ -111,7 +111,7 @@ pub fn handle_collision_static(
 
     rigid_body.apply_force(impulse, collision_point.point);
 }
-
+#[derive(Clone, Copy, Debug)]
 pub struct RigidBody {
     pub inverse_mass: f32,
     pub transform: Transform,
@@ -202,6 +202,9 @@ impl RigidBody {
             let gravity_force = GRAVITY * (1.0 / self.inverse_mass); 
             self.apply_force(gravity_force, self.transform.position);
         }
+    }
+    pub fn debug_string(&self) -> String {
+        format!("Location: {}", self.transform.position).into()
     }
 }
 #[derive(Clone, Copy, Debug)]

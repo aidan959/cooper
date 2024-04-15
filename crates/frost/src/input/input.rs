@@ -61,8 +61,6 @@ impl Input {
 
         self.mouse_delta.x = (self.mouse_pos.x - prev_mouse_pos.0) as f32;
         self.mouse_delta.y = (self.mouse_pos.y - prev_mouse_pos.1) as f32;
-
-
     }
     pub fn key_pressed(&self, key: VirtualKeyCode ) -> bool {
         self.key_states.contains_key(&key) && !self.prev_key_states.contains_key(&key)

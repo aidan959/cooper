@@ -41,8 +41,8 @@ struct CooperUI {
 }
 
 struct PhysicsControl {
-    pub paused: bool,
-    pub step: bool,
+    paused: bool,
+    step: bool,
 }
 impl PhysicsControl {
     fn new() -> Self {
@@ -255,7 +255,7 @@ impl CooperApplication {
         let finally_transmitter = event_trasmitter.clone();
 
         let mut physics_control = PhysicsControl{
-            paused: true,
+            paused: false,
             step: false
         };
 
@@ -295,7 +295,7 @@ impl CooperApplication {
                     while lag >= self.engine_settings.fixed_update_rate.as_secs_f32() {
                         // user fixed update call
                         count += 1; // Increment the count for each execution
-                        if !physics_control.paused || physics_control.step{
+                        if physics_control.should_update_physics(){
                             physics_system.run(&world, self.engine_settings.fixed_update_rate.as_secs_f32()).unwrap();
                             let mut rb_search = world.search::<(&GfxLocation, &RigidBody)>().unwrap();
                             rb_search.iter().for_each(|(gfx, rb)| {
@@ -340,17 +340,19 @@ impl CooperApplication {
                     ui_func(&mut run, &mut gui_frame,);
                     
                     let draw_data = self.ui.gui.render();
-                    let delta = self
+                    render_statistics.full_render_time = self
                         .renderer
                         .render(&mut self.graph, &self.camera, draw_data, &mut render_statistics);
+
+                    
                     let current_time = Instant::now();
                     let elapsed = current_time.duration_since(last_fixed_update);
                     last_fixed_update = current_time;
                     lag += elapsed.as_secs_f32();
                     // user update call
-                    update(&update_transmitter, delta);
+                    update(&update_transmitter, render_statistics.full_render_time);
                     // submit input data to camera
-                    self.camera.update(&input, delta);
+                    self.camera.update(&input, render_statistics.full_render_time);
 
                     
 
@@ -405,9 +407,9 @@ impl CooperApplication {
                     debug_info.update(
                         self.camera.get_position(),
                         vec![],
-                        delta,
+                        render_statistics.full_render_time,
                         self.engine_settings.fixed_update_rate.as_secs_f32(),
-                        frame_count as f32,
+                        1./render_statistics.full_render_time,
                         count as f32,
                         self.renderer.internal_renderer.instances.len()
                     );
@@ -447,12 +449,12 @@ impl CooperApplication {
         let w = gui_frame
             .window("Debug Menu")
             .opened(&mut debug_info.opened)
-            .position([20.0, 20.0], Condition::Appearing)
-            .size([700.0, 200.0], Condition::Appearing);
+            .position([1000.0, 20.0], Condition::Appearing)
+            .size([200.0, 100.0], Condition::Appearing);
     
         w.build(||{
-            gui_frame.text(format!("FPS: {} (delta: {}", debug_info.frame_rate,debug_info.delta_time));
-            gui_frame.separator();
+            gui_frame.text(format!("FPS: {}", debug_info.frame_rate));
+            gui_frame.text(format!("Delta Time: {}", debug_info.delta_time));
             
             gui_frame.text(format!("Camera location: {:?}", debug_info.camera_location));
             }
@@ -474,7 +476,7 @@ impl CooperApplication {
             );
         gui_frame
             .window("Physics Control")
-            .size([10.,10.], Condition::FirstUseEver)
+            .size([50.,50.], Condition::FirstUseEver)
             .position([10., 110.], Condition::FirstUseEver)
             .build(|| {
                 gui_frame.checkbox("Do Physics? ", &mut physics_control.paused);

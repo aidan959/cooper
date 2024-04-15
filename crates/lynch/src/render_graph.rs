@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-use ash::vk::{self, Framebuffer, Handle, ImageView};
+use ash::vk::{self};
 
 use crate::renderer::Renderer;
 use crate::vulkan::renderer::{
@@ -82,12 +82,8 @@ pub struct TextureCopy {
     pub dst: TextureId,
     pub copy_desc: vk::ImageCopy,
 }
-pub struct RenderGraph{
+pub struct RenderGraph {
     pub passes: Vec<Vec<RenderPass>>,
-    pub render_passes: HashMap<String, vk::RenderPass>,
-
-    pub render_framebuffers: HashMap<String, Vec<vk::Framebuffer>>,
-
     pub resources: GraphResources,
     pub descriptor_set_camera: Vec<DescriptorSet>,
     pub pipeline_descs: Vec<PipelineDesc>,
@@ -121,7 +117,7 @@ pub struct RenderPassBuilder {
 }
 
 impl RenderPassBuilder {
-    pub fn read(mut self, resource_id: TextureId) -> Self {
+    pub fn layout_in(mut self, resource_id: TextureId) -> Self {
         self.reads.push(Resource::Texture(TextureResource {
             texture: resource_id,
             input_type: TextureResourceType::CombinedImageSampler,
@@ -155,7 +151,7 @@ impl RenderPassBuilder {
         self
     }
 
-    pub fn write(mut self, resource_id: TextureId) -> Self {
+    pub fn layout_out(mut self, resource_id: TextureId) -> Self {
         self.writes.push(Attachment {
             texture: resource_id,
             view: ViewType::Full(),
@@ -274,60 +270,7 @@ impl RenderPassBuilder {
         }
         self
     }
-    pub fn build_presentation( self, graph: &mut RenderGraph, present_image:&Image) {
-        let mut pass = RenderPass::new(
-            self.name,
-            self.pipeline_handle,
-            self.presentation_pass,
-            self.depth_attachment,
-            self.uniforms.clone(),
-            self.render_func,
-            self.copy_command,
-            self.extra_barriers,
-            self.device.clone(),
-        );
 
-        for read in &self.reads {
-            pass.reads.push(*read);
-        }
-
-        for write in &self.writes {
-            pass.writes.push(*write);
-        }
-
-    
-        if !graph.render_passes.contains_key(&pass.name){
-            let render_pass = vulkan::create_present_render_pass(
-                &self.device,
-                vec![present_image.format()]
-            );
-            graph.render_passes.insert(
-                pass.name.clone(),
-                render_pass
-            );
-            println!("Created Renderpass ({}): {:#018x}",&pass.name, render_pass.as_raw());
-
-        }
-        
-        if !self.uniforms.is_empty() {
-            pass.uniform_buffer.replace(
-                graph.create_buffer(
-                    // Todo: Hack: this is very bad just to get unique buffers for every frame_index
-                    format!(
-                        "{}_frame_{}",
-                        self.uniforms.keys().next().unwrap(),
-                        graph.current_frame
-                    )
-                    .as_str(),
-                    self.uniforms.values().next().unwrap().1.size,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    gpu_allocator::MemoryLocation::CpuToGpu,
-                ),
-            );
-        }
-        
-        graph.passes[graph.current_frame].push(pass);
-    }
     pub fn build(self, graph: &mut RenderGraph) {
         let mut pass = RenderPass::new(
             self.name,
@@ -348,11 +291,11 @@ impl RenderPassBuilder {
         for write in &self.writes {
             pass.writes.push(*write);
         }
+
         graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats = pass
             .writes
             .iter()
             .map(|write| {
-
                 graph
                     .resources
                     .texture(write.texture)
@@ -362,18 +305,9 @@ impl RenderPassBuilder {
             })
             .collect();
 
-    
-        let color_attachment_formats = graph.pipeline_descs[pass.pipeline_handle].color_attachment_formats.clone();
-        let mut depth_attachment_format = None;
         if let Some(depth) = &pass.depth_attachment {
             match depth {
                 DepthAttachment::GraphHandle(write) => {
-                    depth_attachment_format = Some(graph
-                        .resources
-                        .texture(write.texture)
-                        .texture
-                        .image
-                        .format());
                     graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
                         graph
                             .resources
@@ -381,66 +315,14 @@ impl RenderPassBuilder {
                             .texture
                             .image
                             .format()
-                    
                 }
                 DepthAttachment::External(image, _) => {
-                    depth_attachment_format = None;
                     graph.pipeline_descs[pass.pipeline_handle].depth_stencil_attachment_format =
-                        image.format();
-
-
+                        image.format()
                 }
             }
-        };
-        if !graph.render_passes.contains_key(&pass.name){
-            let render_pass = vulkan::create_render_pass(
-                &self.device,
-                color_attachment_formats,
-                depth_attachment_format
-            );
-            graph.render_passes.insert(
-                pass.name.clone(),
-                render_pass
-            );
-            println!("Created Renderpass ({}): {:#018x}",&pass.name, render_pass.as_raw());
-
         }
 
-        let render_pass = graph.render_passes.get(&pass.name).unwrap();
-        let image_views : Vec<ImageView> = pass.writes.iter().map(|write|{
-                graph.resources.texture(write.texture).texture.image.image_view.clone()
-            })
-            .collect::<Vec<ImageView>>();
-        let image_extents: Vec<vk::Extent2D> = 
-            pass.writes.iter().map(|write|{
-                let image = &graph.resources.texture(write.texture).texture.image;
-                vk::Extent2D::builder().width(image.width()).height(image.height()).build()
-                
-            })
-            .collect::<Vec<vk::Extent2D>>() ;
-        let extents = if self.presentation_pass {
-            match pass.reads[0] {
-                Resource::Texture(texture) => {
-                    let image = &graph.resources.texture(texture.texture).texture.image;
-                    vec![vk::Extent2D::builder().width(image.width()).height(image.height()).build()]
-                },
-                _=> {panic!("No buffer should be attached to presentation pass.")}
-            }
-        } else {
-            image_extents
-        };
-         
-        if !graph.render_framebuffers.contains_key(&pass.name) {
-            graph.render_framebuffers.insert(
-                pass.name.clone(),
-                vec![vulkan::create_vulkan_framebuffer(
-                    &graph.device, 
-                    *render_pass,
-                    extents[0],
-                    &image_views,
-                )],
-            );
-        }
         if !self.uniforms.is_empty() {
             pass.uniform_buffer.replace(
                 graph.create_buffer(
@@ -457,7 +339,7 @@ impl RenderPassBuilder {
                 ),
             );
         }
-        
+
         graph.passes[graph.current_frame].push(pass);
     }
 }
@@ -507,8 +389,6 @@ impl RenderGraph {
         camera_uniform_buffer: &Vec<Buffer>,
         num_frames_in_flight: u32,
     ) -> Self {
-        let render_framebuffers = HashMap::new();
-        
         RenderGraph {
             passes: (0..num_frames_in_flight).map(|_| vec![]).collect(),
             resources: GraphResources::new(),
@@ -517,8 +397,6 @@ impl RenderGraph {
                 .map(|buffer| Self::create_camera_descriptor_set(device.clone(), buffer))
                 .collect(),
             pipeline_descs: vec![],
-            render_passes: HashMap::new(),
-            render_framebuffers: render_framebuffers,
             current_frame: 0,
             device: device,
         }
@@ -594,7 +472,6 @@ impl RenderGraph {
     }
 
     fn add_pass(&mut self, name: String, pipeline_handle: PipelineId) -> RenderPassBuilder {
-
         RenderPassBuilder {
             name,
             pipeline_handle,
@@ -615,9 +492,7 @@ impl RenderGraph {
         name: &str,
         desc_builder: PipelineDescBuilder,
     ) -> RenderPassBuilder {
-        let desc = desc_builder.build();
-        let pipeline_handle = self.create_pipeline(desc);
-        
+        let pipeline_handle = self.create_pipeline(desc_builder.build());
         self.add_pass(name.to_string(), pipeline_handle)
     }
 
@@ -708,7 +583,6 @@ impl RenderGraph {
                     device,
                     desc.clone(),
                     Some(renderer.internal_renderer.bindless_descriptor_set_layout),
-                    *self.render_passes.get(self.passes[self.current_frame][i].name.as_str()).unwrap(),
                 ));
             }
         }
@@ -758,7 +632,7 @@ impl RenderGraph {
         &mut self,
         command_buffer: &vk::CommandBuffer,
         renderer: &VulkanRenderer,
-        present_image: &Image
+        present_image: &Image,
     ) {
         let device = renderer.device();
         for pass in &self.passes[self.current_frame] {
@@ -915,13 +789,7 @@ impl RenderGraph {
                 ViewType::Full(),
                 vk::AttachmentLoadOp::CLEAR,
             )];
-            let framebuffer = if !pass.presentation_pass {
-                self.render_framebuffers.get(&pass.name).unwrap()[0]
-            } else {
-                self.render_framebuffers.get(&pass.name).unwrap()[0]
-            };
-            
-            let renderpass = self.render_passes.get(&pass.name).unwrap();
+
             pass.prepare_render(
                 command_buffer,
                 if !pass.presentation_pass {
@@ -955,8 +823,6 @@ impl RenderGraph {
                     }
                 },
                 &self.resources.pipelines,
-                *renderpass,
-                framebuffer
             );
             unsafe {
                 let bind_point = match pass_pipeline.pipeline_type {
@@ -1013,9 +879,7 @@ impl RenderGraph {
             }
 
             if pass_pipeline.pipeline_type == PipelineType::Graphics {
-                //unsafe { device.device().cmd_end_rendering(*command_buffer) };
-                unsafe { device.device().cmd_end_render_pass(*command_buffer) };
-
+                unsafe { device.device().cmd_end_rendering(*command_buffer) };
             }
 
             if let Some(copy_command) = &pass.copy_command {
@@ -1060,46 +924,6 @@ impl RenderGraph {
                     )
                 };
             }
-            // if pass.presentation_pass {
-            //     let next_access = vulkan::image_pipeline_barrier(
-            //         device,
-            //         *command_buffer,
-            //         &self.resources.textures[src].texture.image,
-            //         self.resources.textures[src].prev_access,
-            //         vk_sync::AccessType::TransferRead,
-            //         false,
-            //     );
-            //     self.resources.textures.get_mut(src).unwrap().prev_access = next_access;
-
-            //     let next_access = vulkan::image_pipeline_barrier(
-            //         device,
-            //         *command_buffer,
-            //         &self.resources.textures[dst].texture.image,
-            //         self.resources.textures[dst].prev_access,
-            //         vk_sync::AccessType::TransferWrite,
-            //         false,
-            //     );
-            //     self.resources.textures.get_mut(dst).unwrap().prev_access = next_access;
-
-            //     let src = &self.resources.textures[src].texture.image;
-            //     let dst = &self.resources.textures[dst].texture.image;
-
-            //     let mut copy_desc = copy_command.copy_desc;
-            //     copy_desc.src_subresource.aspect_mask = src.desc.aspect_flags;
-            //     copy_desc.dst_subresource.aspect_mask = dst.desc.aspect_flags;
-
-            //     unsafe {
-            //         device.device().cmd_copy_image(
-            //             *command_buffer,
-            //             src.image,
-            //             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-            //             dst.image,
-            //             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            //             &[copy_desc],
-            //         )
-            //     };
-            // }
         }
-
     }
 }

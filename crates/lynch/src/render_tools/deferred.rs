@@ -1,5 +1,3 @@
-use ash::vk;
-
 use crate::{
     render_graph::{RenderGraph, TextureId},
     vulkan::PipelineDesc,
@@ -19,8 +17,6 @@ pub fn setup_deferred_pass(
     brdf_lut: TextureId,
     cascade_data: ([glam::Mat4; 4], [f32; 4]),
     deferred_output: TextureId,
-    render_pass: vk::RenderPass,
-    framebuffers: Vec<vk::Framebuffer>,
 ) {
     graph
         .add_pass_from_desc(
@@ -29,21 +25,21 @@ pub fn setup_deferred_pass(
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/deferred.frag"),
         )
-        .read(gbuffer_position)
-        .read(gbuffer_normal)
-        .read(gbuffer_albedo)
-        .read(gbuffer_pbr)
-        .read(shadow_map)
-        .read(ssao_output)
-        .read(irradiance_map)
-        .read(specular_map)
-        .read(brdf_lut)
-        .write(deferred_output)
+        .layout_in(gbuffer_position)
+        .layout_in(gbuffer_normal)
+        .layout_in(gbuffer_albedo)
+        .layout_in(gbuffer_pbr)
+        .layout_in(shadow_map)
+        .layout_in(ssao_output)
+        .layout_in(irradiance_map)
+        .layout_in(specular_map)
+        .layout_in(brdf_lut)
+        .layout_out(deferred_output)
         .uniforms("shadowmapParams", &(cascade_data))
         .record_render(
             move |device, command_buffer, _renderer, _pass, _resources| unsafe {
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build(graph,render_pass, framebuffers);
+        .build(graph);
 }

@@ -27,7 +27,7 @@ pub fn setup_atmosphere_pass(
                 .default_primitive_vertex_attributes(),
         )
         .load_write(atmosphere_output)
-        .read(environment_map)
+        .layout_in(environment_map)
         .uniforms("ubo_constants", &(projection, world))
         .external_depth_attachment(base.depth_image.clone(), vk::AttachmentLoadOp::LOAD)
         .record_render(

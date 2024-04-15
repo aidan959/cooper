@@ -1,15 +1,9 @@
-use ash::vk;
-
 use crate::{
     render_graph::{RenderGraph, TextureId},
-    vulkan::{Image, PipelineDesc},
+    vulkan::PipelineDesc,
 };
 
-pub fn setup_present_pass(
-    graph: &mut RenderGraph,
-    color_output: TextureId,
-    present_image: &Image
-) {
+pub fn setup_present_pass(graph: &mut RenderGraph, color_output: TextureId) {
     let fxaa_threshold = 0.45;
 
     graph
@@ -19,7 +13,7 @@ pub fn setup_present_pass(
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/present.frag"),
         )
-        .read(color_output)
+        .layout_in(color_output)
         .uniforms(
             "settings_fxaa",
             &(glam::Vec4::new(1.0, 0.0, fxaa_threshold, 0.0)),
@@ -30,5 +24,5 @@ pub fn setup_present_pass(
                 device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
             },
         )
-        .build_presentation(graph, present_image);
+        .build(graph);
 }

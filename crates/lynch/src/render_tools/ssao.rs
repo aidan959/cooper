@@ -19,13 +19,12 @@ pub fn setup_ssao_pass(
                 .vertex_path("assets/shaders/fullscreen.vert")
                 .fragment_path("assets/shaders/ssao.frag"),
         )
-        .read(gbuffer_position)
-        .read(gbuffer_normal)
-        .write(ssao_output)
+        .layout_in(gbuffer_position)
+        .layout_in(gbuffer_normal)
+        .layout_out(ssao_output)
         .uniforms("settings_ubo", &(radius_bias))
         .record_render(
             move |device, command_buffer, _renderer, _pass, _resources| unsafe {
-                // Todo: This is a hack to get around the fact that we can't properly disable a pass
                 if enabled {
                     device.device().cmd_draw(*command_buffer, 3, 1, 0, 0);
                 }

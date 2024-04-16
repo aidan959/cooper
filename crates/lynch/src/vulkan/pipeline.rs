@@ -7,7 +7,7 @@ use vulkan::shader::{create_layouts_from_reflection, create_shader_module};
 
 use crate::*;
 
-use super::{render_pass, Device};
+use super::Device;
 
 #[derive(Clone)]
 pub struct PipelineDesc {
@@ -18,11 +18,10 @@ pub struct PipelineDesc {
     pub vertex_input_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
     pub color_attachment_formats: Vec<vk::Format>,
     pub depth_stencil_attachment_format: vk::Format,
-    pub render_pass: vk::RenderPass,
 }
 
 pub struct PipelineDescBuilder {
-    desc: PipelineDesc,
+    descriptor: PipelineDesc,
 }
 
 pub struct Pipeline {
@@ -32,7 +31,6 @@ pub struct Pipeline {
     pub reflection: vulkan::shader::ShaderReflect,
     pub pipeline_desc: PipelineDesc,
     pub pipeline_type: PipelineType,
-    pub render_pass: vk::RenderPass,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -69,7 +67,6 @@ impl Pipeline {
         device: &Device,
         pipeline_desc: PipelineDesc,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
-        render_pass: vk::RenderPass,
     ) -> Pipeline {
         let pipeline_type = match &pipeline_desc.compute_path {
             Some(_) => PipelineType::Compute,
@@ -83,7 +80,6 @@ impl Pipeline {
             reflection: vulkan::shader::ShaderReflect::default(),
             pipeline_desc,
             pipeline_type,
-            render_pass,
         };
 
         Self::create_pipeline(&mut pipeline, device, bindless_descriptor_set_layout)
@@ -97,12 +93,13 @@ impl Pipeline {
         device: &Device,
         bindless_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     ) -> bool {
-        // Todo: DESTROY OLD PIPELINE_RESOURCES
+
         if Self::create_pipeline(self, device, bindless_descriptor_set_layout).is_ok() {
-            info!("Successfully recreated pipeline.");
-            return true;
+            info!("Pipeline recompiled.");
+            true
+        } else {
+            false
         }
-        false
     }
 
     fn create_pipeline(
@@ -137,7 +134,6 @@ impl Pipeline {
                 desc.depth_stencil_attachment_format,
                 pipeline_layout,
                 &pipeline.pipeline_desc,
-                pipeline.render_pass,
             ),
             PipelineType::Compute => Pipeline::create_compute_pipeline(
                 &device.ash_device,
@@ -215,7 +211,6 @@ impl Pipeline {
         depth_stencil_attachment_format: vk::Format,
         pipeline_layout: vk::PipelineLayout,
         pipeline_desc: &PipelineDesc,
-        render_pass: vk::RenderPass,
     ) -> vk::Pipeline {
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(
@@ -249,11 +244,18 @@ impl Pipeline {
             compare_op: vk::CompareOp::ALWAYS,
             ..Default::default()
         };
-        // Create color blend attachment states correctly
-        let color_blend_attachment_states = color_attachment_formats
-            .iter()
-            .map(|_| vk::PipelineColorBlendAttachmentState {
-                blend_enable: vk::FALSE,
+        let depth_state_info = vk::PipelineDepthStencilStateCreateInfo {
+            depth_test_enable: 1,
+            depth_write_enable: 1,
+            depth_compare_op: vk::CompareOp::LESS,
+            front: noop_stencil_state,
+            back: noop_stencil_state,
+            max_depth_bounds: 1.0,
+            ..Default::default()
+        };
+        let color_blend_attachment_states = vec![
+            vk::PipelineColorBlendAttachmentState {
+                blend_enable: 0,
                 src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
                 dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
                 color_blend_op: vk::BlendOp::ADD,
@@ -264,22 +266,9 @@ impl Pipeline {
                     | vk::ColorComponentFlags::G
                     | vk::ColorComponentFlags::B
                     | vk::ColorComponentFlags::A,
-            })
-            .collect::<Vec<_>>();
-        let depth_state_info = if depth_stencil_attachment_format != vk::Format::UNDEFINED {
-            vk::PipelineDepthStencilStateCreateInfo {
-                depth_test_enable: vk::TRUE,
-                depth_write_enable: vk::TRUE,
-                depth_compare_op: vk::CompareOp::LESS,
-                front: noop_stencil_state,
-                back: noop_stencil_state,
-                max_depth_bounds: 1.0,
-                ..Default::default()
-            }
-        } else {
-            vk::PipelineDepthStencilStateCreateInfo::default()
-        };
-        
+            };
+            color_attachment_formats.len()
+        ];
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
             .attachments(&color_blend_attachment_states);
@@ -305,8 +294,8 @@ impl Pipeline {
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state_info)
             .layout(pipeline_layout)
-            .render_pass(render_pass);
-            //.push_next(&mut rendering_info);
+            .render_pass(vk::RenderPass::null())
+            .push_next(&mut rendering_info);
 
         let graphics_pipelines = unsafe {
             device
@@ -391,7 +380,7 @@ impl PipelineDesc {
 impl PipelineDescBuilder {
     pub fn new() -> Self {
         Self {
-            desc: PipelineDesc {
+            descriptor: PipelineDesc {
                 vertex_path: None,
                 fragment_path: None,
                 compute_path: None,
@@ -399,23 +388,22 @@ impl PipelineDescBuilder {
                 vertex_input_attribute_descriptions: Vec::new(),
                 color_attachment_formats: Vec::new(),
                 depth_stencil_attachment_format: vk::Format::UNDEFINED,
-                render_pass: vk::RenderPass::null(),
             },
         }
     }
 
     pub fn vertex_path(mut self, path: &'static str) -> Self {
-        self.desc.vertex_path = Some(path);
+        self.descriptor.vertex_path = Some(path);
         self
     }
 
     pub fn fragment_path(mut self, path: &'static str) -> Self {
-        self.desc.fragment_path = Some(path);
+        self.descriptor.fragment_path = Some(path);
         self
     }
 
     pub fn compute_path(mut self, path: &'static str) -> Self {
-        self.desc.compute_path = Some(path);
+        self.descriptor.compute_path = Some(path);
         self
     }
 
@@ -423,7 +411,7 @@ impl PipelineDescBuilder {
         mut self,
         descriptions: Vec<vk::VertexInputBindingDescription>,
     ) -> Self {
-        self.desc.vertex_input_binding_descriptions = descriptions;
+        self.descriptor.vertex_input_binding_descriptions = descriptions;
         self
     }
 
@@ -431,33 +419,33 @@ impl PipelineDescBuilder {
         mut self,
         descriptions: Vec<vk::VertexInputAttributeDescription>,
     ) -> Self {
-        self.desc.vertex_input_attribute_descriptions = descriptions;
+        self.descriptor.vertex_input_attribute_descriptions = descriptions;
         self
     }
 
     pub fn default_primitive_vertex_bindings(mut self) -> Self {
-        self.desc.vertex_input_binding_descriptions =
+        self.descriptor.vertex_input_binding_descriptions =
             crate::mesh::Primitive::get_vertex_input_binding_descriptions();
         self
     }
 
     pub fn default_primitive_vertex_attributes(mut self) -> Self {
-        self.desc.vertex_input_attribute_descriptions =
+        self.descriptor.vertex_input_attribute_descriptions =
             crate::mesh::Primitive::get_vertex_input_attribute_descriptions();
         self
     }
 
     pub fn color_attachment_formats(mut self, formats: Vec<vk::Format>) -> Self {
-        self.desc.color_attachment_formats = formats;
+        self.descriptor.color_attachment_formats = formats;
         self
     }
 
     pub fn depth_stencil_attachment_format(mut self, format: vk::Format) -> Self {
-        self.desc.depth_stencil_attachment_format = format;
+        self.descriptor.depth_stencil_attachment_format = format;
         self
     }
 
     pub fn build(self) -> PipelineDesc {
-        self.desc
+        self.descriptor
     }
 }

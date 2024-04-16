@@ -44,8 +44,6 @@ impl RenderPass {
         copy_command: Option<TextureCopy>,
         extra_barriers: Option<Vec<(BufferId, vk_sync::AccessType)>>,
         device: Arc<Device>,
-        
-        
     ) -> RenderPass {
         RenderPass {
             pipeline_handle,
@@ -70,7 +68,6 @@ impl RenderPass {
         pipelines: &[Pipeline],
         textures: &[GraphTexture],
         buffers: &[GraphBuffer],
-        _tlas: vk::AccelerationStructureKHR,
     ) {
         if !(!self.reads.is_empty() && self.read_resources_descriptor_set.is_none()) {
             return;
@@ -158,8 +155,6 @@ impl RenderPass {
         depth_attachment: Option<(Image, ViewType, vk::AttachmentLoadOp)>,
         extent: vk::Extent2D,
         pipelines: &[Pipeline],
-        render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer
     ) {
         let bind_point = match pipelines[self.pipeline_handle].pipeline_type {
             PipelineType::Graphics => vk::PipelineBindPoint::GRAPHICS,
@@ -178,46 +173,59 @@ impl RenderPass {
             return;
         }
 
+        let color_attachments = color_attachments
+            .iter()
+            .map(|image| {
+                vk::RenderingAttachmentInfo::builder()
+                    .image_view(match image.1 {
+                        ViewType::Full() => image.0.image_view,
+                        ViewType::Layer(layer) => image.0.layer_view(layer),
+                    })
+                    .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .load_op(image.2)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [1.0, 1.0, 1.0, 0.0],
+                        },
+                    })
+                    .build()
+            })
+            .collect::<Vec<_>>();
 
-
-         let mut clear_values = Vec::new();
-         for (_, _, load_op) in color_attachments {
-             if *load_op == vk::AttachmentLoadOp::CLEAR {
-                 clear_values.push(vk::ClearValue {
-                     color: vk::ClearColorValue {
-                         float32: [0.0, 0.0, 0.0, 1.0], 
-                     },
-                 });
-             }
-         }
-         if let Some((_, _, load_op)) = depth_attachment {
-            if load_op == vk::AttachmentLoadOp::CLEAR {
-                clear_values.push(vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
-                    },
-                });
-            }
-        }    
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffer)
+        let rendering_info = vk::RenderingInfo::builder()
+            .view_mask(0)
+            .layer_count(1)
+            .color_attachments(&color_attachments)
+            .depth_attachment(&if let Some(depth_attachment) = depth_attachment {
+                vk::RenderingAttachmentInfo::builder()
+                    .image_view(match depth_attachment.1 {
+                        ViewType::Full() => depth_attachment.0.image_view,
+                        ViewType::Layer(layer) => depth_attachment.0.layer_view(layer),
+                    })
+                    .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .load_op(depth_attachment.2)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    })
+                    .build()
+            } else {
+                vk::RenderingAttachmentInfo::default()
+            })
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
-            .clear_values(&clear_values);
-
+            .build();
 
         unsafe {
             self.device
                 .device()
-                .cmd_begin_render_pass(
-                    *command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
+                .cmd_begin_rendering(*command_buffer, &rendering_info);
 
             self.device.device().cmd_bind_pipeline(
                 *command_buffer,

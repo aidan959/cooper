@@ -28,6 +28,15 @@ pub struct GraphBuffer {
     pub buffer: Buffer,
     pub prev_access: vk_sync::AccessType,
 }
+impl GraphBuffer {
+    pub fn nothing(buffer: Buffer) -> Self {
+        Self {
+            buffer,
+            prev_access:vk_sync::AccessType::Nothing
+        }
+    }
+}
+
 // TODO These need to be destroyed on release
 pub struct GraphResources {
     pub buffers: Vec<GraphBuffer>,
@@ -325,7 +334,7 @@ impl RenderPassBuilder {
 
         if !self.uniforms.is_empty() {
             pass.uniform_buffer.replace(
-                graph.create_buffer(
+                graph.get_or_create_buffer(
                     // Todo: Hack: this is very bad just to get unique buffers for every frame_index
                     format!(
                         "{}_frame_{}",
@@ -371,7 +380,7 @@ impl Drop for RenderGraph {
             .iter()
             .for_each(|ds| ds.clean_vk_resources());
         self.resources.buffers.iter().for_each(|b| unsafe {
-            self.device.ash_device.destroy_buffer(b.buffer.buffer, None);
+            self.device.ash_device.destroy_buffer(b.buffer.vk_buffer, None);
         });
         self.resources.pipelines.iter().for_each(|b| unsafe {
             self.device
@@ -492,22 +501,17 @@ impl RenderGraph {
         name: &str,
         desc_builder: PipelineDescBuilder,
     ) -> RenderPassBuilder {
-        let pipeline_handle = self.create_pipeline(desc_builder.build());
+        let pipeline_handle = self.get_or_create_pipeline(desc_builder.build());
         self.add_pass(name.to_string(), pipeline_handle)
     }
 
-    /// Creates a texture and returns its handle.
-    ///
-    /// If a texture with the same name already exists, it will be returned instead.
-    /// Compared to `graph::create_pipeline`, this function does not defer the creation of the texture.
-    pub fn create_texture(
+    pub fn get_or_create_texture(
         &mut self,
         debug_name: &str,
         device: Arc<Device>,
         image_desc: ImageDesc,
     ) -> TextureId {
-        // Todo: Cannot rely on debug_name being unique
-        // Todo: shall use a Hash to include extent and format of the texture
+
         self.resources
             .textures
             .iter()
@@ -524,11 +528,7 @@ impl RenderGraph {
             })
     }
 
-    /// Creates a buffer and returns its handle.
-    ///
-    /// If a buffer with the same name already exists, it will be returned instead.
-    /// Compared to `graph::create_pipeline`, this function does not defer the creation of the buffer.
-    pub fn create_buffer(
+    pub fn get_or_create_buffer(
         &mut self,
         debug_name: &str,
         size: u64,
@@ -551,17 +551,14 @@ impl RenderGraph {
 
                 buffer.set_debug_name(debug_name);
 
-                self.resources.buffers.push(GraphBuffer {
-                    buffer,
-                    prev_access: vk_sync::AccessType::Nothing,
-                });
+                self.resources.buffers.push(GraphBuffer::nothing(buffer));
 
                 self.resources.buffers.len() - 1
             })
     }
 
     /// Creates a pipeline and returns its handle.
-    pub fn create_pipeline(&mut self, pipeline_desc: PipelineDesc) -> PipelineId {
+    pub fn get_or_create_pipeline(&mut self, pipeline_desc: PipelineDesc) -> PipelineId {
         if let Some(existing_pipeline_id) = self
             .pipeline_descs
             .iter()
@@ -576,7 +573,7 @@ impl RenderGraph {
 
     pub fn prepare(&mut self, renderer: &VulkanRenderer) {
         let device = renderer.device();
-        // Todo: shall be possible to create the pipelines using multiple threads
+
         for (i, desc) in self.pipeline_descs.iter().enumerate() {
             if self.resources.pipelines.len() <= i {
                 self.resources.pipelines.push(Pipeline::new(
@@ -591,7 +588,6 @@ impl RenderGraph {
                 &self.resources.pipelines,
                 &self.resources.textures,
                 &self.resources.buffers,
-                vk::AccelerationStructureKHR::null(),
             );
             pass.try_create_uniform_buffer_descriptor_set(
                 &self.resources.pipelines,

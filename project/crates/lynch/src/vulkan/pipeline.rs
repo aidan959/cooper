@@ -210,7 +210,6 @@ impl Pipeline {
         depth_stencil_attachment_format: vk::Format,
         pipeline_layout: vk::PipelineLayout,
         pipeline_desc: &PipelineDesc,
-        render_pass: vk::RenderPass,
     ) -> vk::Pipeline {
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(
@@ -294,7 +293,7 @@ impl Pipeline {
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state_info)
             .layout(pipeline_layout)
-            .render_pass(render_pass)
+            .render_pass(vk::RenderPass::null())
             .push_next(&mut rendering_info);
 
         let graphics_pipelines = unsafe {

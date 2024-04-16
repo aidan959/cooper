@@ -5,7 +5,7 @@ use crate::{
 };
 use glam::{Mat4, Vec3, Vec4Swizzles};
 
-const SHADOW_TEXTURE_CASCADE_NO: usize = 4;
+pub const SHADOW_TEXTURE_CASCADE_NO: usize = 4;
 pub fn setup_shadow_pass(
     graph: &mut RenderGraph,
     shadow_texture: TextureId,

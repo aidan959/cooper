@@ -11,8 +11,7 @@ pub fn setup_atmosphere_pass(
     base: &VulkanRenderer,
     atmosphere_output: TextureId,
     environment_map: TextureId,
-    camera: &crate::camera::Camera,
-    enabled: bool,
+    camera: &crate::camera::Camera
 ) {
     let projection = camera.get_projection();
     let world = Mat4::from_scale(Vec3::splat(10000.0));
@@ -32,14 +31,14 @@ pub fn setup_atmosphere_pass(
         .external_depth_attachment(base.depth_image.clone(), vk::AttachmentLoadOp::LOAD)
         .record_render(
             move |device, command_buffer, _renderer, _pass, _resources| unsafe {
-                if enabled && _renderer.internal_renderer.instances.len() > 0 { // we should not rely on an instance existing for this
+                if  _renderer.internal_renderer.instances.len() > 0 { // we should not rely on an instance existing for this
                     device.device().cmd_bind_vertex_buffers(
                         *command_buffer,
                         0,
                         &[_renderer.internal_renderer.instances[0].model.meshes[0]
                             .primitive
                             .vertex_buffer
-                            .buffer],
+                            .vk_buffer],
                         &[0],
                     );
                     device.device().cmd_bind_index_buffer(
@@ -47,7 +46,7 @@ pub fn setup_atmosphere_pass(
                         _renderer.internal_renderer.instances[0].model.meshes[0]
                             .primitive
                             .index_buffer
-                            .buffer,
+                            .vk_buffer,
                         0,
                         vk::IndexType::UINT32,
                     );

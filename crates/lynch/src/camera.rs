@@ -2,65 +2,59 @@ use crate::math::normalize;
 use cgmath::Point3;
 use cgmath::Point2;
 pub const  PI : f32 = 3.14159265358979323846;
-
+use dolly::prelude::*;
+use glam::{Mat3, Mat4, Quat, Vec3};
 
 #[derive(Clone, Copy)]
 pub struct Camera {
-    last_look_position: Option<Point2<f32>>,
+    camera_rig: CameraRig,
+    aspect_ratio: f32,
+    z_near: f32,
+    z_far: f32,
     sensitivity: f32,
-    location: Point3<f32>,
-    pitch: f32,
-    yaw: f32,
-    r: f32,
 }
 
 
 impl Camera {
-    pub fn position(&self) -> Point3<f32> {
-        self.location
+    pub fn new(
+        pos: Vec3,
+        target: Vec3,
+        fov_degrees: f32,
+        aspect_ratio: f64,
+        z_near: f32,
+        z_far: f32,
+        speed: f32,
+    ) -> Camera {
+        let rotation = Self::get_lookat_rotation(pos, target);
+
+        let camera_rig = CameraRig::builder()
+            .with(Position::new(pos))
+            .with(YawPitch::new().rotation_quat(rotation))
+            .with(Smooth::new_position_rotation(0.9, 0.9))
+            .build();
+
+        Camera {
+            camera_rig,
+            fov_degrees,
+            aspect_ratio: aspect_ratio as f32,
+            z_near,
+            z_far,
+            speed,
+        }
     }
-    pub fn get_forward(&self) -> [f32; 3]{
-        let forward_vector = [
-            self.pitch.cos() * self.yaw.sin(),
-            self.pitch.sin(),
-            self.pitch.cos() * self.yaw.cos()
-        ];
-        return normalize(forward_vector);
-    } 
-    pub fn move_forward(&mut self, amount: f32){
-
-        let forward = self.get_forward();
-        self.location[0] +=  forward[0] * amount;
-        self.location[1] +=  forward[1] * amount;
-        self.location[2] +=  forward[2] * amount;
+    pub fn position(&self) -> Vec3 {
+        self.camera_rig.final_transform.position
     }
-    pub fn move_sideways(&mut self, amount: f32){
-        let forward = self.get_forward();
 
-        let sideway = cross_product(forward, [0.,1.,0.]);
-
-        self.location[0] +=  sideway[0] * amount;
-        self.location[1] +=  sideway[1] * amount;
-        self.location[2] +=  sideway[2] * amount;
-    }
-    pub fn mouse_moved(&mut self, mouse_pos: [i32; 2]) {
-        self.yaw -= mouse_pos[0] as f32 * self.sensitivity;
-        self.pitch =  (self.pitch - (mouse_pos[1] as f32 * self.sensitivity)).clamp(-(PI / 2.) +0.01, PI / 2. -0.01);
-    }
-    pub fn get_look_toward(&mut self) -> Point3<f32> {
-        let r = self.pitch.cos();
-
-        let mut y = self.pitch.sin();
-        let mut z = r * self.yaw.cos();
-        let mut x = r * self.yaw.sin();
-        x += self.location.x;
-        y += self.location.y;
-        z += self.location.z;
-
-        Point3 { x: x, y: y, z: z }
-
-
-
+    pub fn get_lookat_rotation(pos: Vec3, target: Vec3) -> Quat {
+        (target - pos)
+            .try_normalize()
+            .and_then(|forward| {
+                let right = forward.cross(Vec3::Y).try_normalize()?;
+                let up = right.cross(forward);
+                Some(Quat::from_mat3(&Mat3::from_cols(right, up, -forward)))
+            })
+            .unwrap_or_default()
     }
     pub fn forward(&mut self, r: f32) {
         self.r -= r;

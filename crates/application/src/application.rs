@@ -66,6 +66,7 @@ const HEIGHT : f64 = 720.;
 pub struct CooperApplication {
     window: Window,
     renderer: VulkanRenderer,
+    graph: RenderGraph,
     event_handler: EventHandler,
     event_loop: EventLoop<()>
 }
@@ -74,6 +75,7 @@ impl CooperApplication {
         let (window,event_loop) = Window::create("Cooper", WIDTH, HEIGHT);
         
         let renderer = VulkanRenderer::create(&window);
+        let graph = RenderGraph::new(renderer.vk_context.arc_device(), &renderer.camera_uniform_buffer, renderer.image_count);
         let event_handler = EventHandler::new();
         CooperApplication {
             window,
@@ -91,7 +93,7 @@ impl CooperApplication {
                     
                     Event::WindowEvent {event, .. } => match event {
                         WindowEvent::RedrawRequested=> {
-                            println!("Redraw Requested");
+                            self.renderer.render(&mut self.graph);
                             self.renderer.draw_frame();
                         }
                         WindowEvent::CloseRequested => {
